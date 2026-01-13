@@ -1,0 +1,31 @@
+name: Daily FR Delta
+
+on:
+  schedule:
+    - cron: "15 11 * * *"   # 06:15 ET (EST) = 11:15 UTC
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: make init
+
+      - name: Test
+        run: make test
+
+      - name: Run FR Delta
+        run: |
+          make db-init
+          make fr-delta
