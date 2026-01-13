@@ -9,3 +9,6 @@ test:
 
 fr-ping:
 	./.venv/bin/python -m src.fetch_fr_ping
+
+db-init:
+	./.venv/bin/python -c "from src.db import init_db; init_db()"

@@ -6,3 +6,8 @@ outputs/
 .venv/
 __pycache__/
 .DS_Store
+
+# Data
+/data/
+*.db
+*.sqlite
