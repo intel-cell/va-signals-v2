@@ -4,9 +4,6 @@ from typing import Any, Dict, List, Tuple
 
 import requests
 
-# GovInfo bulkdata exposes JSON directory listings by inserting `/json/` after `/bulkdata/`.
-# Example: https://www.govinfo.gov/bulkdata/FR/2025/ -> https://www.govinfo.gov/bulkdata/json/FR/2025/
-
 HEADERS_JSON = {"Accept": "application/json"}
 
 
@@ -20,6 +17,10 @@ def _to_json_listing_url(bulk_url: str) -> str:
     if "/bulkdata/" not in bulk_url:
         return bulk_url
     return bulk_url.replace("/bulkdata/", "/bulkdata/json/", 1)
+
+
+def _to_bulk_url(json_or_bulk_url: str) -> str:
+    return json_or_bulk_url.replace("/bulkdata/json/", "/bulkdata/", 1)
 
 
 def fetch_bulk_listing_json(bulk_url: str, timeout: int = 30) -> Dict[str, Any]:
@@ -43,42 +44,53 @@ def _label(item: Dict[str, Any]) -> str:
     return str(item.get("displayLabel") or item.get("name") or "").strip()
 
 
-def list_latest_day_folders(fr_root_bulk_url: str, max_days: int = 7, timeout: int = 30) -> List[Tuple[str, str]]:
+def list_latest_month_folders(fr_root_bulk_url: str, max_months: int = 3, timeout: int = 30) -> List[Tuple[str, str]]:
+    """Return newest-first list of (YYYY-MM, month_bulk_url)."""
     out: List[Tuple[str, str]] = []
 
     years_items = [i for i in list_folder_children(fr_root_bulk_url, timeout=timeout) if _is_folder(i)]
-    years = sorted({lab for lab in (_label(i) for i in years_items) if lab.isdigit()}, reverse=True)
+    years: List[Tuple[str, str]] = []
+    for it in years_items:
+        lab = _label(it)
+        link = it.get("link")
+        if lab.isdigit() and link:
+            years.append((lab, link))
+    years.sort(key=lambda x: x[0], reverse=True)
 
-    for y in years:
-        if len(out) >= max_days:
+    for y, year_link in years:
+        if len(out) >= max_months:
             break
-        year_url = fr_root_bulk_url.rstrip("/") + f"/{y}/"
 
-        months_items = [i for i in list_folder_children(year_url, timeout=timeout) if _is_folder(i)]
-        months = sorted({lab for lab in (_label(i) for i in months_items) if re.fullmatch(r"\d{2}", lab)}, reverse=True)
+        months_items = [i for i in list_folder_children(year_link, timeout=timeout) if _is_folder(i)]
+        months: List[Tuple[str, str]] = []
+        for it in months_items:
+            lab = _label(it)
+            link = it.get("link")
+            if re.fullmatch(r"\d{2}", lab) and link:
+                months.append((lab, link))
+        months.sort(key=lambda x: x[0], reverse=True)
 
-        for m in months:
-            if len(out) >= max_days:
+        for m, month_link in months:
+            if len(out) >= max_months:
                 break
-            month_url = year_url.rstrip("/") + f"/{m}/"
-
-            days_items = [i for i in list_folder_children(month_url, timeout=timeout) if _is_folder(i)]
-            days = sorted({lab for lab in (_label(i) for i in days_items) if re.fullmatch(r"\d{2}", lab)}, reverse=True)
-
-            for d in days:
-                if len(out) >= max_days:
-                    break
-                day_url = month_url.rstrip("/") + f"/{d}/"
-                out.append((f"{y}-{m}-{d}", day_url))
+            out.append((f"{y}-{m}", _to_bulk_url(month_link)))
 
     return out
 
 
-def list_day_packages(day_folder_url: str, timeout: int = 30) -> List[str]:
-    items = list_folder_children(day_folder_url, timeout=timeout)
-    pkgs: List[str] = []
+def list_month_packages(month_bulk_url: str, timeout: int = 30) -> List[Dict[str, str]]:
+    """Return FR package IDs in a month folder (FR-YYYY-MM-DD*)."""
+    items = list_folder_children(month_bulk_url, timeout=timeout)
+    out: List[Dict[str, str]] = []
     for it in items:
         lab = _label(it)
-        if lab.startswith("FR-"):
-            pkgs.append(lab.strip("/"))
-    return sorted(set(pkgs))
+        link = it.get("link") or ""
+        m = re.match(r"^FR-(\d{4})-(\d{2})-(\d{2})", lab)
+        if m:
+            published_date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+            out.append({
+                "doc_id": lab.strip("/"),
+                "published_date": published_date,
+                "source_url": link or month_bulk_url,
+            })
+    return out
