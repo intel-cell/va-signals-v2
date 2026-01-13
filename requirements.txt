@@ -3,3 +3,5 @@ jsonschema>=4.22.0
 pyyaml>=6.0.1
 pytest>=8.0.0
 python-dateutil>=2.9.0.post0
+
+lxml>=5.2.2

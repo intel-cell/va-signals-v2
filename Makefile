@@ -12,3 +12,6 @@ fr-ping:
 
 db-init:
 	./.venv/bin/python -c "from src.db import init_db; init_db()"
+
+fr-delta:
+	./.venv/bin/python -m src.run_fr_delta
