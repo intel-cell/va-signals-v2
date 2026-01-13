@@ -1,0 +1,15 @@
+version: 1
+policy:
+  fail_closed: true
+  allow_demo: false
+
+approved_sources:
+  - id: govinfo_fr_bulk
+    name: "GovInfo Federal Register Bulk Data"
+    type: "primary/binding"
+    domains:
+      - "www.govinfo.gov"
+      - "govinfo.gov"
+    endpoints:
+      - "https://www.govinfo.gov/bulkdata/FR/"
+    notes: "Primary source for FR bulk data. Ping first; ingest later."

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VA Signals V2 - Signal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id","title","domain","authority_class","what_changed","confidence","provenance"],
+  "properties": {
+    "id": { "type": "string", "minLength": 8, "maxLength": 128 },
+    "title": { "type": "string", "minLength": 5, "maxLength": 180 },
+    "domain": {
+      "type": "string",
+      "enum": ["Regulatory","Judicial","Legislative","VA_Ops","Media","Advocacy","State"]
+    },
+    "authority_class": {
+      "type": "string",
+      "enum": ["Primary/Binding","Authoritative/Signaling","Context/Narrative"]
+    },
+    "what_changed": { "type": "string", "minLength": 10, "maxLength": 2000 },
+    "confidence": { "type": "string", "enum": ["High","Medium","Low"] },
+    "published_at": { "type": ["string","null"], "format": "date-time" },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id","source_name","retrieved_at","source_url_or_primary_id"],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 3, "maxLength": 64 },
+        "source_name": { "type": "string", "minLength": 3, "maxLength": 128 },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "source_url_or_primary_id": { "type": "string", "minLength": 8, "maxLength": 512 }
+      }
+    }
+  }
+}

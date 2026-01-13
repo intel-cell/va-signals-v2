@@ -1,0 +1,5 @@
+requests>=2.31.0
+jsonschema>=4.22.0
+pyyaml>=6.0.1
+pytest>=8.0.0
+python-dateutil>=2.9.0.post0

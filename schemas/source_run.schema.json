@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VA Signals V2 - Source Run Record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_id","started_at","ended_at","status","records_fetched","errors"],
+  "properties": {
+    "source_id": { "type": "string" },
+    "started_at": { "type": "string", "format": "date-time" },
+    "ended_at": { "type": "string", "format": "date-time" },
+    "status": { "type": "string", "enum": ["SUCCESS","NO_DATA","ERROR"] },
+    "records_fetched": { "type": "integer", "minimum": 0 },
+    "errors": { "type": "array", "items": { "type": "string" } }
+  }
+}
