@@ -47,3 +47,12 @@ def upsert_fr_seen(doc_id: str, published_date: str, first_seen_at: str, source_
         con.commit()
     con.close()
     return not exists
+
+def assert_tables_exist():
+  con = connect()
+  rows = con.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+  con.close()
+  names = {r[0] for r in rows}
+  missing = {"source_runs","fr_seen"} - names
+  if missing:
+    raise RuntimeError(f"DB_SCHEMA_MISSING_TABLES: {sorted(missing)}")
