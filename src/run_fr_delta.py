@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 import yaml
 from jsonschema import validate
 
+from .notify_slack import post_slack, format_fr_delta_alert
 from .provenance import utc_now_iso
 from .db import init_db, insert_source_run, upsert_fr_seen
 from .fr_bulk import list_latest_month_folders, list_month_packages
@@ -91,7 +92,15 @@ def run_fr_delta(max_months: int = 3) -> Dict[str, Any]:
         encoding="utf-8",
     )
 
-    print(json.dumps({"run_record": run_record, "new_docs_count": len(new_docs)}, indent=2))
+    new_docs_count = len(new_docs)
+    print(json.dumps({"run_record": run_record, "new_docs_count": new_docs_count}, indent=2))
+
+    alert_payload = format_fr_delta_alert(run_record, new_docs_count)
+    if alert_payload:
+        try:
+            post_slack(alert_payload)
+        except Exception:
+            pass
     return run_record
 
 
