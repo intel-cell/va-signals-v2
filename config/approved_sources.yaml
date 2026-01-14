@@ -13,3 +13,13 @@ approved_sources:
     endpoints:
       - "https://www.govinfo.gov/bulkdata/FR/"
     notes: "Primary source for FR bulk data. Ping first; ingest later."
+
+  - id: govinfo_ecfr_title_38
+    name: "GovInfo eCFR Title 38 Bulk XML"
+    type: "authoritative/signaling"
+    domains:
+      - "www.govinfo.gov"
+      - "govinfo.gov"
+    endpoints:
+      - "https://www.govinfo.gov/bulkdata/ECFR/title-38/ECFR-title38.xml"
+    notes: "eCFR is unofficial but operationally relevant. Track incorporation of Title 38."
