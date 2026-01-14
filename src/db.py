@@ -56,3 +56,35 @@ def assert_tables_exist():
   missing = {"source_runs","fr_seen"} - names
   if missing:
     raise RuntimeError(f"DB_SCHEMA_MISSING_TABLES: {sorted(missing)}")
+
+def upsert_ecfr_seen(doc_id: str, last_modified: str, etag: str, first_seen_at: str, source_url: str) -> bool:
+    """
+    Returns True if inserted or changed; False if unchanged.
+    Change detection is based on (last_modified, etag).
+    """
+    con = connect()
+    cur = con.cursor()
+    cur.execute("SELECT last_modified, etag FROM ecfr_seen WHERE doc_id = ?", (doc_id,))
+    row = cur.fetchone()
+
+    if row is None:
+        cur.execute(
+            "INSERT INTO ecfr_seen(doc_id,last_modified,etag,first_seen_at,source_url) VALUES(?,?,?,?,?)",
+            (doc_id, last_modified, etag, first_seen_at, source_url),
+        )
+        con.commit()
+        con.close()
+        return True
+
+    prev_last_modified, prev_etag = row[0], row[1]
+    if (prev_last_modified != last_modified) or (prev_etag != etag):
+        cur.execute(
+            "UPDATE ecfr_seen SET last_modified=?, etag=?, first_seen_at=?, source_url=? WHERE doc_id=?",
+            (last_modified, etag, first_seen_at, source_url, doc_id),
+        )
+        con.commit()
+        con.close()
+        return True
+
+    con.close()
+    return False

@@ -14,3 +14,11 @@ CREATE TABLE IF NOT EXISTS fr_seen (
   first_seen_at TEXT NOT NULL,
   source_url TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ecfr_seen (
+  doc_id TEXT PRIMARY KEY,
+  last_modified TEXT,
+  etag TEXT,
+  first_seen_at TEXT NOT NULL,
+  source_url TEXT NOT NULL
+);
