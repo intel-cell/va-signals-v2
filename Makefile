@@ -15,3 +15,6 @@ db-init:
 
 fr-delta:
 	./.venv/bin/python -m src.run_fr_delta
+
+ecfr-delta:
+	./.venv/bin/python -m src.run_ecfr_delta
