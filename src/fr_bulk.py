@@ -1,10 +1,34 @@
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Tuple
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 HEADERS_JSON = {"Accept": "application/json"}
+
+# Module-level session with retry/backoff for connection reuse and resilience
+_session: requests.Session | None = None
+
+
+def _get_session() -> requests.Session:
+    """Return a shared session with retry strategy."""
+    global _session
+    if _session is None:
+        _session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET"],
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        _session.mount("https://", adapter)
+        _session.mount("http://", adapter)
+        _session.headers.update(HEADERS_JSON)
+    return _session
 
 
 def utc_now_iso() -> str:
@@ -25,7 +49,7 @@ def _to_bulk_url(json_or_bulk_url: str) -> str:
 
 def fetch_bulk_listing_json(bulk_url: str, timeout: int = 30) -> Dict[str, Any]:
     url = _to_json_listing_url(bulk_url)
-    r = requests.get(url, headers=HEADERS_JSON, timeout=timeout)
+    r = _get_session().get(url, timeout=timeout)
     r.raise_for_status()
     return r.json()
 
@@ -94,3 +118,24 @@ def list_month_packages(month_bulk_url: str, timeout: int = 30) -> List[Dict[str
                 "source_url": link or month_bulk_url,
             })
     return out
+
+
+def list_all_packages_parallel(
+    month_folders: List[Tuple[str, str]], timeout: int = 30, max_workers: int = 4
+) -> List[Dict[str, str]]:
+    """Fetch packages from multiple month folders in parallel."""
+    all_packages: List[Dict[str, str]] = []
+
+    def fetch_month(month_url: str) -> List[Dict[str, str]]:
+        return list_month_packages(month_url, timeout=timeout)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_month = {
+            executor.submit(fetch_month, url): label
+            for label, url in month_folders
+        }
+        for future in as_completed(future_to_month):
+            pkgs = future.result()  # Propagate exceptions for fail-closed
+            all_packages.extend(pkgs)
+
+    return all_packages
