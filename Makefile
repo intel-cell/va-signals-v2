@@ -29,4 +29,4 @@ report-weekly:
 	./.venv/bin/python -m src.reports weekly
 
 summarize:
-	./.venv/bin/python -m src.summarize --pending
+	ANTHROPIC_API_KEY=$$(security find-generic-password -s "claude-api" -a "$$USER" -w) ./.venv/bin/python -m src.summarize --pending

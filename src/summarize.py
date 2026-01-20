@@ -1,7 +1,7 @@
 """
 LLM-powered summarization for VA Signals Federal Register documents.
 
-Uses OpenAI API (gpt-4o-mini) to generate veteran-focused summaries
+Uses Claude API (claude-sonnet) to generate veteran-focused summaries
 of Federal Register rules and notices.
 """
 
@@ -26,9 +26,9 @@ from .db import connect
 # Configuration
 # -----------------------------------------------------------------------------
 
-OPENAI_MODEL = "gpt-4o-mini"
-OPENAI_TEMPERATURE = 0.3
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+CLAUDE_MODEL = "claude-sonnet-4-20250514"
+CLAUDE_MAX_TOKENS = 1024
+CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
 # Rate limiting: delay between API calls (seconds)
 RATE_LIMIT_DELAY = 0.5
@@ -62,17 +62,14 @@ Guidelines:
 4. Be factual and precise - do not speculate or editorialize
 5. Use plain language accessible to a general audience
 
-You must respond with valid JSON in this exact format:
-{
-  "summary": "A brief 2-3 sentence summary of the document",
-  "bullet_points": ["Key point 1", "Key point 2", "Key point 3"],
-  "veteran_impact": "A concise explanation of how this affects veterans",
-  "tags": ["tag1", "tag2"]
-}
+CRITICAL: Respond with ONLY valid JSON. No markdown, no explanation, no code blocks. Just the raw JSON object.
 
-For tags, select only from this list: benefits, healthcare, disability, claims, appeals, housing, education, employment, mental-health, caregivers, women-veterans, rural-veterans
+Required JSON format:
+{"summary": "A brief 2-3 sentence summary", "bullet_points": ["Point 1", "Point 2", "Point 3"], "veteran_impact": "How this affects veterans", "tags": ["tag1", "tag2"]}
 
-Only include tags that are directly relevant to the document content."""
+Valid tags: benefits, healthcare, disability, claims, appeals, housing, education, employment, mental-health, caregivers, women-veterans, rural-veterans
+
+Only include tags directly relevant to the document."""
 
 
 # -----------------------------------------------------------------------------
@@ -81,49 +78,84 @@ Only include tags that are directly relevant to the document content."""
 
 
 def is_configured() -> bool:
-    """Check if OpenAI API key is configured."""
-    return bool(os.environ.get("OPENAI_API_KEY"))
+    """Check if Anthropic API key is configured."""
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
 
 
-def _get_openai_key() -> Optional[str]:
-    """Get OpenAI API key from environment."""
-    return os.environ.get("OPENAI_API_KEY")
+def _get_anthropic_key() -> Optional[str]:
+    """Get Anthropic API key from environment."""
+    return os.environ.get("ANTHROPIC_API_KEY")
 
 
 def fetch_document_content(doc_id: str, timeout: int = 30) -> Optional[Dict[str, Any]]:
     """
-    Fetch document content from Federal Register API.
+    Fetch document content. First tries to get source_url from database,
+    then fetches and parses the XML.
 
     Args:
-        doc_id: Federal Register document ID (e.g., "2026-00123")
+        doc_id: Document ID (e.g., "FR-2026-01-20.xml")
         timeout: Request timeout in seconds
 
     Returns:
-        Dict with title, abstract, full_text_xml_url, html_url, etc. or None on error
+        Dict with doc_id, title, abstract, etc. or None on error
     """
     try:
-        # FR API accepts document numbers directly
-        url = f"{FR_API_BASE}/{doc_id}.json"
-        r = requests.get(url, timeout=timeout)
+        # Get source_url from database
+        con = connect()
+        cur = con.cursor()
+        cur.execute("SELECT source_url, published_date FROM fr_seen WHERE doc_id = ?", (doc_id,))
+        row = cur.fetchone()
+        con.close()
 
-        if r.status_code == 404:
+        if not row:
             return None
-        r.raise_for_status()
 
-        data = r.json()
+        source_url, published_date = row[0], row[1]
+
+        # Fetch the XML content
+        r = requests.get(source_url, timeout=timeout)
+        if r.status_code != 200:
+            return None
+
+        # Parse XML to extract key information
+        from lxml import etree
+        root = etree.fromstring(r.content)
+
+        # Extract document titles and agencies from the FR XML
+        titles = []
+        agencies = set()
+
+        # FR bulk XML structure: look for RULE, NOTICE, PRORULE elements
+        for doc_type in ['RULE', 'NOTICE', 'PRORULE', 'PRESDOC']:
+            for doc in root.findall(f'.//{doc_type}'):
+                # Get subject/title
+                subject = doc.find('.//SUBJECT')
+                if subject is not None and subject.text:
+                    titles.append(subject.text.strip())
+                # Get agency
+                agency = doc.find('.//AGENCY')
+                if agency is not None and agency.text:
+                    agencies.add(agency.text.strip())
+
+        # Build a summary of the day's FR content
+        title = f"Federal Register - {published_date or doc_id}"
+        abstract = ""
+        if titles:
+            # Take first 10 titles as abstract
+            abstract = "Documents include: " + "; ".join(titles[:10])
+            if len(titles) > 10:
+                abstract += f" (and {len(titles) - 10} more)"
+
         return {
             "doc_id": doc_id,
-            "title": data.get("title", ""),
-            "abstract": data.get("abstract", ""),
-            "document_number": data.get("document_number", ""),
-            "type": data.get("type", ""),
-            "publication_date": data.get("publication_date", ""),
-            "effective_on": data.get("effective_on"),
-            "html_url": data.get("html_url", ""),
-            "raw_text_url": data.get("raw_text_url", ""),
-            "agencies": [a.get("name", "") for a in data.get("agencies", [])],
+            "title": title,
+            "abstract": abstract,
+            "publication_date": published_date,
+            "agencies": list(agencies),
+            "document_count": len(titles),
         }
-    except Exception:
+    except Exception as e:
+        print(f"Error fetching {doc_id}: {e}")
         return None
 
 
@@ -257,51 +289,97 @@ def get_unsummarized_doc_ids(limit: int = 100) -> List[str]:
 # -----------------------------------------------------------------------------
 
 
-def _call_openai(
+def _extract_json(text: str) -> Optional[Dict[str, Any]]:
+    """
+    Extract JSON from text, handling cases where Claude adds extra text.
+    """
+    # Try direct parse first
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find JSON object in the text
+    import re
+    json_match = re.search(r'\{[\s\S]*\}', text)
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            pass
+
+    return None
+
+
+def _call_claude(
     system_prompt: str,
     user_prompt: str,
     api_key: str,
     timeout: int = 60,
+    retries: int = 2,
 ) -> Optional[Dict[str, Any]]:
     """
-    Make a chat completion request to OpenAI API.
+    Make a message request to Claude API with retry logic.
 
     Args:
         system_prompt: System message content
         user_prompt: User message content
-        api_key: OpenAI API key
+        api_key: Anthropic API key
         timeout: Request timeout in seconds
+        retries: Number of retries on failure
 
     Returns:
         Parsed JSON response or None on error
     """
-    try:
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": OPENAI_MODEL,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": OPENAI_TEMPERATURE,
-            "response_format": {"type": "json_object"},
-        }
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": CLAUDE_MODEL,
+        "max_tokens": CLAUDE_MAX_TOKENS,
+        "system": system_prompt,
+        "messages": [
+            {"role": "user", "content": user_prompt},
+        ],
+    }
 
-        r = requests.post(OPENAI_API_URL, headers=headers, json=payload, timeout=timeout)
-        r.raise_for_status()
+    for attempt in range(retries + 1):
+        try:
+            r = requests.post(CLAUDE_API_URL, headers=headers, json=payload, timeout=timeout)
+            r.raise_for_status()
 
-        data = r.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            data = r.json()
+            content = data.get("content", [{}])[0].get("text", "")
 
-        if not content:
+            if not content:
+                continue
+
+            result = _extract_json(content)
+            if result:
+                return result
+
+            # If JSON extraction failed, retry with explicit reminder
+            if attempt < retries:
+                payload["messages"] = [
+                    {"role": "user", "content": user_prompt},
+                    {"role": "assistant", "content": content},
+                    {"role": "user", "content": "Please respond with ONLY valid JSON, no other text."},
+                ]
+                time.sleep(0.5)
+
+        except requests.exceptions.RequestException as e:
+            if attempt < retries:
+                time.sleep(1)
+                continue
+            print(f"Claude API request error: {e}")
+            return None
+        except Exception as e:
+            print(f"Claude API error: {e}")
             return None
 
-        return json.loads(content)
-    except Exception:
-        return None
+    return None
 
 
 def _build_user_prompt(title: str, abstract: str, full_text: Optional[str] = None) -> str:
@@ -350,7 +428,7 @@ def summarize_document(
             "summarized_at": "2026-01-19T..."
         }
     """
-    api_key = _get_openai_key()
+    api_key = _get_anthropic_key()
     if not api_key:
         return None
 
@@ -358,7 +436,7 @@ def summarize_document(
         return None
 
     user_prompt = _build_user_prompt(title, abstract, full_text)
-    result = _call_openai(SYSTEM_PROMPT, user_prompt, api_key)
+    result = _call_claude(SYSTEM_PROMPT, user_prompt, api_key)
 
     if result is None:
         return None
@@ -474,7 +552,7 @@ def summarize_batch(
 def _cli_summarize_one(doc_id: str) -> None:
     """Summarize a single document by ID."""
     if not is_configured():
-        print("ERROR: OPENAI_API_KEY not configured")
+        print("ERROR: ANTHROPIC_API_KEY not configured")
         sys.exit(1)
 
     # Check if already summarized
@@ -516,7 +594,7 @@ def _cli_summarize_one(doc_id: str) -> None:
 def _cli_summarize_pending(limit: int = 10) -> None:
     """Summarize all unsummarized documents."""
     if not is_configured():
-        print("ERROR: OPENAI_API_KEY not configured")
+        print("ERROR: ANTHROPIC_API_KEY not configured")
         sys.exit(1)
 
     doc_ids = get_unsummarized_doc_ids(limit=limit)
@@ -558,16 +636,16 @@ def main() -> None:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="Check if OpenAI API is configured",
+        help="Check if Claude API is configured",
     )
 
     args = parser.parse_args()
 
     if args.check:
         if is_configured():
-            print("OpenAI API configured: Yes")
+            print("Claude API configured: Yes")
         else:
-            print("OpenAI API configured: No (OPENAI_API_KEY not set)")
+            print("Claude API configured: No (ANTHROPIC_API_KEY not set)")
         return
 
     if args.pending:
