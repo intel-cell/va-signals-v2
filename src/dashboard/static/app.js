@@ -7,10 +7,12 @@
 const CONFIG = {
     refreshInterval: 60000, // 60 seconds
     apiBase: '/api',
+    wsBase: `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`,
     dateFormat: {
         full: { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' },
         time: { hour: '2-digit', minute: '2-digit' }
-    }
+    },
+    toastDuration: 5000
 };
 
 // State management
@@ -18,14 +20,34 @@ const state = {
     runs: [],
     stats: null,
     frDocuments: [],
+    frDocumentsFiltered: [],
     ecfrDocuments: [],
     health: null,
     errors: [],
+    summaries: [],
+    summarizedDocIds: new Set(),
     charts: {
         runsChart: null,
         statusChart: null
     },
-    refreshTimer: null
+    refreshTimer: null,
+    ws: null,
+    wsReconnectTimer: null,
+    filters: {
+        fr: {
+            search: '',
+            type: '',
+            dateFrom: '',
+            dateTo: ''
+        }
+    },
+    loading: {
+        runs: true,
+        stats: true,
+        frDocs: true,
+        ecfrDocs: true,
+        summaries: true
+    }
 };
 
 // DOM Elements
@@ -41,7 +63,24 @@ const elements = {
     ecfrTbody: document.getElementById('ecfr-tbody'),
     errorModal: document.getElementById('error-modal'),
     errorDetails: document.getElementById('error-details'),
-    modalClose: document.getElementById('modal-close')
+    modalClose: document.getElementById('modal-close'),
+    summariesFeed: document.getElementById('summaries-feed'),
+    summariesCount: document.getElementById('summaries-count'),
+    summaryModal: document.getElementById('summary-modal'),
+    summaryDetails: document.getElementById('summary-details'),
+    summaryModalClose: document.getElementById('summary-modal-close'),
+    reportsBtn: document.getElementById('reports-btn'),
+    reportsDropdown: document.querySelector('.reports-dropdown'),
+    toastContainer: document.getElementById('toast-container'),
+    // Filter elements
+    frSearch: document.getElementById('fr-search'),
+    frTypeFilter: document.getElementById('fr-type-filter'),
+    frDateFrom: document.getElementById('fr-date-from'),
+    frDateTo: document.getElementById('fr-date-to'),
+    clearFrFilters: document.getElementById('clear-fr-filters'),
+    exportFrCsv: document.getElementById('export-fr-csv'),
+    exportSummariesCsv: document.getElementById('export-summaries-csv'),
+    frResultsCount: document.getElementById('fr-results-count')
 };
 
 // Utility Functions
@@ -96,6 +135,286 @@ function getStatusClass(status) {
     }
 }
 
+// Toast Notification System
+function showToast(type, title, message) {
+    if (!elements.toastContainer) return;
+
+    const icons = {
+        success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+        error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+        warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <span class="toast-icon">${icons[type] || icons.info}</span>
+        <div class="toast-content">
+            <div class="toast-title">${escapeHtml(title)}</div>
+            ${message ? `<div class="toast-message">${escapeHtml(message)}</div>` : ''}
+        </div>
+        <button class="toast-close">&times;</button>
+    `;
+
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => removeToast(toast));
+
+    elements.toastContainer.appendChild(toast);
+
+    // Auto-remove after duration
+    setTimeout(() => removeToast(toast), CONFIG.toastDuration);
+}
+
+function removeToast(toast) {
+    if (!toast || !toast.parentNode) return;
+    toast.classList.add('toast-exit');
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 300);
+}
+
+// Skeleton Loading Functions
+function renderSkeletonRows(count, columns) {
+    const sizes = ['medium', 'large', 'small', 'medium', 'small'];
+    return Array(count).fill(0).map(() => `
+        <tr class="skeleton-row">
+            ${Array(columns).fill(0).map((_, i) => `
+                <td><div class="skeleton skeleton-cell ${sizes[i % sizes.length]}"></div></td>
+            `).join('')}
+        </tr>
+    `).join('');
+}
+
+function renderSkeletonCards(count) {
+    return Array(count).fill(0).map(() => `
+        <div class="skeleton-card">
+            <div class="skeleton skeleton-line short"></div>
+            <div class="skeleton skeleton-line full"></div>
+            <div class="skeleton skeleton-line medium"></div>
+        </div>
+    `).join('');
+}
+
+// CSV Export Functions
+function downloadCsv(data, filename) {
+    const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function escapeCsvValue(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+}
+
+function exportFrDocumentsToCsv() {
+    const docs = state.frDocumentsFiltered.length > 0 ? state.frDocumentsFiltered : state.frDocuments;
+    if (docs.length === 0) {
+        showToast('warning', 'No Data', 'No documents to export');
+        return;
+    }
+
+    const headers = ['doc_id', 'published_date', 'first_seen_at', 'has_summary', 'source_url'];
+    const rows = docs.map(doc => {
+        const docId = doc.doc_id || doc.document_id || doc.id;
+        return [
+            escapeCsvValue(docId),
+            escapeCsvValue(doc.published_date),
+            escapeCsvValue(doc.first_seen_at || doc.created_at),
+            state.summarizedDocIds.has(docId) ? 'Yes' : 'No',
+            escapeCsvValue(doc.source_url || doc.url)
+        ].join(',');
+    });
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const date = new Date().toISOString().split('T')[0];
+    downloadCsv(csv, `fr-documents-${date}.csv`);
+    showToast('success', 'Export Complete', `Exported ${docs.length} documents`);
+}
+
+function exportSummariesToCsv() {
+    if (state.summaries.length === 0) {
+        showToast('warning', 'No Data', 'No summaries to export');
+        return;
+    }
+
+    const headers = ['doc_id', 'summary', 'bullet_points', 'veteran_impact', 'tags', 'summarized_at', 'source_url'];
+    const rows = state.summaries.map(s => [
+        escapeCsvValue(s.doc_id),
+        escapeCsvValue(s.summary),
+        escapeCsvValue((s.bullet_points || []).join('; ')),
+        escapeCsvValue(s.veteran_impact),
+        escapeCsvValue((s.tags || []).join(', ')),
+        escapeCsvValue(s.summarized_at),
+        escapeCsvValue(s.source_url)
+    ].join(','));
+
+    const csv = [headers.join(','), ...rows].join('\n');
+    const date = new Date().toISOString().split('T')[0];
+    downloadCsv(csv, `summaries-${date}.csv`);
+    showToast('success', 'Export Complete', `Exported ${state.summaries.length} summaries`);
+}
+
+// Filter Functions
+function applyFrFilters() {
+    const { search, type, dateFrom, dateTo } = state.filters.fr;
+    let filtered = [...state.frDocuments];
+
+    // Search filter
+    if (search) {
+        const searchLower = search.toLowerCase();
+        filtered = filtered.filter(doc => {
+            const docId = (doc.doc_id || doc.document_id || doc.id || '').toLowerCase();
+            const url = (doc.source_url || '').toLowerCase();
+            return docId.includes(searchLower) || url.includes(searchLower);
+        });
+    }
+
+    // Type filter (would need doc type in data, placeholder for now)
+    // if (type) {
+    //     filtered = filtered.filter(doc => doc.type === type);
+    // }
+
+    // Date filters
+    if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        filtered = filtered.filter(doc => {
+            const docDate = new Date(doc.published_date || doc.first_seen_at);
+            return docDate >= fromDate;
+        });
+    }
+
+    if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(doc => {
+            const docDate = new Date(doc.published_date || doc.first_seen_at);
+            return docDate <= toDate;
+        });
+    }
+
+    state.frDocumentsFiltered = filtered;
+    renderFrTable();
+
+    // Update results count
+    if (elements.frResultsCount) {
+        const total = state.frDocuments.length;
+        const shown = filtered.length;
+        elements.frResultsCount.textContent = search || dateFrom || dateTo ?
+            `${shown} of ${total}` : '';
+    }
+}
+
+function clearFrFilters() {
+    state.filters.fr = { search: '', type: '', dateFrom: '', dateTo: '' };
+    if (elements.frSearch) elements.frSearch.value = '';
+    if (elements.frTypeFilter) elements.frTypeFilter.value = '';
+    if (elements.frDateFrom) elements.frDateFrom.value = '';
+    if (elements.frDateTo) elements.frDateTo.value = '';
+    state.frDocumentsFiltered = [];
+    renderFrTable();
+    if (elements.frResultsCount) elements.frResultsCount.textContent = '';
+}
+
+// WebSocket Functions
+function connectWebSocket() {
+    // Check if WebSocket endpoint exists before connecting
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
+
+    try {
+        state.ws = new WebSocket(CONFIG.wsBase);
+
+        state.ws.onopen = () => {
+            console.log('WebSocket connected');
+            showToast('success', 'Connected', 'Real-time updates enabled');
+            // Clear any reconnect timer
+            if (state.wsReconnectTimer) {
+                clearTimeout(state.wsReconnectTimer);
+                state.wsReconnectTimer = null;
+            }
+        };
+
+        state.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            } catch (e) {
+                console.error('WebSocket message parse error:', e);
+            }
+        };
+
+        state.ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            // Schedule reconnection
+            if (!state.wsReconnectTimer) {
+                state.wsReconnectTimer = setTimeout(() => {
+                    state.wsReconnectTimer = null;
+                    connectWebSocket();
+                }, 5000);
+            }
+        };
+
+        state.ws.onerror = (error) => {
+            console.log('WebSocket error (will fallback to polling):', error);
+            // Don't show error toast - silently fallback to polling
+        };
+    } catch (e) {
+        console.log('WebSocket not available, using polling');
+    }
+}
+
+function handleWebSocketMessage(data) {
+    switch (data.type) {
+        case 'new_run':
+            // Add new run to the beginning
+            state.runs.unshift(data.run);
+            state.runs = state.runs.slice(0, 50); // Keep max 50
+            renderRunsTable();
+            showToast('info', 'New Run', `${data.run.source_id}: ${data.run.status}`);
+            break;
+
+        case 'new_document':
+            state.frDocuments.unshift(data.document);
+            renderFrTable();
+            showToast('info', 'New Document', data.document.doc_id);
+            break;
+
+        case 'new_summary':
+            state.summaries.unshift(data.summary);
+            state.summarizedDocIds.add(data.summary.doc_id);
+            renderSummariesFeed();
+            renderFrTable(); // Update summary badges
+            showToast('success', 'New Summary', data.summary.doc_id);
+            break;
+
+        case 'stats_update':
+            state.stats = data.stats;
+            updateHealthCards();
+            updateCharts();
+            break;
+
+        case 'error':
+            showToast('error', 'Error', data.message);
+            break;
+
+        default:
+            console.log('Unknown WebSocket message type:', data.type);
+    }
+}
+
 // API Functions
 async function fetchApi(endpoint) {
     try {
@@ -112,7 +431,10 @@ async function fetchApi(endpoint) {
 
 // Data Loading Functions
 async function loadRuns() {
+    state.loading.runs = true;
+    renderRunsTable(); // Show skeleton
     const data = await fetchApi('/runs');
+    state.loading.runs = false;
     if (data) {
         state.runs = Array.isArray(data) ? data : (data.runs || []);
         renderRunsTable();
@@ -129,9 +451,13 @@ async function loadStats() {
 }
 
 async function loadFrDocuments() {
+    state.loading.frDocs = true;
+    renderFrTable(); // Show skeleton
     const data = await fetchApi('/documents/fr');
+    state.loading.frDocs = false;
     if (data) {
         state.frDocuments = Array.isArray(data) ? data : (data.documents || []);
+        state.frDocumentsFiltered = [];
         renderFrTable();
     }
 }
@@ -156,6 +482,24 @@ async function loadErrors() {
     if (data) {
         state.errors = Array.isArray(data) ? data : (data.errors || []);
         updateLastError();
+    }
+}
+
+async function loadSummaries() {
+    state.loading.summaries = true;
+    renderSummariesFeed(); // Show skeleton
+    const data = await fetchApi('/summaries');
+    state.loading.summaries = false;
+    if (data) {
+        state.summaries = Array.isArray(data) ? data : (data.summaries || []);
+        renderSummariesFeed();
+    }
+}
+
+async function loadSummarizedDocIds() {
+    const data = await fetchApi('/summaries/doc-ids');
+    if (data && data.doc_ids) {
+        state.summarizedDocIds = new Set(data.doc_ids);
     }
 }
 
@@ -222,11 +566,15 @@ function renderRunsTable() {
         return;
     }
 
-    elements.runsTbody.innerHTML = runs.map(run => {
+    elements.runsTbody.innerHTML = runs.map((run, index) => {
         const sourceClass = getSourceClass(run.source_id);
         const statusClass = getStatusClass(run.status);
-        const hasErrors = run.error_message || run.errors;
+        // Handle errors array properly - check length, not just truthiness
+        const errorsArray = Array.isArray(run.errors) ? run.errors : [];
+        const errorText = run.error_message || (errorsArray.length > 0 ? errorsArray.join('\n') : '');
+        const hasErrors = errorText.length > 0;
 
+        // Store error text in a data attribute to avoid escaping issues
         return `
             <tr>
                 <td>
@@ -244,7 +592,7 @@ function renderRunsTable() {
                 <td>${run.records_fetched ?? run.record_count ?? '--'}</td>
                 <td>
                     ${hasErrors
-                        ? `<button class="error-btn" onclick="showErrorDetails('${escapeHtml(run.error_message || run.errors || '')}')">View</button>`
+                        ? `<button class="error-btn" data-error="${escapeHtml(errorText)}" onclick="showErrorFromButton(this)">View</button>`
                         : '<span class="no-errors">--</span>'
                     }
                 </td>
@@ -259,7 +607,7 @@ function renderFrTable() {
     if (docs.length === 0) {
         elements.frTbody.innerHTML = `
             <tr class="empty-state-row">
-                <td colspan="3" class="empty-state">
+                <td colspan="4" class="empty-state">
                     <p>No FR documents found</p>
                 </td>
             </tr>
@@ -270,6 +618,7 @@ function renderFrTable() {
     elements.frTbody.innerHTML = docs.map(doc => {
         const docId = doc.doc_id || doc.document_id || doc.id;
         const sourceUrl = doc.source_url || doc.url;
+        const hasSummary = state.summarizedDocIds.has(docId);
 
         return `
             <tr>
@@ -280,6 +629,18 @@ function renderFrTable() {
                     </span>
                 </td>
                 <td>${formatRelativeTime(doc.first_seen_at || doc.created_at)}</td>
+                <td>
+                    ${hasSummary
+                        ? `<button class="summary-badge" onclick="showSummaryModal('${escapeHtml(docId)}')">
+                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                   <polyline points="14 2 14 8 20 8"/>
+                               </svg>
+                               Summary
+                           </button>`
+                        : '<span class="no-errors">--</span>'
+                    }
+                </td>
                 <td>
                     ${sourceUrl
                         ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="doc-link truncate" title="${escapeHtml(sourceUrl)}">${escapeHtml(sourceUrl)}</a>`
@@ -314,6 +675,174 @@ function renderEcfrTable() {
             </tr>
         `;
     }).join('');
+}
+
+function renderSummariesFeed() {
+    const summaries = state.summaries;
+
+    if (!elements.summariesFeed) return;
+
+    elements.summariesCount.textContent = `${summaries.length} summaries`;
+
+    if (summaries.length === 0) {
+        elements.summariesFeed.innerHTML = `
+            <div class="empty-summaries">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                </svg>
+                <p>No summaries available yet</p>
+            </div>
+        `;
+        return;
+    }
+
+    elements.summariesFeed.innerHTML = summaries.map((summary, index) => {
+        const docId = summary.doc_id;
+        const tags = summary.tags || [];
+        const bulletPoints = summary.bullet_points || [];
+        const sourceUrl = summary.source_url;
+
+        return `
+            <div class="summary-card" data-doc-id="${escapeHtml(docId)}">
+                <div class="summary-header">
+                    <div class="summary-doc-id">
+                        ${sourceUrl
+                            ? `<a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(docId)}</a>`
+                            : `<span>${escapeHtml(docId)}</span>`
+                        }
+                    </div>
+                    <span class="summary-date">${formatRelativeTime(summary.summarized_at)}</span>
+                </div>
+                <p class="summary-text">${escapeHtml(summary.summary)}</p>
+                ${tags.length > 0 ? `
+                    <div class="summary-tags">
+                        ${tags.map(tag => `<span class="tag ${escapeHtml(tag)}">${escapeHtml(tag)}</span>`).join('')}
+                    </div>
+                ` : ''}
+                <button class="summary-expand" onclick="toggleSummaryDetails(${index})">
+                    <span>Show details</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                </button>
+                <div class="summary-details" id="summary-details-${index}">
+                    ${bulletPoints.length > 0 ? `
+                        <ul class="summary-bullet-points">
+                            ${bulletPoints.map(point => `<li>${escapeHtml(point)}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+                    ${summary.veteran_impact ? `
+                        <div class="summary-impact">
+                            <span class="summary-impact-label">Veteran Impact</span>
+                            <p class="summary-impact-text">${escapeHtml(summary.veteran_impact)}</p>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function toggleSummaryDetails(index) {
+    const detailsEl = document.getElementById(`summary-details-${index}`);
+    const buttonEl = detailsEl?.previousElementSibling;
+
+    if (detailsEl) {
+        detailsEl.classList.toggle('visible');
+        if (buttonEl) {
+            buttonEl.classList.toggle('expanded');
+            const spanEl = buttonEl.querySelector('span');
+            if (spanEl) {
+                spanEl.textContent = detailsEl.classList.contains('visible') ? 'Hide details' : 'Show details';
+            }
+        }
+    }
+}
+
+async function showSummaryModal(docId) {
+    const data = await fetchApi(`/summaries/${docId}`);
+    if (!data) {
+        alert('Could not load summary');
+        return;
+    }
+
+    const tags = data.tags || [];
+    const bulletPoints = data.bullet_points || [];
+
+    elements.summaryDetails.innerHTML = `
+        <div class="summary-tags" style="margin-bottom: 1rem;">
+            ${tags.map(tag => `<span class="tag ${escapeHtml(tag)}">${escapeHtml(tag)}</span>`).join('')}
+        </div>
+        <p class="modal-summary-text">${escapeHtml(data.summary)}</p>
+        ${bulletPoints.length > 0 ? `
+            <div class="modal-summary-section">
+                <h4>Key Points</h4>
+                <ul>
+                    ${bulletPoints.map(point => `<li>${escapeHtml(point)}</li>`).join('')}
+                </ul>
+            </div>
+        ` : ''}
+        ${data.veteran_impact ? `
+            <div class="modal-summary-section">
+                <h4>Veteran Impact</h4>
+                <div class="summary-impact">
+                    <p class="summary-impact-text">${escapeHtml(data.veteran_impact)}</p>
+                </div>
+            </div>
+        ` : ''}
+        ${data.source_url ? `
+            <div class="modal-summary-section">
+                <a href="${escapeHtml(data.source_url)}" target="_blank" rel="noopener noreferrer" class="doc-link">
+                    View Original Document
+                </a>
+            </div>
+        ` : ''}
+    `;
+
+    elements.summaryModal.classList.add('active');
+}
+
+function hideSummaryModal() {
+    elements.summaryModal.classList.remove('active');
+}
+
+// Reports Functions
+async function downloadReport(reportType) {
+    // Close dropdown
+    if (elements.reportsDropdown) {
+        elements.reportsDropdown.classList.remove('active');
+    }
+
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/reports/generate?type=${reportType}&format=json`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const report = await response.json();
+        const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `va-signals-${reportType}-report-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error downloading report:', error);
+        alert('Failed to download report. Please try again.');
+    }
+}
+
+function toggleReportsDropdown() {
+    if (elements.reportsDropdown) {
+        elements.reportsDropdown.classList.toggle('active');
+    }
 }
 
 // Chart Functions
@@ -462,6 +991,11 @@ function showErrorDetails(errorText) {
     elements.errorModal.classList.add('active');
 }
 
+function showErrorFromButton(button) {
+    const errorText = button.dataset.error || 'No error details available';
+    showErrorDetails(errorText);
+}
+
 function hideErrorModal() {
     elements.errorModal.classList.remove('active');
 }
@@ -504,8 +1038,13 @@ async function refreshAll() {
         loadFrDocuments(),
         loadEcfrDocuments(),
         loadHealth(),
-        loadErrors()
+        loadErrors(),
+        loadSummaries(),
+        loadSummarizedDocIds()
     ]);
+
+    // Re-render FR table to show summary badges (after summarizedDocIds is loaded)
+    renderFrTable();
 }
 
 function startAutoRefresh() {
@@ -517,7 +1056,7 @@ function startAutoRefresh() {
 
 // Event Listeners
 function initEventListeners() {
-    // Modal close
+    // Error modal close
     elements.modalClose.addEventListener('click', hideErrorModal);
     elements.errorModal.addEventListener('click', (e) => {
         if (e.target === elements.errorModal) {
@@ -525,16 +1064,51 @@ function initEventListeners() {
         }
     });
 
+    // Summary modal close
+    if (elements.summaryModalClose) {
+        elements.summaryModalClose.addEventListener('click', hideSummaryModal);
+    }
+    if (elements.summaryModal) {
+        elements.summaryModal.addEventListener('click', (e) => {
+            if (e.target === elements.summaryModal) {
+                hideSummaryModal();
+            }
+        });
+    }
+
+    // Reports dropdown toggle
+    if (elements.reportsBtn) {
+        elements.reportsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleReportsDropdown();
+        });
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (elements.reportsDropdown && !elements.reportsDropdown.contains(e.target)) {
+            elements.reportsDropdown.classList.remove('active');
+        }
+    });
+
     // Keyboard events
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             hideErrorModal();
+            hideSummaryModal();
+            if (elements.reportsDropdown) {
+                elements.reportsDropdown.classList.remove('active');
+            }
         }
     });
 }
 
-// Make showErrorDetails available globally for onclick handlers
+// Make functions available globally for onclick handlers
 window.showErrorDetails = showErrorDetails;
+window.showErrorFromButton = showErrorFromButton;
+window.showSummaryModal = showSummaryModal;
+window.toggleSummaryDetails = toggleSummaryDetails;
+window.downloadReport = downloadReport;
 
 // Initialize
 async function init() {
