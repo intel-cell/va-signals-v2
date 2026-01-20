@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VA Signals Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                </div>
+                <h1>VA Signals Dashboard</h1>
+            </div>
+            <div class="header-right">
+                <span class="refresh-indicator" id="refresh-indicator">
+                    <span class="pulse"></span>
+                    Live
+                </span>
+                <span class="last-refresh">Last refresh: <span id="last-refresh-time">--</span></span>
+            </div>
+        </header>
+
+        <!-- Health Cards -->
+        <section class="health-cards">
+            <div class="card health-card">
+                <div class="card-icon runs-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <span class="card-value" id="total-runs">--</span>
+                    <span class="card-label">Runs Today</span>
+                </div>
+            </div>
+            <div class="card health-card">
+                <div class="card-icon success-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <span class="card-value" id="success-rate">--%</span>
+                    <span class="card-label">Success Rate</span>
+                </div>
+            </div>
+            <div class="card health-card">
+                <div class="card-icon docs-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="12" y1="18" x2="12" y2="12"/>
+                        <line x1="9" y1="15" x2="15" y2="15"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <span class="card-value" id="new-docs">--</span>
+                    <span class="card-label">New Docs Today</span>
+                </div>
+            </div>
+            <div class="card health-card">
+                <div class="card-icon error-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                </div>
+                <div class="card-content">
+                    <span class="card-value" id="last-error">--</span>
+                    <span class="card-label">Last Error</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content Grid -->
+        <div class="main-grid">
+            <!-- Recent Runs Table -->
+            <section class="card runs-section">
+                <div class="card-header">
+                    <h2>Recent Runs</h2>
+                    <span class="badge" id="runs-count">0 runs</span>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="runs-table">
+                        <thead>
+                            <tr>
+                                <th>Source</th>
+                                <th>Status</th>
+                                <th>Started</th>
+                                <th>Records</th>
+                                <th>Errors</th>
+                            </tr>
+                        </thead>
+                        <tbody id="runs-tbody">
+                            <tr class="loading-row">
+                                <td colspan="5">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <h2>Runs by Day</h2>
+                        <span class="badge">Last 7 days</span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="runs-chart"></canvas>
+                    </div>
+                </div>
+                <div class="card chart-card">
+                    <div class="card-header">
+                        <h2>Status Distribution</h2>
+                    </div>
+                    <div class="chart-container donut-container">
+                        <canvas id="status-chart"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Documents Section -->
+        <section class="card documents-section">
+            <div class="card-header">
+                <h2>Documents</h2>
+                <div class="tabs">
+                    <button class="tab active" data-tab="fr">FR Documents</button>
+                    <button class="tab" data-tab="ecfr">eCFR Status</button>
+                </div>
+            </div>
+
+            <div class="tab-content active" id="fr-tab">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Document ID</th>
+                                <th>First Seen</th>
+                                <th>Source URL</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fr-tbody">
+                            <tr class="loading-row">
+                                <td colspan="3">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-content" id="ecfr-tab">
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Last Modified</th>
+                                <th>Checked At</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ecfr-tbody">
+                            <tr class="loading-row">
+                                <td colspan="3">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Error Details Modal -->
+        <div class="modal" id="error-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Error Details</h3>
+                    <button class="modal-close" id="modal-close">&times;</button>
+                </div>
+                <div class="modal-body" id="error-details">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

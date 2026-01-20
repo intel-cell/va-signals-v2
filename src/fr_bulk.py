@@ -1,6 +1,7 @@
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+import threading
 from typing import Any, Dict, List, Tuple
 
 import requests
@@ -9,15 +10,15 @@ from urllib3.util.retry import Retry
 
 HEADERS_JSON = {"Accept": "application/json"}
 
-# Module-level session with retry/backoff for connection reuse and resilience
-_session: requests.Session | None = None
+# Thread-local session with retry/backoff for connection reuse and resilience
+_session_local = threading.local()
 
 
 def _get_session() -> requests.Session:
-    """Return a shared session with retry strategy."""
-    global _session
-    if _session is None:
-        _session = requests.Session()
+    """Return a thread-local session with retry strategy."""
+    session = getattr(_session_local, "session", None)
+    if session is None:
+        session = requests.Session()
         retry = Retry(
             total=3,
             backoff_factor=0.5,
@@ -25,10 +26,11 @@ def _get_session() -> requests.Session:
             allowed_methods=["HEAD", "GET"],
         )
         adapter = HTTPAdapter(max_retries=retry)
-        _session.mount("https://", adapter)
-        _session.mount("http://", adapter)
-        _session.headers.update(HEADERS_JSON)
-    return _session
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        session.headers.update(HEADERS_JSON)
+        _session_local.session = session
+    return session
 
 
 def utc_now_iso() -> str:

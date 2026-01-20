@@ -6,6 +6,13 @@ from typing import Any, Dict, List
 import yaml
 from jsonschema import validate
 
+# Allow running as a script (python src/run_fr_delta.py) by setting package context
+if __name__ == "__main__" and __package__ is None:
+    import sys
+
+    sys.path.append(str(Path(__file__).resolve().parent.parent))
+    __package__ = "src"
+
 from .notify_slack import post_slack, format_fr_delta_alert
 from .provenance import utc_now_iso
 from .db import init_db, insert_source_run, upsert_fr_seen
@@ -95,7 +102,7 @@ def run_fr_delta(max_months: int = 3) -> Dict[str, Any]:
     new_docs_count = len(new_docs)
     print(json.dumps({"run_record": run_record, "new_docs_count": new_docs_count}, indent=2))
 
-    alert_payload = format_fr_delta_alert(run_record, new_docs_count)
+    alert_payload = format_fr_delta_alert(run_record, new_docs)
     if alert_payload:
         try:
             post_slack(alert_payload)

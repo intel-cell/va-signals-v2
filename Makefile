@@ -1,4 +1,4 @@
-.PHONY: init test fr-ping
+.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize
 
 init:
 	python3 -m venv .venv
@@ -18,3 +18,15 @@ fr-delta:
 
 ecfr-delta:
 	./.venv/bin/python -m src.run_ecfr_delta
+
+dashboard:
+	./.venv/bin/uvicorn src.dashboard_api:app --reload --port 8000
+
+report-daily:
+	./.venv/bin/python -m src.reports daily
+
+report-weekly:
+	./.venv/bin/python -m src.reports weekly
+
+summarize:
+	./.venv/bin/python -m src.summarize --pending

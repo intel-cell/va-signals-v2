@@ -63,3 +63,30 @@ def format_fr_delta_alert(run_record: Dict[str, Any], new_docs: list[dict]) -> O
         }
 
     return None
+
+
+def format_agenda_drift_alert(events: list[dict]) -> Optional[Dict[str, Any]]:
+    """
+    Format agenda drift deviation events for Slack.
+    Returns None if no events, else {"text": "..."}.
+    """
+    if not events:
+        return None
+
+    lines = [f"VA Signals — Agenda Drift: {len(events)} deviation(s)"]
+    for e in events[:5]:
+        member = e.get("member_name", e.get("member_id", "Unknown"))
+        z = e.get("zscore", 0)
+        hearing = e.get("hearing_id", "")
+        note = e.get("note", "")
+        line = f"- {member}: z={z:.1f}"
+        if hearing:
+            line += f" ({hearing})"
+        if note:
+            line += f" — {note}"
+        lines.append(line)
+
+    if len(events) > 5:
+        lines.append(f"(+{len(events) - 5} more)")
+
+    return {"text": "\n".join(lines)}

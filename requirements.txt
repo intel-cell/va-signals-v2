@@ -5,3 +5,10 @@ pytest>=8.0.0
 python-dateutil>=2.9.0.post0
 
 lxml>=5.2.2
+
+# Dashboard
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+
+# LLM Summaries
+openai>=1.0.0
