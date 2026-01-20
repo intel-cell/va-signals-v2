@@ -855,21 +855,25 @@ function updateRunsChart() {
     const ctx = document.getElementById('runs-chart');
     if (!ctx) return;
 
-    // Get runs by day data from stats or generate from runs
+    // Get runs by day data from stats
     let labels = [];
     let data = [];
 
-    if (state.stats?.runs_by_day) {
-        const runsByDay = state.stats.runs_by_day;
-        labels = Object.keys(runsByDay).slice(-7);
-        data = labels.map(day => runsByDay[day] || 0);
+    if (state.stats?.runs_by_day && Array.isArray(state.stats.runs_by_day)) {
+        // API returns array of {date, count} objects
+        const runsByDay = state.stats.runs_by_day.slice(-7);
+        labels = runsByDay.map(d => {
+            const date = new Date(d.date + 'T00:00:00');
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        });
+        data = runsByDay.map(d => d.count);
     } else {
-        // Generate last 7 days
+        // Fallback: generate last 7 days with zero data
         for (let i = 6; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
-            labels.push(date.toLocaleDateString('en-US', { weekday: 'short' }));
-            data.push(Math.floor(Math.random() * 20) + 5); // Placeholder
+            labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            data.push(0);
         }
     }
 
@@ -994,6 +998,112 @@ function showErrorDetails(errorText) {
 function showErrorFromButton(button) {
     const errorText = button.dataset.error || 'No error details available';
     showErrorDetails(errorText);
+}
+
+function showColumnExplanation(column) {
+    const explanations = {
+        source: `
+            <div class="explanation-content">
+                <h3>What is a Source?</h3>
+                <p>A <strong>source</strong> is a government data feed that the system monitors for changes.</p>
+
+                <div class="explanation-breakdown">
+                    <div class="explanation-item">
+                        <span class="label">govinfo_fr_bulk</span>
+                        <span class="value" style="color: var(--accent-primary)">Federal Register</span>
+                    </div>
+                    <div class="explanation-item">
+                        <span class="label">govinfo_ecfr_title_38</span>
+                        <span class="value" style="color: var(--accent-primary)">eCFR Title 38 (VA regulations)</span>
+                    </div>
+                </div>
+
+                <p class="explanation-note">
+                    The Federal Register publishes new rules, notices, and proposed regulations daily.
+                    eCFR Title 38 contains the official VA regulations.
+                </p>
+            </div>
+        `,
+        status: `
+            <div class="explanation-content">
+                <h3>What does Status mean?</h3>
+                <p>Status tells you what happened when the system checked a source.</p>
+
+                <div class="explanation-breakdown">
+                    <div class="explanation-item success">
+                        <span class="label">SUCCESS</span>
+                        <span class="value">Found new documents</span>
+                    </div>
+                    <div class="explanation-item no-data">
+                        <span class="label">NO_DATA</span>
+                        <span class="value">Checked successfully, nothing new</span>
+                    </div>
+                    <div class="explanation-item error">
+                        <span class="label">ERROR</span>
+                        <span class="value">Something went wrong</span>
+                    </div>
+                </div>
+
+                <p class="explanation-note">
+                    NO_DATA is normal! The Federal Register doesn't publish on weekends or holidays.
+                    It just means the system checked and found no new content.
+                </p>
+            </div>
+        `,
+        started: `
+            <div class="explanation-content">
+                <h3>What is a Run?</h3>
+                <p>A <strong>run</strong> is one check of a data source. The system automatically runs on a schedule.</p>
+
+                <div class="explanation-breakdown">
+                    <div class="explanation-item">
+                        <span class="label">Schedule</span>
+                        <span class="value">Daily at 6:15 AM ET</span>
+                    </div>
+                    <div class="explanation-item">
+                        <span class="label">Trigger</span>
+                        <span class="value">GitHub Actions (automated)</span>
+                    </div>
+                    <div class="explanation-item">
+                        <span class="label">Can also run</span>
+                        <span class="value">Manually via command line</span>
+                    </div>
+                </div>
+
+                <p class="explanation-note">
+                    Each run: connects to the source → downloads latest data →
+                    compares against what we've seen before → saves any new documents →
+                    sends alerts if something changed.
+                </p>
+            </div>
+        `,
+        records: `
+            <div class="explanation-content">
+                <h3>What does Records mean?</h3>
+                <p><strong>Records</strong> is the number of items the system examined during that run.</p>
+
+                <div class="explanation-breakdown">
+                    <div class="explanation-item">
+                        <span class="label">For FR (Federal Register)</span>
+                        <span class="value">Days of XML files checked</span>
+                    </div>
+                    <div class="explanation-item">
+                        <span class="label">For eCFR</span>
+                        <span class="value">Usually 1 (the whole title)</span>
+                    </div>
+                </div>
+
+                <p class="explanation-note">
+                    A high number means more data was scanned. It doesn't mean that many
+                    <em>new</em> documents were found — most are usually already in the database.
+                </p>
+            </div>
+        `
+    };
+
+    const content = explanations[column] || '<p>No explanation available.</p>';
+    elements.errorDetails.innerHTML = content;
+    elements.errorModal.classList.add('active');
 }
 
 function showHealthyExplanation() {
@@ -1152,6 +1262,7 @@ function initEventListeners() {
 // Make functions available globally for onclick handlers
 window.showErrorDetails = showErrorDetails;
 window.showErrorFromButton = showErrorFromButton;
+window.showColumnExplanation = showColumnExplanation;
 window.showHealthyExplanation = showHealthyExplanation;
 window.showSummaryModal = showSummaryModal;
 window.toggleSummaryDetails = toggleSummaryDetails;

@@ -185,6 +185,20 @@ body {
     color: var(--accent-primary);
 }
 
+.clickable-header {
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.clickable-header:hover {
+    color: var(--accent-primary);
+}
+
+.clickable-header:hover .info-hint {
+    opacity: 1;
+    color: var(--accent-primary);
+}
+
 .card-icon {
     width: 48px;
     height: 48px;
