@@ -480,7 +480,7 @@ async function loadHealth() {
 async function loadErrors() {
     const data = await fetchApi('/errors');
     if (data) {
-        state.errors = Array.isArray(data) ? data : (data.errors || []);
+        state.errors = Array.isArray(data) ? data : (data.error_runs || data.errors || []);
         updateLastError();
     }
 }
@@ -511,10 +511,10 @@ function updateHealthCards() {
     const runsToday = stats?.runs_today ?? stats?.total_runs_today ?? '--';
     elements.totalRuns.textContent = runsToday;
 
-    // Success rate
-    let successRate = stats?.success_rate ?? stats?.success_percentage;
-    if (successRate !== null && successRate !== undefined) {
-        const rateValue = typeof successRate === 'number' ? successRate : parseFloat(successRate);
+    // Healthy rate (SUCCESS + NO_DATA = runs without errors)
+    let healthyRate = stats?.healthy_rate ?? stats?.success_rate;
+    if (healthyRate !== null && healthyRate !== undefined) {
+        const rateValue = typeof healthyRate === 'number' ? healthyRate : parseFloat(healthyRate);
         elements.successRate.textContent = `${rateValue.toFixed(1)}%`;
 
         // Color coding
@@ -538,7 +538,7 @@ function updateHealthCards() {
 function updateLastError() {
     if (state.errors && state.errors.length > 0) {
         const lastError = state.errors[0];
-        const errorTime = lastError.created_at || lastError.timestamp;
+        const errorTime = lastError.ended_at || lastError.created_at || lastError.timestamp;
         elements.lastError.textContent = formatRelativeTime(errorTime);
         elements.lastError.style.color = 'var(--error)';
     } else {
@@ -996,6 +996,52 @@ function showErrorFromButton(button) {
     showErrorDetails(errorText);
 }
 
+function showHealthyExplanation() {
+    const stats = state.stats;
+    const total = stats?.total_runs ?? 0;
+    const success = stats?.success_count ?? 0;
+    const noData = stats?.no_data_count ?? 0;
+    const errors = stats?.error_count ?? 0;
+    const healthyRate = stats?.healthy_rate ?? 0;
+
+    const explanation = `
+        <div class="explanation-content">
+            <h3>What does "${healthyRate}% Healthy" mean?</h3>
+            <p>This shows how often the system runs <strong>without errors</strong>.</p>
+
+            <div class="explanation-breakdown">
+                <div class="explanation-item success">
+                    <span class="label">Found new documents</span>
+                    <span class="value">${success} runs</span>
+                </div>
+                <div class="explanation-item no-data">
+                    <span class="label">Checked, nothing new</span>
+                    <span class="value">${noData} runs</span>
+                </div>
+                <div class="explanation-item error">
+                    <span class="label">Had errors</span>
+                    <span class="value">${errors} runs</span>
+                </div>
+                <div class="explanation-item total">
+                    <span class="label">Total runs</span>
+                    <span class="value">${total}</span>
+                </div>
+            </div>
+
+            <p class="explanation-summary">
+                <strong>${healthyRate}%</strong> = (${success} + ${noData}) ÷ ${total} × 100
+            </p>
+            <p class="explanation-note">
+                "Checked, nothing new" is normal — the Federal Register doesn't publish every day.
+                What matters is the system ran without crashing.
+            </p>
+        </div>
+    `;
+
+    elements.errorDetails.innerHTML = explanation;
+    elements.errorModal.classList.add('active');
+}
+
 function hideErrorModal() {
     elements.errorModal.classList.remove('active');
 }
@@ -1106,6 +1152,7 @@ function initEventListeners() {
 // Make functions available globally for onclick handlers
 window.showErrorDetails = showErrorDetails;
 window.showErrorFromButton = showErrorFromButton;
+window.showHealthyExplanation = showHealthyExplanation;
 window.showSummaryModal = showSummaryModal;
 window.toggleSummaryDetails = toggleSummaryDetails;
 window.downloadReport = downloadReport;

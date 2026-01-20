@@ -57,6 +57,7 @@ class StatsResponse(BaseModel):
     no_data_count: int
     success_rate: float
     error_rate: float
+    healthy_rate: float  # SUCCESS + NO_DATA (ran without errors)
     runs_by_source: list[RunsBySource]
     runs_by_day: list[RunsByDay]
 
@@ -253,6 +254,7 @@ def get_runs_stats():
 
     success_rate = (success_count / total_runs * 100) if total_runs > 0 else 0.0
     error_rate = (error_count / total_runs * 100) if total_runs > 0 else 0.0
+    healthy_rate = ((success_count + no_data_count) / total_runs * 100) if total_runs > 0 else 0.0
 
     # Runs by source
     cur.execute("SELECT source_id, COUNT(*) FROM source_runs GROUP BY source_id ORDER BY COUNT(*) DESC")
@@ -281,6 +283,7 @@ def get_runs_stats():
         no_data_count=no_data_count,
         success_rate=round(success_rate, 2),
         error_rate=round(error_rate, 2),
+        healthy_rate=round(healthy_rate, 2),
         runs_by_source=runs_by_source,
         runs_by_day=runs_by_day,
     )

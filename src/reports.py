@@ -8,9 +8,13 @@ fr_seen, and ecfr_seen tables.
 import csv
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # Allow running as a script (python -m src.reports) by setting package context
 if __name__ == "__main__" and __package__ is None:
@@ -22,6 +26,29 @@ from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = ROOT / "outputs" / "reports"
+FR_API_URL = "https://www.federalregister.gov/api/v1/documents.json"
+MAX_FR_DOCS_FETCH = 1000  # upper bound per-day fetch
+MAX_FR_DOCS_SHOWN = 50    # limit detailed listings to keep reports readable
+
+# Shared HTTP session with retry/backoff for FR API calls
+_http_session: requests.Session | None = None
+
+
+def _get_http_session() -> requests.Session:
+    global _http_session
+    if _http_session is None:
+        session = requests.Session()
+        retry = Retry(
+            total=3,
+            backoff_factor=0.5,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET"],
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _http_session = session
+    return _http_session
 
 
 def _parse_iso_datetime(iso_str: str) -> datetime:
@@ -165,6 +192,212 @@ def _aggregate_run_stats(runs: list[dict]) -> dict:
     }
 
 
+def _parse_iso_date(date_str: str | None) -> date | None:
+    """Parse YYYY-MM-DD into a date object."""
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00")).date()
+    except ValueError:
+        return None
+
+
+def _assess_urgency(entry: dict, today: date) -> tuple[bool, list[str]]:
+    """Assess urgency based on comment close and effective dates."""
+    reasons: list[str] = []
+
+    close_date = _parse_iso_date(entry.get("comments_close_on"))
+    if close_date:
+        days_to_close = (close_date - today).days
+        if 0 <= days_to_close <= 14:
+            reasons.append(f"Comments close in {days_to_close} days ({close_date.isoformat()})")
+
+    effective_date = _parse_iso_date(entry.get("effective_on"))
+    if effective_date:
+        days_to_effective = (effective_date - today).days
+        if 0 <= days_to_effective <= 30:
+            reasons.append(f"Effective in {days_to_effective} days ({effective_date.isoformat()})")
+
+    return (len(reasons) > 0, reasons)
+
+
+def _filter_va_docs(documents: list[dict]) -> list[dict]:
+    """Return only documents associated with VA (case-insensitive)."""
+    va_docs: list[dict] = []
+    for doc in documents:
+        agencies = [a.lower() for a in doc.get("agencies", [])]
+        if any("veterans affairs" in a for a in agencies):
+            va_docs.append(doc)
+    return va_docs
+
+
+def _shape_fr_document(entry: dict, today: date) -> dict:
+    """Extract the fields we care about for FR documents."""
+    agencies = [a.get("name", "").strip() for a in entry.get("agencies") or [] if a.get("name")]
+    is_urgent, urgency_reasons = _assess_urgency(entry, today)
+
+    return {
+        "document_number": entry.get("document_number", ""),
+        "title": (entry.get("title") or "").strip(),
+        "type": entry.get("type", ""),
+        "agencies": agencies,
+        "publication_date": entry.get("publication_date", ""),
+        "comments_close_on": entry.get("comments_close_on"),
+        "effective_on": entry.get("effective_on"),
+        "html_url": entry.get("html_url"),
+        "comment_url": entry.get("comment_url"),
+        "significant": entry.get("significant"),
+        "abstract": (entry.get("abstract") or "").strip(),
+        "urgency": {
+            "is_urgent": is_urgent,
+            "reasons": urgency_reasons,
+        },
+    }
+
+
+def _fetch_fr_documents_for_date(publication_date: str, timeout: int = 20) -> tuple[list[dict], int, str | None]:
+    """
+    Fetch Federal Register documents for a given publication date.
+    Returns (docs, total_count, error); docs may be empty on failure.
+    """
+    if not publication_date:
+        return [], 0, "missing_publication_date"
+
+    params = {
+        "conditions[publication_date]": publication_date,
+        "per_page": MAX_FR_DOCS_FETCH,
+        "order": "newest",
+    }
+    session = _get_http_session()
+
+    try:
+        resp = session.get(FR_API_URL, params=params, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get("results") or []
+        # Safety filter: keep only the requested publication_date
+        results = [r for r in results if r.get("publication_date") == publication_date]
+        total_count = len(results)
+    except Exception as e:
+        return [], 0, f"FR API fetch failed for {publication_date}: {e.__class__.__name__}"
+
+    today = datetime.now(timezone.utc).date()
+    shaped = [_shape_fr_document(entry, today) for entry in results]
+    return shaped, total_count, None
+
+
+def _format_highlights(documents: list[dict]) -> list[str]:
+    """Create short highlights for human scanning."""
+    if not documents:
+        return []
+
+    urgent_docs = [d for d in documents if d.get("urgency", {}).get("is_urgent")]
+    candidates = urgent_docs[:3] if urgent_docs else documents[:3]
+    highlights: list[str] = []
+
+    for doc in candidates:
+        agency = ", ".join(doc.get("agencies") or []) or "Agency TBD"
+        deadlines: list[str] = []
+        if doc.get("comments_close_on"):
+            deadlines.append(f"comments close {doc['comments_close_on']}")
+        if doc.get("effective_on"):
+            deadlines.append(f"effective {doc['effective_on']}")
+        deadline_part = "; ".join(deadlines)
+
+        snippet = f"{doc.get('document_number', '')}: {doc.get('title', '')} ({agency})"
+        if deadline_part:
+            snippet += f" — {deadline_part}"
+        highlights.append(snippet.strip())
+
+    return highlights
+
+
+def _build_report_highlights(enriched_docs: list[dict], max_items: int = 5) -> list[str]:
+    """Create cross-document highlights, prioritizing urgent then VA-scoped docs."""
+    if not enriched_docs:
+        return []
+
+    def collect(predicate):
+        items = []
+        for parent in enriched_docs:
+            for doc in parent.get("documents", []):
+                if predicate(parent, doc):
+                    items.append((parent, doc))
+        return items
+
+    urgent = collect(lambda p, d: d.get("urgency", {}).get("is_urgent"))
+    va_docs = collect(lambda p, d: p.get("documents_scope") == "veterans_affairs")
+    all_docs = collect(lambda _p, _d: True)
+
+    chosen = urgent or va_docs or all_docs
+    highlights: list[str] = []
+    today = datetime.now(timezone.utc).date()
+
+    for parent, doc in chosen[:max_items]:
+        title = doc.get("title") or "New Federal Register document"
+        agency = ", ".join(doc.get("agencies") or []) or "Agency TBD"
+        parts = [f"{parent.get('doc_id', '')} — {title}", f"({agency}; published {doc.get('publication_date','')})"]
+
+        urgency = doc.get("urgency") or {}
+        reasons = urgency.get("reasons") or []
+        if reasons:
+            parts.append(f"URGENT: {'; '.join(reasons)}")
+        else:
+            # Include nearest date if present to give some context
+            close_date = _parse_iso_date(doc.get("comments_close_on"))
+            effective_date = _parse_iso_date(doc.get("effective_on"))
+            if close_date:
+                days = (close_date - today).days
+                parts.append(f"Comments close in {days} days ({close_date})")
+            elif effective_date:
+                days = (effective_date - today).days
+                parts.append(f"Effective in {days} days ({effective_date})")
+
+        highlights.append(" — ".join(parts))
+
+    return highlights
+
+
+def _enrich_new_documents(new_docs: list[dict]) -> list[dict]:
+    """
+    Enrich new FR documents with Federal Register metadata (titles, agencies, urgency).
+    """
+    enriched: list[dict] = []
+    cache: dict[str, tuple[list[dict], int, str | None]] = {}
+    for doc in new_docs:
+        pub_date = doc.get("published_date", "")
+        if pub_date not in cache:
+            fr_documents_all, total_count, err = _fetch_fr_documents_for_date(pub_date)
+            cache[pub_date] = (fr_documents_all, total_count, err)
+        else:
+            fr_documents_all, total_count, err = cache[pub_date]
+        va_documents = _filter_va_docs(fr_documents_all)
+        selected_docs = va_documents if va_documents else fr_documents_all
+        selected_docs = selected_docs[:MAX_FR_DOCS_SHOWN]
+
+        urgent_count = sum(1 for d in selected_docs if d.get("urgency", {}).get("is_urgent"))
+        label = pub_date or doc.get("doc_id", "")
+        available_count = len(fr_documents_all)
+        if total_count and total_count < MAX_FR_DOCS_FETCH:
+            available_count = total_count
+        enriched.append({
+            **doc,
+            "why_flagged": f"New FR bulk package for {label} (first seen at {doc.get('first_seen_at', '')})",
+            "document_count": len(selected_docs),
+            "documents_shown": len(selected_docs),
+            "veterans_affairs_documents": len(va_documents),
+            "documents_scanned": len(fr_documents_all),
+            "total_documents_available": available_count,
+            "urgent_count": urgent_count,
+            "documents_scope": "veterans_affairs" if va_documents else "all_documents",
+            "highlights": _format_highlights(selected_docs),
+            "documents": selected_docs,
+            "truncated": (len(selected_docs) < len(va_documents)) if va_documents else (len(selected_docs) < len(fr_documents_all)),
+            "fetch_error": err,
+        })
+    return enriched
+
+
 def generate_report(
     report_type: str, start_date: str | None = None, end_date: str | None = None
 ) -> dict:
@@ -197,6 +430,14 @@ def generate_report(
     stats = _aggregate_run_stats(runs)
     stats["new_fr_docs"] = len(new_docs)
 
+    # Enrich new docs with FR metadata for context/urgency
+    enriched_docs = _enrich_new_documents(new_docs)
+    stats["new_fr_docs_with_metadata"] = sum(1 for d in enriched_docs if d.get("document_count", 0) > 0)
+    stats["urgent_fr_docs"] = sum(d.get("urgent_count", 0) for d in enriched_docs)
+    stats["va_fr_docs"] = sum(d.get("veterans_affairs_documents", 0) for d in enriched_docs)
+    stats["fr_enrichment_errors"] = sum(1 for d in enriched_docs if d.get("fetch_error"))
+    highlights = _build_report_highlights(enriched_docs)
+
     report = {
         "report_type": report_type,
         "generated_at": utc_now_iso(),
@@ -207,6 +448,8 @@ def generate_report(
         "summary": stats,
         "runs": runs,
         "new_documents": new_docs,
+        "new_documents_enriched": enriched_docs,
+        "highlights": highlights,
     }
 
     return report
@@ -299,6 +542,46 @@ def export_csv(report: dict, filepath: str) -> str:
                 doc.get("first_seen_at", ""),
                 doc.get("source_url", ""),
             ])
+
+    # Export detailed docs CSV (with FR metadata/urgency) if available
+    enriched_docs = report.get("new_documents_enriched") or []
+    if enriched_docs:
+        detailed_path = base_path.parent / f"{base_path.name}_docs_detailed.csv"
+        with open(detailed_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+            writer.writerow([
+                "doc_id",
+                "published_date",
+                "first_seen_at",
+                "document_number",
+                "title",
+                "type",
+                "agencies",
+                "comments_close_on",
+                "effective_on",
+                "is_urgent",
+                "urgency_reasons",
+                "html_url",
+                "source_url",
+            ])
+            for parent in enriched_docs:
+                for fr_doc in parent.get("documents", []) or []:
+                    urgency = fr_doc.get("urgency") or {}
+                    writer.writerow([
+                        parent.get("doc_id", ""),
+                        parent.get("published_date", ""),
+                        parent.get("first_seen_at", ""),
+                        fr_doc.get("document_number", ""),
+                        fr_doc.get("title", ""),
+                        fr_doc.get("type", ""),
+                        "; ".join(fr_doc.get("agencies", [])),
+                        fr_doc.get("comments_close_on") or "",
+                        fr_doc.get("effective_on") or "",
+                        urgency.get("is_urgent", False),
+                        "; ".join(urgency.get("reasons", [])),
+                        fr_doc.get("html_url") or "",
+                        parent.get("source_url", ""),
+                    ])
 
     return str(base_path)
 

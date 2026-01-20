@@ -8,6 +8,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
     <div class="dashboard">
         <!-- Header -->
         <header class="header">
@@ -20,6 +23,41 @@
                 <h1>VA Signals Dashboard</h1>
             </div>
             <div class="header-right">
+                <div class="reports-dropdown">
+                    <button class="reports-btn" id="reports-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                        Reports
+                        <svg class="dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <div class="dropdown-menu" id="reports-dropdown-menu">
+                        <button class="dropdown-item" onclick="downloadReport('daily')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="16" y1="2" x2="16" y2="6"/>
+                                <line x1="8" y1="2" x2="8" y2="6"/>
+                                <line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            Daily Report
+                        </button>
+                        <button class="dropdown-item" onclick="downloadReport('weekly')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="16" y1="2" x2="16" y2="6"/>
+                                <line x1="8" y1="2" x2="8" y2="6"/>
+                                <line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            Weekly Report
+                        </button>
+                    </div>
+                </div>
                 <span class="refresh-indicator" id="refresh-indicator">
                     <span class="pulse"></span>
                     Live
@@ -41,7 +79,7 @@
                     <span class="card-label">Runs Today</span>
                 </div>
             </div>
-            <div class="card health-card">
+            <div class="card health-card clickable" id="healthy-card" onclick="showHealthyExplanation()">
                 <div class="card-icon success-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
@@ -50,7 +88,7 @@
                 </div>
                 <div class="card-content">
                     <span class="card-value" id="success-rate">--%</span>
-                    <span class="card-label">Success Rate</span>
+                    <span class="card-label">Healthy <span class="info-hint">ⓘ</span></span>
                 </div>
             </div>
             <div class="card health-card">
@@ -132,6 +170,27 @@
             </section>
         </div>
 
+        <!-- Summaries Section -->
+        <section class="card summaries-section">
+            <div class="card-header">
+                <h2>LLM Summaries</h2>
+                <div style="display: flex; gap: 0.75rem; align-items: center;">
+                    <button class="export-btn" id="export-summaries-csv" title="Export summaries to CSV">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export CSV
+                    </button>
+                    <span class="badge" id="summaries-count">0 summaries</span>
+                </div>
+            </div>
+            <div class="summaries-feed" id="summaries-feed">
+                <div class="loading-state">Loading summaries...</div>
+            </div>
+        </section>
+
         <!-- Documents Section -->
         <section class="card documents-section">
             <div class="card-header">
@@ -142,6 +201,38 @@
                 </div>
             </div>
 
+            <!-- Search and Filter Controls -->
+            <div class="filter-controls" id="fr-filters">
+                <div class="search-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input type="text" class="search-input" id="fr-search" placeholder="Search documents...">
+                </div>
+                <select class="filter-select" id="fr-type-filter">
+                    <option value="">All Types</option>
+                    <option value="Rule">Rule</option>
+                    <option value="Proposed Rule">Proposed Rule</option>
+                    <option value="Notice">Notice</option>
+                </select>
+                <div class="date-range">
+                    <input type="date" class="date-input" id="fr-date-from" title="From date">
+                    <span class="date-separator">to</span>
+                    <input type="date" class="date-input" id="fr-date-to" title="To date">
+                </div>
+                <button class="clear-filters-btn" id="clear-fr-filters">Clear</button>
+                <button class="export-btn" id="export-fr-csv" title="Export to CSV">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Export CSV
+                </button>
+                <span class="results-count" id="fr-results-count"></span>
+            </div>
+
             <div class="tab-content active" id="fr-tab">
                 <div class="table-container">
                     <table class="data-table">
@@ -149,12 +240,13 @@
                             <tr>
                                 <th>Document ID</th>
                                 <th>First Seen</th>
+                                <th>Summary</th>
                                 <th>Source URL</th>
                             </tr>
                         </thead>
                         <tbody id="fr-tbody">
                             <tr class="loading-row">
-                                <td colspan="3">Loading...</td>
+                                <td colspan="4">Loading...</td>
                             </tr>
                         </tbody>
                     </table>
@@ -189,6 +281,18 @@
                     <button class="modal-close" id="modal-close">&times;</button>
                 </div>
                 <div class="modal-body" id="error-details">
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Details Modal -->
+        <div class="modal" id="summary-modal">
+            <div class="modal-content summary-modal-content">
+                <div class="modal-header">
+                    <h3>Document Summary</h3>
+                    <button class="modal-close" id="summary-modal-close">&times;</button>
+                </div>
+                <div class="modal-body" id="summary-details">
                 </div>
             </div>
         </div>
