@@ -1,0 +1,225 @@
+schema_version: "1.0"
+category_id: "oversight_accountability"
+description: "Oversight activity signaling increased scrutiny, audits, or enforcement"
+priority: "high"
+owner: "VetClaims.ai Signals Cell"
+created_at: "2026-01-21"
+last_updated: "2026-01-21"
+
+field_access:
+  description: "Evaluators may only access these envelope fields"
+  allowed_top_level:
+    - event_id
+    - authority_id
+    - authority_source
+    - authority_type
+    - committee
+    - subcommittee
+    - topics
+    - title
+    - body_text
+    - content_hash
+    - version
+    - published_at
+    - published_at_source
+    - event_start_at
+    - source_url
+    - fetched_at
+  allowed_nested_prefix: "metadata."
+
+evaluator_whitelist:
+  - contains_any
+  - field_in
+  - field_intersects
+  - equals
+  - gt
+  - field_exists
+  - nested_field_in
+
+indicators:
+  - indicator_id: "gao_oig_reference"
+    description: "Congressional events referencing GAO or OIG review of VA processes"
+    indicator_condition:
+      evaluator: "field_in"
+      args:
+        field: "authority_source"
+        values: ["congress_gov", "house_veterans", "senate_veterans"]
+    triggers:
+      - trigger_id: "formal_audit_signal"
+        description: "Direct reference to GAO, OIG, audit, or investigation"
+        condition:
+          all_of:
+            - evaluator: "contains_any"
+              args:
+                field: "body_text"
+                terms: ["GAO", "Government Accountability Office", "OIG", "Office of Inspector General", "audit", "investigation"]
+            - any_of:
+                - evaluator: "field_in"
+                  args:
+                    field: "committee"
+                    values: ["HVAC", "SVAC"]
+                - evaluator: "field_intersects"
+                  args:
+                    field: "topics"
+                    values: ["disability_benefits", "rating", "exam_quality", "claims_backlog"]
+                - evaluator: "field_in"
+                  args:
+                    field: "authority_type"
+                    values: ["hearing_notice", "bill_text", "report"]
+              label: "anti_spam_discriminator"
+
+      - trigger_id: "contractor_exam_quality_signal"
+        description: "References to contractor exam quality, MDEO, or C&P exams"
+        condition:
+          all_of:
+            - evaluator: "contains_any"
+              args:
+                field: "body_text"
+                terms: ["contractor exam", "MDEO", "medical disability examination", "exam quality", "C&P exam", "compensation and pension exam"]
+            - any_of:
+                - evaluator: "field_in"
+                  args:
+                    field: "committee"
+                    values: ["HVAC", "SVAC"]
+                - evaluator: "field_intersects"
+                  args:
+                    field: "topics"
+                    values: ["exam_quality", "disability_benefits", "rating"]
+                - evaluator: "field_in"
+                  args:
+                    field: "authority_type"
+                    values: ["hearing_notice", "bill_text", "report"]
+              label: "anti_spam_discriminator"
+
+  - indicator_id: "hearing_status"
+    description: "Hearings scheduled, cancelled, or rescheduled on VA disability topics"
+    indicator_condition:
+      evaluator: "field_in"
+      args:
+        field: "authority_source"
+        values: ["congress_gov", "house_veterans", "senate_veterans"]
+    triggers:
+      - trigger_id: "new_hearing_scheduled_va_disability"
+        description: "New hearing scheduled on VA disability topics"
+        condition:
+          all_of:
+            - evaluator: "field_in"
+              args:
+                field: "authority_type"
+                values: ["hearing_notice"]
+            - evaluator: "field_in"
+              args:
+                field: "committee"
+                values: ["HVAC", "SVAC"]
+            - evaluator: "field_intersects"
+              args:
+                field: "topics"
+                values: ["disability_benefits", "rating", "exam_quality", "claims_backlog", "vasrd", "appeals"]
+            - evaluator: "equals"
+              args:
+                field: "version"
+                value: 1
+
+      - trigger_id: "hearing_rescheduled_or_cancelled"
+        description: "Existing hearing rescheduled or cancelled"
+        condition:
+          all_of:
+            - evaluator: "field_in"
+              args:
+                field: "authority_type"
+                values: ["hearing_notice"]
+            - evaluator: "field_in"
+              args:
+                field: "committee"
+                values: ["HVAC", "SVAC"]
+            - any_of:
+                - evaluator: "nested_field_in"
+                  args:
+                    field: "metadata.status"
+                    values: ["cancelled", "rescheduled", "postponed"]
+                - evaluator: "gt"
+                  args:
+                    field: "version"
+                    value: 1
+                - evaluator: "contains_any"
+                  args:
+                    field: "title"
+                    terms: ["cancelled", "canceled", "rescheduled", "postponed"]
+              label: "status_change_detector"
+
+  - indicator_id: "legislative_mandate"
+    description: "Bill text imposing reporting deadlines or mandated reviews"
+    indicator_condition:
+      evaluator: "field_in"
+      args:
+        field: "authority_source"
+        values: ["congress_gov"]
+    triggers:
+      - trigger_id: "mandated_report_or_deadline"
+        description: "Legislative language requiring reports or imposing deadlines"
+        condition:
+          all_of:
+            - evaluator: "field_in"
+              args:
+                field: "authority_type"
+                values: ["bill_text"]
+            - evaluator: "contains_any"
+              args:
+                field: "body_text"
+                terms: ["shall report", "not later than", "within 90 days", "within 180 days", "GAO review", "submit to Congress"]
+            - any_of:
+                - evaluator: "field_intersects"
+                  args:
+                    field: "topics"
+                    values: ["disability_benefits", "rating", "vasrd", "exam_quality"]
+                - evaluator: "contains_any"
+                  args:
+                    field: "body_text"
+                    terms: ["disability", "rating schedule", "VASRD", "veterans benefits"]
+              label: "anti_spam_discriminator"
+
+routing:
+  - trigger_id: "formal_audit_signal"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "write_audit_log", "add_to_oversight_pressure_register"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 60
+      version_aware: true
+
+  - trigger_id: "contractor_exam_quality_signal"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "write_audit_log", "flag_rating_integrity_concern"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 120
+      version_aware: true
+
+  - trigger_id: "new_hearing_scheduled_va_disability"
+    severity: "medium"
+    human_review_required: false
+    actions: ["post_slack_alert", "update_hearing_tracker", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 1440
+      version_aware: true
+
+  - trigger_id: "hearing_rescheduled_or_cancelled"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "update_hearing_tracker", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 30
+      version_aware: true
+
+  - trigger_id: "mandated_report_or_deadline"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "add_to_oversight_pressure_register", "notify_product_policy_leads", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 1440
+      version_aware: true
