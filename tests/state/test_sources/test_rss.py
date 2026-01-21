@@ -39,6 +39,7 @@ def test_rss_feeds_defined():
 @patch("src.state.sources.rss.feedparser.parse")
 def test_rss_fetch_parses_feed(mock_parse):
     mock_parse.return_value = MagicMock(
+        bozo=False,
         entries=[
             _make_feed_entry(
                 title="Texas veterans receive PACT Act benefits",
@@ -64,8 +65,12 @@ def test_rss_fetch_parses_feed(mock_parse):
 
 
 @patch("src.state.sources.rss.feedparser.parse")
-def test_rss_handles_error(mock_parse):
-    mock_parse.side_effect = Exception("Feed parse error")
+def test_rss_handles_bozo_error(mock_parse):
+    """Feeds with parse errors (bozo=True) are skipped gracefully."""
+    mock_parse.return_value = MagicMock(
+        bozo=True,
+        bozo_exception=Exception("malformed XML"),
+    )
 
     source = RSSSource(state="TX")
     signals = source.fetch()
@@ -77,6 +82,7 @@ def test_rss_handles_error(mock_parse):
 def test_rss_filters_veteran_relevant(mock_parse):
     """Only veteran-relevant articles should be included."""
     mock_parse.return_value = MagicMock(
+        bozo=False,
         entries=[
             _make_feed_entry(
                 title="Local bakery opens new location",

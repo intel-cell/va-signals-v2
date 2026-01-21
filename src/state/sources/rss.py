@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import TypedDict
 from time import mktime
 
 import feedparser
@@ -12,7 +12,13 @@ from src.state.sources.base import StateSource
 
 logger = logging.getLogger(__name__)
 
-RSS_FEEDS = {
+
+class FeedInfo(TypedDict):
+    name: str
+    url: str
+
+
+RSS_FEEDS: dict[str, list[FeedInfo]] = {
     "TX": [
         {
             "name": "Texas Tribune",
@@ -65,24 +71,23 @@ class RSSSource(StateSource):
     def fetch(self) -> list[RawSignal]:
         """Fetch news from all RSS feeds for this state."""
         all_signals = []
-        seen_urls = set()
+        seen_urls: set[str] = set()
 
         for feed_info in RSS_FEEDS[self._state]:
-            try:
-                signals = self._parse_feed(feed_info)
-                for signal in signals:
-                    if signal.url not in seen_urls:
-                        seen_urls.add(signal.url)
-                        all_signals.append(signal)
-            except Exception as e:
-                logger.warning(f"Failed to parse RSS feed {feed_info['name']}: {e}")
-                continue
+            signals = self._parse_feed(feed_info)
+            for signal in signals:
+                if signal.url not in seen_urls:
+                    seen_urls.add(signal.url)
+                    all_signals.append(signal)
 
         return all_signals
 
-    def _parse_feed(self, feed_info: dict) -> list[RawSignal]:
+    def _parse_feed(self, feed_info: FeedInfo) -> list[RawSignal]:
         """Parse a single RSS feed and filter for veteran relevance."""
         feed = feedparser.parse(feed_info["url"])
+        if feed.bozo:
+            logger.warning(f"Feed parse error for {feed_info['name']}: {getattr(feed, 'bozo_exception', 'unknown error')}")
+            return []
         signals = []
 
         for entry in feed.entries:
