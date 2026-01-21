@@ -1103,8 +1103,20 @@ function renderHearings() {
 
     elements.hearingsList.innerHTML = hearings.map(hearing => {
         const statusClass = getHearingStatusClass(hearing.status);
-        const chamberLabel = hearing.chamber === 'House' ? 'HVAC' : 'SVAC';
-        const chamberClass = hearing.chamber === 'House' ? 'hvac' : 'svac';
+        const chamberLower = (hearing.chamber || '').toLowerCase();
+        const isHouse = chamberLower === 'house';
+        const chamberClass = isHouse ? 'hvac' : 'svac';
+
+        // Determine committee label - show subcommittee name if available
+        let chamberLabel = isHouse ? 'HVAC' : 'SVAC';
+        const committeeName = hearing.committee_name || '';
+        if (committeeName.includes('Subcommittee')) {
+            // Extract subcommittee name: "House VA Subcommittee on X" -> "X"
+            const match = committeeName.match(/Subcommittee on (.+)$/);
+            if (match) {
+                chamberLabel = match[1].length > 20 ? match[1].substring(0, 18) + '...' : match[1];
+            }
+        }
 
         // Build title display
         const titleDisplay = hearing.title

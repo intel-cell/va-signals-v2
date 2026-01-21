@@ -1075,25 +1075,24 @@ def get_hearing_stats():
     cur.execute("SELECT COUNT(*) FROM hearings WHERE hearing_date >= ?", (today,))
     upcoming_count = cur.fetchone()[0]
 
-    # By committee (upcoming only)
+    # By chamber (upcoming only) - group all House VA (full + subcommittees) and Senate VA
     cur.execute(
         """
-        SELECT committee_name, COUNT(*) FROM hearings
+        SELECT chamber, COUNT(*) FROM hearings
         WHERE hearing_date >= ?
-        GROUP BY committee_name
-        ORDER BY COUNT(*) DESC
+        GROUP BY chamber
         """,
         (today,),
     )
     by_committee = {}
     for row in cur.fetchall():
-        name = row[0] or "Unknown"
-        # Abbreviate common committee names
-        if "Veterans" in name and "House" in name:
-            name = "HVAC"
-        elif "Veterans" in name and "Senate" in name:
-            name = "SVAC"
-        by_committee[name] = row[1]
+        chamber = (row[0] or "").lower()
+        if chamber == "house":
+            by_committee["HVAC"] = row[1]
+        elif chamber == "senate":
+            by_committee["SVAC"] = row[1]
+        else:
+            by_committee[chamber] = row[1]
 
     # By status (upcoming only)
     cur.execute(
