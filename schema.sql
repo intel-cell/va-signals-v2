@@ -259,3 +259,84 @@ CREATE TABLE IF NOT EXISTS om_digests (
   delivered_via TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============================================================================
+-- STATE INTELLIGENCE TABLES
+-- ============================================================================
+
+-- Sources we monitor (official + news)
+CREATE TABLE IF NOT EXISTS state_sources (
+    source_id TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    enabled INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_state_sources_state ON state_sources(state);
+
+-- Raw signals before classification
+CREATE TABLE IF NOT EXISTS state_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    signal_id TEXT UNIQUE NOT NULL,
+    state TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    program TEXT,
+    title TEXT NOT NULL,
+    content TEXT,
+    url TEXT NOT NULL,
+    pub_date TEXT,
+    event_date TEXT,
+    fetched_at TEXT NOT NULL,
+    FOREIGN KEY (source_id) REFERENCES state_sources(source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_state_signals_state ON state_signals(state);
+CREATE INDEX IF NOT EXISTS idx_state_signals_pub_date ON state_signals(pub_date);
+
+-- Classification results
+CREATE TABLE IF NOT EXISTS state_classifications (
+    signal_id TEXT PRIMARY KEY,
+    severity TEXT NOT NULL,
+    classification_method TEXT NOT NULL,
+    keywords_matched TEXT,
+    llm_reasoning TEXT,
+    classified_at TEXT NOT NULL,
+    FOREIGN KEY (signal_id) REFERENCES state_signals(signal_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_state_classifications_severity ON state_classifications(severity);
+
+-- Track notification state
+CREATE TABLE IF NOT EXISTS state_notifications (
+    signal_id TEXT PRIMARY KEY,
+    notified_at TEXT NOT NULL,
+    channel TEXT NOT NULL,
+    FOREIGN KEY (signal_id) REFERENCES state_signals(signal_id)
+);
+
+-- Run tracking
+CREATE TABLE IF NOT EXISTS state_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_type TEXT NOT NULL,
+    state TEXT,
+    status TEXT NOT NULL,
+    signals_found INTEGER DEFAULT 0,
+    high_severity_count INTEGER DEFAULT 0,
+    started_at TEXT NOT NULL,
+    finished_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_state_runs_status ON state_runs(status);
+
+-- Source health tracking
+CREATE TABLE IF NOT EXISTS state_source_health (
+    source_id TEXT PRIMARY KEY,
+    consecutive_failures INTEGER DEFAULT 0,
+    last_success TEXT,
+    last_failure TEXT,
+    last_error TEXT,
+    FOREIGN KEY (source_id) REFERENCES state_sources(source_id)
+);
