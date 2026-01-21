@@ -295,6 +295,7 @@ CREATE TABLE IF NOT EXISTS state_signals (
 
 CREATE INDEX IF NOT EXISTS idx_state_signals_state ON state_signals(state);
 CREATE INDEX IF NOT EXISTS idx_state_signals_pub_date ON state_signals(pub_date);
+CREATE INDEX IF NOT EXISTS idx_state_signals_source_id ON state_signals(source_id);
 
 -- Classification results
 CREATE TABLE IF NOT EXISTS state_classifications (
@@ -330,6 +331,7 @@ CREATE TABLE IF NOT EXISTS state_runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_state_runs_status ON state_runs(status);
+CREATE INDEX IF NOT EXISTS idx_state_runs_state_status ON state_runs(state, status);
 
 -- Source health tracking
 CREATE TABLE IF NOT EXISTS state_source_health (
@@ -340,3 +342,5 @@ CREATE TABLE IF NOT EXISTS state_source_health (
     last_error TEXT,
     FOREIGN KEY (source_id) REFERENCES state_sources(source_id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_state_source_health_source_id ON state_source_health(source_id);
