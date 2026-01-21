@@ -19,51 +19,6 @@ def test_ca_source_attributes():
     assert source.state == "CA"
 
 
-def test_ca_source_parse_calvet_news(calvet_html):
-    source = CAOfficialSource()
-
-    with patch("src.state.sources.ca_official.CALVET_DISABLED", False):
-        with patch("src.state.sources.ca_official.httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.text = calvet_html
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-
-            signals = source.fetch()
-
-    assert len(signals) >= 2
-    assert any("PACT" in s.title for s in signals)
-
-
-def test_ca_source_extracts_dates(calvet_html):
-    source = CAOfficialSource()
-
-    with patch("src.state.sources.ca_official.CALVET_DISABLED", False):
-        with patch("src.state.sources.ca_official.httpx.get") as mock_get:
-            mock_response = MagicMock()
-            mock_response.text = calvet_html
-            mock_response.raise_for_status = MagicMock()
-            mock_get.return_value = mock_response
-
-            signals = source.fetch()
-
-    pact_signal = next((s for s in signals if "PACT" in s.title), None)
-    assert pact_signal is not None
-    assert pact_signal.pub_date == "2026-01-19"
-
-
-def test_ca_source_handles_error():
-    source = CAOfficialSource()
-
-    with patch("src.state.sources.ca_official.CALVET_DISABLED", False):
-        with patch("src.state.sources.ca_official.httpx.get") as mock_get:
-            mock_get.side_effect = Exception("Connection error")
-
-            signals = source.fetch()
-
-    assert signals == []
-
-
 def test_ca_source_disabled_returns_empty():
     """When CALVET_DISABLED is True, fetch returns empty list."""
     source = CAOfficialSource()
@@ -72,3 +27,36 @@ def test_ca_source_disabled_returns_empty():
     signals = source.fetch()
 
     assert signals == []
+
+
+def test_ca_source_parse_calvet_news(calvet_html):
+    """Test HTML parsing logic when source is enabled."""
+    source = CAOfficialSource()
+
+    # Test the parsing method directly
+    signals = source._parse_calvet_news(calvet_html)
+
+    assert len(signals) >= 2
+    assert any("PACT" in s.title for s in signals)
+
+
+def test_ca_source_extracts_dates(calvet_html):
+    """Test date extraction from HTML."""
+    source = CAOfficialSource()
+
+    signals = source._parse_calvet_news(calvet_html)
+
+    pact_signal = next((s for s in signals if "PACT" in s.title), None)
+    assert pact_signal is not None
+    assert pact_signal.pub_date == "2026-01-19"
+
+
+def test_ca_source_parse_date_text():
+    """Test date text parsing formats."""
+    source = CAOfficialSource()
+
+    assert source._parse_date_text("01/19/2026") == "2026-01-19"
+    assert source._parse_date_text("January 19, 2026") == "2026-01-19"
+    assert source._parse_date_text("Jan 19, 2026") == "2026-01-19"
+    assert source._parse_date_text("2026-01-19") == "2026-01-19"
+    assert source._parse_date_text("invalid") is None

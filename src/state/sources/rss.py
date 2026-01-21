@@ -22,11 +22,11 @@ RSS_FEEDS: dict[str, list[FeedInfo]] = {
     "TX": [
         {
             "name": "Texas Tribune",
-            "url": "https://www.texastribune.org/feeds/rss/",
+            "url": "https://www.texastribune.org/feed/",
         },
         {
-            "name": "Houston Chronicle",
-            "url": "https://www.houstonchronicle.com/rss/feed/news-rss-xml.php",
+            "name": "Google News Texas Veterans",
+            "url": "https://news.google.com/rss/search?q=Texas+veterans&hl=en-US&gl=US&ceid=US:en",
         },
     ],
     "CA": [
@@ -37,6 +37,10 @@ RSS_FEEDS: dict[str, list[FeedInfo]] = {
         {
             "name": "LA Times",
             "url": "https://www.latimes.com/politics/rss2.0.xml",
+        },
+        {
+            "name": "Google News California Veterans",
+            "url": "https://news.google.com/rss/search?q=California+veterans+CalVet&hl=en-US&gl=US&ceid=US:en",
         },
     ],
     "FL": [
