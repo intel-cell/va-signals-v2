@@ -1,7 +1,6 @@
 """Tests for base source class."""
 
 import pytest
-from abc import ABC
 
 from src.state.sources.base import StateSource
 from src.state.common import RawSignal
@@ -14,13 +13,18 @@ def test_state_source_is_abstract():
 
 
 def test_state_source_subclass():
-    """Subclass must implement fetch method."""
+    """Subclass must implement properties and fetch method."""
 
     class TestSource(StateSource):
-        source_id = "test_source"
-        state = "TX"
+        @property
+        def source_id(self) -> str:
+            return "test_source"
 
-        def fetch(self):
+        @property
+        def state(self) -> str:
+            return "TX"
+
+        def fetch(self) -> list[RawSignal]:
             return [
                 RawSignal(
                     url="https://example.com/1",
@@ -31,7 +35,26 @@ def test_state_source_subclass():
             ]
 
     source = TestSource()
-    signals = source.fetch()
 
+    # Verify properties are accessible
+    assert source.source_id == "test_source"
+    assert source.state == "TX"
+
+    # Verify fetch works
+    signals = source.fetch()
     assert len(signals) == 1
     assert signals[0].state == "TX"
+    assert signals[0].source_id == "test_source"
+
+
+def test_state_source_missing_implementation():
+    """Subclass missing required properties cannot be instantiated."""
+
+    class IncompleteSource(StateSource):
+        def fetch(self) -> list[RawSignal]:
+            return []
+
+        # Missing source_id and state properties
+
+    with pytest.raises(TypeError):
+        IncompleteSource()
