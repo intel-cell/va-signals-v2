@@ -446,3 +446,30 @@ def update_ad_deviation_note(event_id: int, note: str) -> None:
     )
     con.commit()
     con.close()
+
+
+def get_ad_deviations_without_notes(limit: int = 50) -> list[dict]:
+    """Get deviation events that don't have explanations yet."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT e.id, e.member_id, m.name, e.hearing_id, e.utterance_id, e.zscore
+           FROM ad_deviation_events e
+           JOIN ad_members m ON e.member_id = m.member_id
+           WHERE e.note IS NULL OR e.note = ''
+           ORDER BY e.detected_at DESC LIMIT ?""",
+        (limit,),
+    )
+    rows = cur.fetchall()
+    con.close()
+    return [
+        {
+            "id": r[0],
+            "member_id": r[1],
+            "member_name": r[2],
+            "hearing_id": r[3],
+            "utterance_id": r[4],
+            "zscore": r[5],
+        }
+        for r in rows
+    ]

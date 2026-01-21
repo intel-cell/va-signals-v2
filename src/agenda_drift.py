@@ -7,6 +7,7 @@ Compares new utterances against a member's historical baseline centroid.
 
 import math
 import os
+import subprocess
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -228,8 +229,21 @@ Example output: "This statement focuses on budget cuts, while they typically dis
 
 
 def _get_anthropic_key() -> Optional[str]:
-    """Get Anthropic API key from environment."""
-    return os.environ.get("ANTHROPIC_API_KEY")
+    """Get Anthropic API key from environment or macOS Keychain."""
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if key:
+        return key
+    # Try macOS Keychain
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", "claude-api", "-a", os.environ.get("USER", ""), "-w"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
 
 
 def _call_claude_for_explanation(

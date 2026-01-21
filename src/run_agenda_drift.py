@@ -228,6 +228,37 @@ def get_recent_deviations(limit: int = 10) -> list[dict]:
     return db.get_ad_deviation_events(limit=limit, min_zscore=0)
 
 
+def backfill_explanations(limit: int = 50) -> dict:
+    """Generate explanations for existing deviations that don't have them."""
+    stats = {
+        "checked": 0,
+        "generated": 0,
+        "errors": [],
+    }
+
+    deviations = db.get_ad_deviations_without_notes(limit=limit)
+    if not deviations:
+        print("No deviations need explanations.")
+        return stats
+
+    print(f"Backfilling explanations for {len(deviations)} deviations...")
+
+    for d in deviations:
+        stats["checked"] += 1
+        try:
+            explanation = explain_deviation(d["member_id"], d["utterance_id"])
+            if explanation:
+                db.update_ad_deviation_note(d["id"], explanation)
+                stats["generated"] += 1
+                print(f"  {d['member_name']}: {explanation}")
+            else:
+                stats["errors"].append(f"No explanation for {d['utterance_id']}")
+        except Exception as e:
+            stats["errors"].append(f"Error for {d['utterance_id']}: {e}")
+
+    return stats
+
+
 def print_summary():
     """Print overall system summary."""
     # Embedding stats
@@ -277,12 +308,30 @@ def main():
                         help=f"Min embeddings required for baseline (default: {MIN_EMBEDDINGS_FOR_BASELINE})")
     parser.add_argument("--no-explanations", action="store_true",
                         help="Skip LLM explanation generation for deviations")
+    parser.add_argument("--backfill-explanations", action="store_true",
+                        help="Generate explanations for existing deviations that don't have them")
     args = parser.parse_args()
 
     # Ensure DB is initialized
     db.init_db()
 
     if args.summary:
+        print_summary()
+        return
+
+    if args.backfill_explanations:
+        print("\n" + "=" * 60)
+        print("BACKFILLING EXPLANATIONS")
+        print("=" * 60)
+
+        stats = backfill_explanations(limit=args.limit)
+
+        print(f"\nBackfill Summary:")
+        print(f"  Checked:   {stats['checked']}")
+        print(f"  Generated: {stats['generated']}")
+        if stats["errors"]:
+            print(f"  Errors:    {len(stats['errors'])}")
+
         print_summary()
         return
 
