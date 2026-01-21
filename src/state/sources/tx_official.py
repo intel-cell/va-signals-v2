@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -35,8 +36,11 @@ class TXOfficialSource(StateSource):
             response = httpx.get(self.base_url, timeout=30.0)
             response.raise_for_status()
             return self._parse_tvc_news(response.text)
-        except Exception as e:
+        except (httpx.HTTPError, httpx.TimeoutException) as e:
             logger.error(f"Failed to fetch TVC news: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching TVC news: {e}")
             return []
 
     def _parse_tvc_news(self, html: str) -> list[RawSignal]:
@@ -52,20 +56,17 @@ class TXOfficialSource(StateSource):
 
                 title = title_elem.get_text(strip=True)
                 href = title_elem.get("href", "")
+                if not href:
+                    continue  # Skip articles without links
+                url = urljoin("https://tvc.texas.gov/", href)
 
-                if href.startswith("/"):
-                    url = f"https://tvc.texas.gov{href}"
-                elif href.startswith("http"):
-                    url = href
-                else:
-                    url = f"{self.base_url}/{href}"
-
+                # Extract date
                 date_elem = article.select_one("time, .date, .pub-date")
                 pub_date = None
                 if date_elem:
                     datetime_attr = date_elem.get("datetime")
-                    if datetime_attr:
-                        pub_date = datetime_attr[:10]
+                    if datetime_attr and len(datetime_attr) >= 10:
+                        pub_date = datetime_attr[:10]  # YYYY-MM-DD
                     else:
                         pub_date = self._parse_date_text(date_elem.get_text())
 
@@ -83,7 +84,7 @@ class TXOfficialSource(StateSource):
                     )
                 )
 
-            except Exception as e:
+            except (AttributeError, ValueError, TypeError) as e:
                 logger.warning(f"Failed to parse article: {e}")
                 continue
 
