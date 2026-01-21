@@ -7,6 +7,8 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
+HAIKU_MODEL = "claude-3-haiku-20240307"
+
 
 @dataclass
 class ClassificationResult:
@@ -204,19 +206,32 @@ def _call_haiku(prompt: str) -> dict:
     client = anthropic.Anthropic(api_key=_get_api_key())
 
     response = client.messages.create(
-        model="claude-3-haiku-20240307",
+        model=HAIKU_MODEL,
         max_tokens=500,
         messages=[{"role": "user", "content": prompt}],
     )
 
     # Extract text and parse JSON
     text = response.content[0].text
+
     # Find JSON in response
     start = text.find("{")
     end = text.rfind("}") + 1
-    if start >= 0 and end > start:
-        return json.loads(text[start:end])
-    raise ValueError(f"Could not parse JSON from response: {text}")
+    if start < 0 or end <= start:
+        raise ValueError(f"No JSON object found in response: {text[:200]}")
+
+    try:
+        result = json.loads(text[start:end])
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON in response: {e}")
+
+    # Validate required fields
+    if "severity" not in result:
+        raise ValueError(f"Missing 'severity' field in response: {result}")
+    if result["severity"] not in ("high", "medium", "low", "noise"):
+        raise ValueError(f"Invalid severity value: {result['severity']}")
+
+    return result
 
 
 def classify_by_llm(

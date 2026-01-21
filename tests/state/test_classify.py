@@ -195,3 +195,45 @@ def test_classify_by_llm_fallback_on_error():
 
         # Should fall back to keyword classification
         assert result.method == "keyword"
+
+
+def test_classify_by_llm_malformed_json_fallback():
+    """Verify fallback on malformed JSON response."""
+    with patch("src.state.classify._call_haiku") as mock_haiku:
+        mock_haiku.side_effect = ValueError("Invalid JSON in response")
+
+        from src.state.classify import classify_by_llm
+
+        result = classify_by_llm(
+            title="Breaking veteran news about investigation",
+            content="An investigation has been launched...",
+            state="TX",
+        )
+
+        # Should fall back to keyword classification
+        assert result.method == "keyword"
+        assert result.severity == "high"  # "investigation" keyword
+
+
+def test_classify_by_llm_medium_severity():
+    """Verify medium severity LLM classification."""
+    mock_response = {
+        "is_specific_event": True,
+        "federal_program": "community_care",
+        "severity": "medium",
+        "reasoning": "Policy shift in community care program",
+    }
+
+    with patch("src.state.classify._call_haiku") as mock_haiku:
+        mock_haiku.return_value = mock_response
+
+        from src.state.classify import classify_by_llm
+
+        result = classify_by_llm(
+            title="CalVet announces community care changes",
+            content="The state is reviewing...",
+            state="CA",
+        )
+
+        assert result.severity == "medium"
+        assert result.method == "llm"
