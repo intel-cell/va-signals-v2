@@ -1,4 +1,4 @@
-.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings
+.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest
 
 init:
 	python3 -m venv .venv
@@ -45,3 +45,19 @@ bills:
 
 hearings:
 	./.venv/bin/python -m src.run_hearings
+
+# State Intelligence
+state-monitor:
+	./.venv/bin/python -m src.state.runner
+
+state-monitor-morning:
+	./.venv/bin/python -m src.state.runner --run-type morning
+
+state-monitor-evening:
+	./.venv/bin/python -m src.state.runner --run-type evening
+
+state-monitor-dry:
+	./.venv/bin/python -m src.state.runner --dry-run
+
+state-digest:
+	./.venv/bin/python -c "from src.state.digest import generate_weekly_digest; from src.notify_slack import send_slack_message; msg = generate_weekly_digest(); print(msg) if msg else print('No digest signals')"
