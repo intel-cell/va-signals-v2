@@ -948,7 +948,20 @@ function renderBillsTable() {
         const billType = (bill.bill_type || '').toUpperCase();
         const billNum = bill.bill_number;
         const displayId = `${billType} ${billNum}`;
-        const congressUrl = `https://www.congress.gov/bill/${bill.congress}th-congress/${bill.bill_type.toLowerCase()}-bill/${billNum}`;
+
+        // Map bill_type to Congress.gov URL format
+        const billTypeMap = {
+            'hr': 'house-bill',
+            's': 'senate-bill',
+            'hjres': 'house-joint-resolution',
+            'sjres': 'senate-joint-resolution',
+            'hres': 'house-resolution',
+            'sres': 'senate-resolution',
+            'hconres': 'house-concurrent-resolution',
+            'sconres': 'senate-concurrent-resolution'
+        };
+        const urlBillType = billTypeMap[bill.bill_type.toLowerCase()] || 'bill';
+        const congressUrl = `https://www.congress.gov/bill/${bill.congress}th-congress/${urlBillType}/${billNum}`;
 
         // Sponsor display
         let sponsorDisplay = '--';
