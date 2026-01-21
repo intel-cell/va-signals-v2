@@ -218,16 +218,20 @@ def upsert_ad_embedding(utterance_id: str, vec: list[float], model_id: str) -> b
     return not exists
 
 
-def get_ad_embeddings_for_member(member_id: str) -> list[tuple[str, list[float]]]:
-    """Get all embeddings for a member's utterances. Returns [(utterance_id, vec), ...]."""
+def get_ad_embeddings_for_member(member_id: str, min_content_length: int = 100) -> list[tuple[str, list[float]]]:
+    """Get all embeddings for a member's utterances. Returns [(utterance_id, vec), ...].
+
+    Filters out short utterances (< min_content_length chars) to exclude
+    procedural statements that would skew the baseline.
+    """
     con = connect()
     cur = con.cursor()
     cur.execute(
         """SELECT e.utterance_id, e.vec
            FROM ad_embeddings e
            JOIN ad_utterances u ON e.utterance_id = u.utterance_id
-           WHERE u.member_id = ?""",
-        (member_id,),
+           WHERE u.member_id = ? AND LENGTH(u.content) >= ?""",
+        (member_id, min_content_length),
     )
     rows = cur.fetchall()
     con.close()

@@ -45,12 +45,18 @@ def get_members_with_embeddings() -> list[dict]:
     ]
 
 
+MIN_UTTERANCE_LENGTH = 100  # Filter out short procedural statements
+
+
 def get_utterances_for_detection(member_id: str = None, limit: int = 500) -> list[dict]:
     """
     Get utterances with embeddings that haven't been checked for deviation yet.
 
     An utterance is considered "unchecked" if it has an embedding but no deviation event
     (regardless of whether it would trigger one - we track all checks).
+
+    Filters out short utterances (< MIN_UTTERANCE_LENGTH chars) to exclude
+    procedural statements like greetings and brief responses.
     """
     con = db.connect()
     cur = con.cursor()
@@ -61,10 +67,10 @@ def get_utterances_for_detection(member_id: str = None, limit: int = 500) -> lis
                FROM ad_utterances u
                JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
                LEFT JOIN ad_deviation_events d ON u.utterance_id = d.utterance_id
-               WHERE u.member_id = ? AND d.id IS NULL
+               WHERE u.member_id = ? AND d.id IS NULL AND LENGTH(u.content) >= ?
                ORDER BY u.spoken_at DESC
                LIMIT ?""",
-            (member_id, limit),
+            (member_id, MIN_UTTERANCE_LENGTH, limit),
         )
     else:
         cur.execute(
@@ -72,10 +78,10 @@ def get_utterances_for_detection(member_id: str = None, limit: int = 500) -> lis
                FROM ad_utterances u
                JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
                LEFT JOIN ad_deviation_events d ON u.utterance_id = d.utterance_id
-               WHERE d.id IS NULL
+               WHERE d.id IS NULL AND LENGTH(u.content) >= ?
                ORDER BY u.spoken_at DESC
                LIMIT ?""",
-            (limit,),
+            (MIN_UTTERANCE_LENGTH, limit),
         )
 
     rows = cur.fetchall()
