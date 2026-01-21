@@ -9,6 +9,7 @@ from .parser import (
     AnyOfNode,
     NoneOfNode,
 )
+from .evaluator import evaluate_expression, EvaluationResult, ExpressionEvaluator
 
 __all__ = [
     "parse_expression",
@@ -18,4 +19,7 @@ __all__ = [
     "AllOfNode",
     "AnyOfNode",
     "NoneOfNode",
+    "evaluate_expression",
+    "EvaluationResult",
+    "ExpressionEvaluator",
 ]
