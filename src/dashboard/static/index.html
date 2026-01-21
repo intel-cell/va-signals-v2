@@ -66,6 +66,26 @@
             </div>
         </header>
 
+        <!-- Main Navigation Tabs -->
+        <nav class="main-tabs">
+            <button class="main-tab active" data-tab="federal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/>
+                </svg>
+                Federal
+            </button>
+            <button class="main-tab" data-tab="state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                    <circle cx="12" cy="10" r="3"/>
+                </svg>
+                State Monitor
+            </button>
+        </nav>
+
+        <!-- Federal Tab Content -->
+        <div class="tab-panel active" id="federal-panel">
+
         <!-- Health Cards -->
         <section class="health-cards">
             <div class="card health-card">
@@ -385,6 +405,181 @@
             </div>
             </div><!-- end collapsible-content -->
         </section>
+
+        </div><!-- end federal-panel -->
+
+        <!-- State Monitor Tab Content -->
+        <div class="tab-panel" id="state-panel">
+
+            <!-- State Health Cards -->
+            <section class="health-cards">
+                <div class="card health-card">
+                    <div class="card-icon docs-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="state-total-signals">--</span>
+                        <span class="card-label">Total Signals</span>
+                    </div>
+                </div>
+                <div class="card health-card">
+                    <div class="card-icon error-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="state-high-severity">--</span>
+                        <span class="card-label">High Severity</span>
+                    </div>
+                </div>
+                <div class="card health-card">
+                    <div class="card-icon runs-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="state-last-run">--</span>
+                        <span class="card-label">Last Run</span>
+                    </div>
+                </div>
+                <div class="card health-card">
+                    <div class="card-icon success-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="state-new-signals">--</span>
+                        <span class="card-label">New (24h)</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- State Stats Grid -->
+            <div class="main-grid">
+                <!-- Signals by State -->
+                <section class="card">
+                    <div class="card-header">
+                        <h2>Signals by State</h2>
+                    </div>
+                    <div class="state-bars" id="state-bars">
+                        <div class="state-bar-row">
+                            <span class="state-label">TX</span>
+                            <div class="state-bar-container">
+                                <div class="state-bar tx-bar" id="tx-bar"></div>
+                            </div>
+                            <span class="state-count" id="tx-count">--</span>
+                        </div>
+                        <div class="state-bar-row">
+                            <span class="state-label">FL</span>
+                            <div class="state-bar-container">
+                                <div class="state-bar fl-bar" id="fl-bar"></div>
+                            </div>
+                            <span class="state-count" id="fl-count">--</span>
+                        </div>
+                        <div class="state-bar-row">
+                            <span class="state-label">CA</span>
+                            <div class="state-bar-container">
+                                <div class="state-bar ca-bar" id="ca-bar"></div>
+                            </div>
+                            <span class="state-count" id="ca-count">--</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Signals by Severity -->
+                <section class="card">
+                    <div class="card-header">
+                        <h2>Signals by Severity</h2>
+                    </div>
+                    <div class="severity-grid" id="severity-grid">
+                        <div class="severity-card high">
+                            <span class="severity-value" id="sev-high">--</span>
+                            <span class="severity-label">High</span>
+                        </div>
+                        <div class="severity-card medium">
+                            <span class="severity-value" id="sev-medium">--</span>
+                            <span class="severity-label">Medium</span>
+                        </div>
+                        <div class="severity-card low">
+                            <span class="severity-value" id="sev-low">--</span>
+                            <span class="severity-label">Low</span>
+                        </div>
+                        <div class="severity-card noise">
+                            <span class="severity-value" id="sev-noise">--</span>
+                            <span class="severity-label">Noise</span>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Recent State Signals -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>Recent Signals</h2>
+                    <div class="state-filter-tabs">
+                        <button class="state-filter active" data-state="all">All</button>
+                        <button class="state-filter" data-state="TX">TX</button>
+                        <button class="state-filter" data-state="CA">CA</button>
+                        <button class="state-filter" data-state="FL">FL</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="state-signals-table">
+                        <thead>
+                            <tr>
+                                <th>State</th>
+                                <th>Severity</th>
+                                <th>Title</th>
+                                <th>Source</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="state-signals-tbody">
+                            <tr class="loading-row">
+                                <td colspan="5">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Recent State Runs -->
+            <section class="card">
+                <div class="card-header">
+                    <h2>Recent Runs</h2>
+                    <span class="badge" id="state-runs-count">0 runs</span>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="state-runs-table">
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>State</th>
+                                <th>Status</th>
+                                <th>Signals</th>
+                                <th>High</th>
+                                <th>Started</th>
+                            </tr>
+                        </thead>
+                        <tbody id="state-runs-tbody">
+                            <tr class="loading-row">
+                                <td colspan="6">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div><!-- end state-panel -->
 
         <!-- Error Details Modal -->
         <div class="modal" id="error-modal">

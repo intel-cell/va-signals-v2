@@ -32,6 +32,12 @@ const state = {
     billStats: null,
     hearings: [],
     hearingStats: null,
+    // State monitor
+    stateStats: null,
+    stateSignals: [],
+    stateRuns: [],
+    stateFilter: 'all',
+    activeMainTab: 'federal',
     charts: {
         runsChart: null,
         statusChart: null
@@ -55,7 +61,10 @@ const state = {
         summaries: true,
         drift: true,
         bills: true,
-        hearings: true
+        hearings: true,
+        stateStats: true,
+        stateSignals: true,
+        stateRuns: true
     }
 };
 
@@ -106,7 +115,25 @@ const elements = {
     hearingsHvac: document.getElementById('hearings-hvac'),
     hearingsSvac: document.getElementById('hearings-svac'),
     hearingsTotal: document.getElementById('hearings-total'),
-    hearingsList: document.getElementById('hearings-list')
+    hearingsList: document.getElementById('hearings-list'),
+    // State monitor elements
+    stateTotalSignals: document.getElementById('state-total-signals'),
+    stateHighSeverity: document.getElementById('state-high-severity'),
+    stateLastRun: document.getElementById('state-last-run'),
+    stateNewSignals: document.getElementById('state-new-signals'),
+    txBar: document.getElementById('tx-bar'),
+    txCount: document.getElementById('tx-count'),
+    flBar: document.getElementById('fl-bar'),
+    flCount: document.getElementById('fl-count'),
+    caBar: document.getElementById('ca-bar'),
+    caCount: document.getElementById('ca-count'),
+    sevHigh: document.getElementById('sev-high'),
+    sevMedium: document.getElementById('sev-medium'),
+    sevLow: document.getElementById('sev-low'),
+    sevNoise: document.getElementById('sev-noise'),
+    stateSignalsTbody: document.getElementById('state-signals-tbody'),
+    stateRunsTbody: document.getElementById('state-runs-tbody'),
+    stateRunsCount: document.getElementById('state-runs-count')
 };
 
 // Utility Functions
@@ -1641,7 +1668,204 @@ function hideErrorModal() {
 }
 
 // Tab Functions
+// ============================================
+// State Monitor Functions
+// ============================================
+
+async function fetchStateStats() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/state/stats`);
+        if (!response.ok) throw new Error('Failed to fetch state stats');
+        state.stateStats = await response.json();
+        renderStateStats();
+    } catch (error) {
+        console.error('Error fetching state stats:', error);
+    } finally {
+        state.loading.stateStats = false;
+    }
+}
+
+async function fetchStateSignals() {
+    try {
+        const stateParam = state.stateFilter !== 'all' ? `?state=${state.stateFilter}` : '';
+        const response = await fetch(`${CONFIG.apiBase}/state/signals${stateParam}`);
+        if (!response.ok) throw new Error('Failed to fetch state signals');
+        const data = await response.json();
+        state.stateSignals = data.signals || [];
+        renderStateSignals();
+    } catch (error) {
+        console.error('Error fetching state signals:', error);
+    } finally {
+        state.loading.stateSignals = false;
+    }
+}
+
+async function fetchStateRuns() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/state/runs`);
+        if (!response.ok) throw new Error('Failed to fetch state runs');
+        const data = await response.json();
+        state.stateRuns = data.runs || [];
+        renderStateRuns();
+    } catch (error) {
+        console.error('Error fetching state runs:', error);
+    } finally {
+        state.loading.stateRuns = false;
+    }
+}
+
+function renderStateStats() {
+    if (!state.stateStats) return;
+
+    const stats = state.stateStats;
+
+    // Update health cards
+    if (elements.stateTotalSignals) {
+        elements.stateTotalSignals.textContent = stats.total_signals || 0;
+    }
+    if (elements.stateHighSeverity) {
+        elements.stateHighSeverity.textContent = stats.by_severity?.high || 0;
+    }
+    if (elements.stateLastRun && stats.last_run) {
+        elements.stateLastRun.textContent = formatRelativeTime(stats.last_run.finished_at);
+    }
+    if (elements.stateNewSignals && stats.last_run) {
+        elements.stateNewSignals.textContent = stats.last_run.signals_found || 0;
+    }
+
+    // Update state bars
+    const byState = stats.by_state || {};
+    const maxCount = Math.max(byState.TX || 0, byState.CA || 0, byState.FL || 0, 1);
+
+    if (elements.txBar) {
+        elements.txBar.style.width = `${((byState.TX || 0) / maxCount) * 100}%`;
+    }
+    if (elements.txCount) {
+        elements.txCount.textContent = byState.TX || 0;
+    }
+    if (elements.flBar) {
+        elements.flBar.style.width = `${((byState.FL || 0) / maxCount) * 100}%`;
+    }
+    if (elements.flCount) {
+        elements.flCount.textContent = byState.FL || 0;
+    }
+    if (elements.caBar) {
+        elements.caBar.style.width = `${((byState.CA || 0) / maxCount) * 100}%`;
+    }
+    if (elements.caCount) {
+        elements.caCount.textContent = byState.CA || 0;
+    }
+
+    // Update severity cards
+    const bySeverity = stats.by_severity || {};
+    if (elements.sevHigh) elements.sevHigh.textContent = bySeverity.high || 0;
+    if (elements.sevMedium) elements.sevMedium.textContent = bySeverity.medium || 0;
+    if (elements.sevLow) elements.sevLow.textContent = bySeverity.low || 0;
+    if (elements.sevNoise) elements.sevNoise.textContent = bySeverity.noise || 0;
+}
+
+function renderStateSignals() {
+    if (!elements.stateSignalsTbody) return;
+
+    if (state.stateSignals.length === 0) {
+        elements.stateSignalsTbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="empty-state">No signals found</td>
+            </tr>
+        `;
+        return;
+    }
+
+    elements.stateSignalsTbody.innerHTML = state.stateSignals.slice(0, 50).map(signal => `
+        <tr>
+            <td><span class="state-badge ${signal.state}">${signal.state}</span></td>
+            <td><span class="severity-badge ${signal.severity || 'low'}">${signal.severity || 'unclassified'}</span></td>
+            <td class="signal-title" title="${escapeHtml(signal.title)}">
+                ${signal.url ? `<a href="${escapeHtml(signal.url)}" target="_blank">${escapeHtml(signal.title?.substring(0, 60) || 'Untitled')}${signal.title?.length > 60 ? '...' : ''}</a>` : escapeHtml(signal.title?.substring(0, 60) || 'Untitled')}
+            </td>
+            <td class="source-cell">${escapeHtml(signal.source_id?.replace(/_/g, ' ') || '--')}</td>
+            <td>${signal.pub_date || '--'}</td>
+        </tr>
+    `).join('');
+}
+
+function renderStateRuns() {
+    if (!elements.stateRunsTbody) return;
+
+    if (state.stateRuns.length === 0) {
+        elements.stateRunsTbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="empty-state">No runs found</td>
+            </tr>
+        `;
+        return;
+    }
+
+    if (elements.stateRunsCount) {
+        elements.stateRunsCount.textContent = `${state.stateRuns.length} runs`;
+    }
+
+    elements.stateRunsTbody.innerHTML = state.stateRuns.slice(0, 20).map(run => `
+        <tr>
+            <td>${escapeHtml(run.run_type || '--')}</td>
+            <td>${run.state || 'all'}</td>
+            <td><span class="status-badge ${getStatusClass(run.status)}">${run.status}</span></td>
+            <td>${run.signals_found || 0}</td>
+            <td>${run.high_severity_count || 0}</td>
+            <td>${formatRelativeTime(run.started_at)}</td>
+        </tr>
+    `).join('');
+}
+
+async function refreshStateData() {
+    await Promise.all([
+        fetchStateStats(),
+        fetchStateSignals(),
+        fetchStateRuns()
+    ]);
+}
+
+function initMainTabs() {
+    const mainTabs = document.querySelectorAll('.main-tab');
+    mainTabs.forEach(tab => {
+        tab.addEventListener('click', async () => {
+            // Update active tab
+            mainTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            // Update active panel
+            const tabId = tab.dataset.tab;
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.remove('active');
+            });
+            document.getElementById(`${tabId}-panel`)?.classList.add('active');
+
+            state.activeMainTab = tabId;
+
+            // Load state data when switching to state tab
+            if (tabId === 'state' && state.loading.stateStats) {
+                await refreshStateData();
+            }
+        });
+    });
+
+    // Init state filter buttons
+    const stateFilters = document.querySelectorAll('.state-filter');
+    stateFilters.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            stateFilters.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            state.stateFilter = btn.dataset.state;
+            await fetchStateSignals();
+        });
+    });
+}
+
 function initTabs() {
+    // Init main tabs (Federal/State)
+    initMainTabs();
+
+    // Init document tabs (FR/eCFR)
     const tabs = document.querySelectorAll('.tab');
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -1671,8 +1895,8 @@ function updateRefreshTime() {
 async function refreshAll() {
     updateRefreshTime();
 
-    // Load all data in parallel
-    await Promise.all([
+    // Load federal data in parallel
+    const federalPromises = [
         loadRuns(),
         loadStats(),
         loadFrDocuments(),
@@ -1687,7 +1911,14 @@ async function refreshAll() {
         loadBillStats(),
         loadHearings(),
         loadHearingStats()
-    ]);
+    ];
+
+    // Load state data if on state tab
+    if (state.activeMainTab === 'state') {
+        federalPromises.push(refreshStateData());
+    }
+
+    await Promise.all(federalPromises);
 
     // Re-render FR table to show summary badges (after summarizedDocIds is loaded)
     renderFrTable();
