@@ -30,8 +30,10 @@ def test_rss_feeds_defined():
     assert "TX" in RSS_FEEDS
     assert "CA" in RSS_FEEDS
     assert "FL" in RSS_FEEDS
-    # Each state should have at least one feed
-    assert len(RSS_FEEDS["TX"]) >= 1
+    # Each state should have at least two feeds
+    assert len(RSS_FEEDS["TX"]) >= 2
+    assert len(RSS_FEEDS["CA"]) >= 2
+    assert len(RSS_FEEDS["FL"]) >= 2
 
 
 @patch("src.state.sources.rss.feedparser.parse")

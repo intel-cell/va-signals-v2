@@ -18,17 +18,29 @@ RSS_FEEDS = {
             "name": "Texas Tribune",
             "url": "https://www.texastribune.org/feeds/rss/",
         },
+        {
+            "name": "Houston Chronicle",
+            "url": "https://www.houstonchronicle.com/rss/feed/news-rss-xml.php",
+        },
     ],
     "CA": [
         {
             "name": "CalMatters",
             "url": "https://calmatters.org/feed/",
         },
+        {
+            "name": "LA Times",
+            "url": "https://www.latimes.com/politics/rss2.0.xml",
+        },
     ],
     "FL": [
         {
             "name": "Florida Phoenix",
             "url": "https://floridaphoenix.com/feed/",
+        },
+        {
+            "name": "Tampa Bay Times",
+            "url": "https://www.tampabay.com/arcio/rss/category/news-politics-state/",
         },
     ],
 }
