@@ -9,69 +9,70 @@ from src.db import connect
 DEFAULT_SOURCES = [
     # Texas
     {
-        "source_id": "tx_tvc_official",
-        "state": "TX",
-        "source_type": "official",
-        "name": "Texas Veterans Commission",
-        "url": "https://www.tvc.texas.gov/",
-    },
-    {
         "source_id": "tx_tvc_news",
         "state": "TX",
-        "source_type": "rss",
+        "source_type": "official",
         "name": "Texas Veterans Commission News",
-        "url": "https://www.tvc.texas.gov/feed/",
+        "url": "https://tvc.texas.gov/news",
     },
     {
-        "source_id": "tx_gov_news",
+        "source_id": "tx_register",
         "state": "TX",
-        "source_type": "rss",
-        "name": "Texas Governor Veterans News",
-        "url": "https://gov.texas.gov/news/category/veterans",
+        "source_type": "official",
+        "name": "Texas Register",
+        "url": "https://texreg.sos.state.tx.us",
     },
     # California
     {
-        "source_id": "ca_calvet_official",
-        "state": "CA",
-        "source_type": "official",
-        "name": "California Department of Veterans Affairs",
-        "url": "https://www.calvet.ca.gov/",
-    },
-    {
         "source_id": "ca_calvet_news",
         "state": "CA",
-        "source_type": "rss",
-        "name": "CalVet News",
-        "url": "https://www.calvet.ca.gov/Pages/News.aspx",
+        "source_type": "official",
+        "name": "CalVet Newsroom",
+        "url": "https://calvet.ca.gov/news",
     },
     {
-        "source_id": "ca_legislature",
+        "source_id": "ca_oal_register",
         "state": "CA",
         "source_type": "official",
-        "name": "California Legislature Veterans Affairs",
-        "url": "https://leginfo.legislature.ca.gov/",
+        "name": "OAL Notice Register",
+        "url": "https://oal.ca.gov/publications",
     },
     # Florida
     {
-        "source_id": "fl_fdva_official",
+        "source_id": "fl_dva_news",
         "state": "FL",
         "source_type": "official",
-        "name": "Florida Department of Veterans Affairs",
-        "url": "https://www.floridavets.org/",
+        "name": "Florida DVA News",
+        "url": "https://floridavets.org/news",
     },
     {
-        "source_id": "fl_fdva_news",
+        "source_id": "fl_admin_register",
         "state": "FL",
+        "source_type": "official",
+        "name": "Florida Administrative Register",
+        "url": "https://flrules.org",
+    },
+    # RSS Feeds
+    {
+        "source_id": "rss_texas_tribune",
+        "state": "TX",
         "source_type": "rss",
-        "name": "FDVA News",
-        "url": "https://www.floridavets.org/news/",
+        "name": "Texas Tribune",
+        "url": "https://www.texastribune.org/feeds/rss/",
     },
     {
-        "source_id": "fl_gov_news",
+        "source_id": "rss_calmatters",
+        "state": "CA",
+        "source_type": "rss",
+        "name": "CalMatters",
+        "url": "https://calmatters.org/feed/",
+    },
+    {
+        "source_id": "rss_florida_phoenix",
         "state": "FL",
         "source_type": "rss",
-        "name": "Florida Governor Veterans News",
-        "url": "https://www.flgov.com/category/veterans/",
+        "name": "Florida Phoenix",
+        "url": "https://floridaphoenix.com/feed/",
     },
 ]
 
@@ -84,9 +85,9 @@ def _utc_now_iso() -> str:
 # --- Source helpers ---
 
 
-def insert_state_source(source: dict) -> bool:
+def insert_state_source(source: dict) -> None:
     """
-    Insert a state source. Returns True if new (inserted), False if already exists.
+    Insert a state source (idempotent - skips if already exists).
     Expected keys: source_id, state, source_type, name, url, enabled (optional).
     """
     con = connect()
@@ -94,7 +95,7 @@ def insert_state_source(source: dict) -> bool:
     cur.execute("SELECT source_id FROM state_sources WHERE source_id = ?", (source["source_id"],))
     if cur.fetchone() is not None:
         con.close()
-        return False
+        return
 
     cur.execute(
         """INSERT INTO state_sources(source_id, state, source_type, name, url, enabled, created_at)
@@ -111,7 +112,6 @@ def insert_state_source(source: dict) -> bool:
     )
     con.commit()
     con.close()
-    return True
 
 
 def get_state_source(source_id: str) -> dict | None:
@@ -175,9 +175,9 @@ def get_sources_by_state(state: str, enabled_only: bool = True) -> list[dict]:
 # --- Signal helpers ---
 
 
-def insert_state_signal(signal: dict) -> bool:
+def insert_state_signal(signal: dict) -> None:
     """
-    Insert a state signal. Returns True if new (inserted), False if already exists.
+    Insert a state signal (idempotent - skips if already exists).
     Expected keys: signal_id, state, source_id, title, url.
     Optional: program, content, pub_date, event_date.
     """
@@ -186,7 +186,7 @@ def insert_state_signal(signal: dict) -> bool:
     cur.execute("SELECT signal_id FROM state_signals WHERE signal_id = ?", (signal["signal_id"],))
     if cur.fetchone() is not None:
         con.close()
-        return False
+        return
 
     cur.execute(
         """INSERT INTO state_signals(signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at)
@@ -206,7 +206,6 @@ def insert_state_signal(signal: dict) -> bool:
     )
     con.commit()
     con.close()
-    return True
 
 
 def get_state_signal(signal_id: str) -> dict | None:
@@ -247,16 +246,29 @@ def signal_exists(signal_id: str) -> bool:
     return exists
 
 
-def get_signals_by_state(state: str, limit: int = 100) -> list[dict]:
-    """Get signals for a state, ordered by pub_date descending."""
+def get_signals_by_state(
+    state: str, since: str | None = None, limit: int = 100
+) -> list[dict]:
+    """Get signals for a state, ordered by pub_date descending.
+
+    If `since` is provided, filter by fetched_at >= since.
+    """
     con = connect()
     cur = con.cursor()
-    cur.execute(
-        """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
-           FROM state_signals WHERE state = ?
-           ORDER BY pub_date DESC, fetched_at DESC LIMIT ?""",
-        (state, limit),
-    )
+    if since:
+        cur.execute(
+            """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
+               FROM state_signals WHERE state = ? AND fetched_at >= ?
+               ORDER BY pub_date DESC, fetched_at DESC LIMIT ?""",
+            (state, since, limit),
+        )
+    else:
+        cur.execute(
+            """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
+               FROM state_signals WHERE state = ?
+               ORDER BY pub_date DESC, fetched_at DESC LIMIT ?""",
+            (state, limit),
+        )
     rows = cur.fetchall()
     con.close()
     return [
@@ -280,9 +292,9 @@ def get_signals_by_state(state: str, limit: int = 100) -> list[dict]:
 # --- Classification helpers ---
 
 
-def insert_state_classification(classification: dict) -> bool:
+def insert_state_classification(classification: dict) -> None:
     """
-    Insert a classification for a signal. Returns True if new.
+    Insert a classification for a signal (idempotent - skips if already exists).
     Expected keys: signal_id, severity, classification_method.
     Optional: keywords_matched, llm_reasoning.
     """
@@ -291,7 +303,7 @@ def insert_state_classification(classification: dict) -> bool:
     cur.execute("SELECT signal_id FROM state_classifications WHERE signal_id = ?", (classification["signal_id"],))
     if cur.fetchone() is not None:
         con.close()
-        return False
+        return
 
     cur.execute(
         """INSERT INTO state_classifications(signal_id, severity, classification_method, keywords_matched, llm_reasoning, classified_at)
@@ -307,7 +319,6 @@ def insert_state_classification(classification: dict) -> bool:
     )
     con.commit()
     con.close()
-    return True
 
 
 def get_state_classification(signal_id: str) -> dict | None:
@@ -380,9 +391,9 @@ def get_unnotified_signals(severity: str = None, limit: int = 100) -> list[dict]
     ]
 
 
-def mark_signal_notified(signal_id: str, channel: str) -> bool:
+def mark_signal_notified(signal_id: str, channel: str) -> None:
     """
-    Mark a signal as notified. Returns True if successfully inserted.
+    Mark a signal as notified (idempotent - skips if already exists).
     """
     con = connect()
     cur = con.cursor()
@@ -392,11 +403,10 @@ def mark_signal_notified(signal_id: str, channel: str) -> bool:
             (signal_id, _utc_now_iso(), channel),
         )
         con.commit()
-        con.close()
-        return True
     except Exception:
+        pass  # Already notified, ignore
+    finally:
         con.close()
-        return False
 
 
 # --- Run tracking ---
@@ -556,6 +566,8 @@ def seed_default_sources() -> int:
     """
     count = 0
     for source in DEFAULT_SOURCES:
-        if insert_state_source(source):
+        # Check if exists before inserting
+        if get_state_source(source["source_id"]) is None:
+            insert_state_source(source)
             count += 1
     return count

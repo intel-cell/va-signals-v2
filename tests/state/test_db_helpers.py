@@ -16,8 +16,7 @@ class TestStateSources:
             "name": "Texas DVA",
             "url": "https://www.tvc.texas.gov/",
         }
-        result = db_helpers.insert_state_source(source)
-        assert result is True  # New source inserted
+        db_helpers.insert_state_source(source)  # Returns None
 
         # Get it back
         retrieved = db_helpers.get_state_source("tx_dva_official")
@@ -30,8 +29,8 @@ class TestStateSources:
         assert retrieved["enabled"] == 1
         assert "created_at" in retrieved
 
-    def test_insert_duplicate_source_returns_false(self):
-        """Test that inserting a duplicate source returns False."""
+    def test_insert_duplicate_source_is_idempotent(self):
+        """Test that inserting a duplicate source is idempotent (no error)."""
         source = {
             "source_id": "tx_dva_official",
             "state": "TX",
@@ -40,9 +39,11 @@ class TestStateSources:
             "url": "https://www.tvc.texas.gov/",
         }
         db_helpers.insert_state_source(source)
-        # Try again
-        result = db_helpers.insert_state_source(source)
-        assert result is False
+        # Try again - should not raise, just skip
+        db_helpers.insert_state_source(source)
+        # Still only one
+        retrieved = db_helpers.get_state_source("tx_dva_official")
+        assert retrieved is not None
 
     def test_get_nonexistent_source_returns_none(self):
         """Test that getting a nonexistent source returns None."""
@@ -88,8 +89,7 @@ class TestStateSignals:
             "pub_date": "2024-01-15",
             "event_date": "2024-02-01",
         }
-        result = db_helpers.insert_state_signal(signal)
-        assert result is True
+        db_helpers.insert_state_signal(signal)  # Returns None
 
         retrieved = db_helpers.get_state_signal("sig_001")
         assert retrieved is not None
@@ -134,6 +134,27 @@ class TestStateSignals:
         assert len(tx_signals) == 2
         assert all(s["state"] == "TX" for s in tx_signals)
 
+    def test_get_signals_by_state_with_since(self):
+        """Test getting signals by state with since filter."""
+        source = {"source_id": "tx_since", "state": "TX", "source_type": "official", "name": "TX", "url": "https://tx.gov"}
+        db_helpers.insert_state_source(source)
+
+        # Insert a signal
+        signal = {"signal_id": "tx_since_1", "state": "TX", "source_id": "tx_since", "title": "TX 1", "url": "https://tx.gov/1"}
+        db_helpers.insert_state_signal(signal)
+
+        # Get all signals (no since)
+        all_signals = db_helpers.get_signals_by_state("TX")
+        assert len(all_signals) >= 1
+
+        # Get signals since a future date (should be empty)
+        future_signals = db_helpers.get_signals_by_state("TX", since="2099-01-01T00:00:00+00:00")
+        assert len(future_signals) == 0
+
+        # Get signals since a past date (should include our signal)
+        past_signals = db_helpers.get_signals_by_state("TX", since="2000-01-01T00:00:00+00:00")
+        assert len(past_signals) >= 1
+
 
 class TestStateClassifications:
     """Tests for state classification helpers."""
@@ -153,8 +174,7 @@ class TestStateClassifications:
             "keywords_matched": "budget,cut,reduction",
             "llm_reasoning": None,
         }
-        result = db_helpers.insert_state_classification(classification)
-        assert result is True
+        db_helpers.insert_state_classification(classification)  # Returns None
 
         retrieved = db_helpers.get_state_classification("sig_class")
         assert retrieved is not None
@@ -306,3 +326,23 @@ class TestSeedDefaultSources:
         count2 = db_helpers.seed_default_sources()
         # Second call should insert 0 because all already exist
         assert count2 == 0
+
+    def test_seed_default_sources_correct_ids(self):
+        """Test that seed contains the correct source_ids per spec."""
+        db_helpers.seed_default_sources()
+
+        # Check expected source_ids exist
+        expected_source_ids = [
+            "tx_tvc_news",
+            "tx_register",
+            "ca_calvet_news",
+            "ca_oal_register",
+            "fl_dva_news",
+            "fl_admin_register",
+            "rss_texas_tribune",
+            "rss_calmatters",
+            "rss_florida_phoenix",
+        ]
+        for source_id in expected_source_ids:
+            source = db_helpers.get_state_source(source_id)
+            assert source is not None, f"Expected source_id {source_id} not found"
