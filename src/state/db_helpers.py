@@ -1,5 +1,6 @@
 """Database helpers for state intelligence module."""
 
+import sqlite3
 from datetime import datetime, timezone
 
 from src.db import connect
@@ -344,7 +345,7 @@ def get_state_classification(signal_id: str) -> dict | None:
     }
 
 
-def get_unnotified_signals(severity: str = None, limit: int = 100) -> list[dict]:
+def get_unnotified_signals(severity: str | None = None, limit: int = 100) -> list[dict]:
     """
     Get signals that have been classified but not notified.
     Optionally filter by severity.
@@ -396,15 +397,18 @@ def mark_signal_notified(signal_id: str, channel: str) -> None:
     Mark a signal as notified (idempotent - skips if already exists).
     """
     con = connect()
-    cur = con.cursor()
     try:
-        cur.execute(
-            """INSERT INTO state_notifications(signal_id, notified_at, channel) VALUES(?,?,?)""",
+        con.execute(
+            """
+            INSERT INTO state_notifications (signal_id, notified_at, channel)
+            VALUES (?, ?, ?)
+            """,
             (signal_id, _utc_now_iso(), channel),
         )
         con.commit()
-    except Exception:
-        pass  # Already notified, ignore
+    except sqlite3.IntegrityError:
+        # Already notified, ignore
+        pass
     finally:
         con.close()
 
