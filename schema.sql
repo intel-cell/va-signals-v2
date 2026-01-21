@@ -362,3 +362,21 @@ CREATE TABLE IF NOT EXISTS signal_suppression (
 
 CREATE INDEX IF NOT EXISTS idx_signal_suppression_dedupe ON signal_suppression(dedupe_key);
 CREATE INDEX IF NOT EXISTS idx_signal_suppression_cooldown ON signal_suppression(cooldown_until);
+
+-- Signal audit log
+CREATE TABLE IF NOT EXISTS signal_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    authority_id TEXT NOT NULL,
+    indicator_id TEXT NOT NULL,
+    trigger_id TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    fired_at TEXT NOT NULL,
+    suppressed INTEGER NOT NULL DEFAULT 0,
+    suppression_reason TEXT,
+    explanation_json TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_audit_trigger ON signal_audit_log(trigger_id, fired_at);
+CREATE INDEX IF NOT EXISTS idx_signal_audit_event ON signal_audit_log(event_id);
