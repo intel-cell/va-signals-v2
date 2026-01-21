@@ -26,15 +26,34 @@ from . import db
 # Congress.gov API base URL
 API_BASE = "https://api.congress.gov/v3"
 
-# VA-related committee system codes
+# VA-related committee system codes (full committees + subcommittees)
 VA_COMMITTEES = {
+    # House Veterans' Affairs - Full Committee
     "hsvr00": "house",
+    # House VA Subcommittees
+    "hsvr01": "house",  # Compensation, Pension and Insurance
+    "hsvr02": "house",  # Education, Training and Employment
+    "hsvr03": "house",  # Health
+    "hsvr04": "house",  # Housing and Memorial Affairs
+    "hsvr08": "house",  # Oversight and Investigations
+    "hsvr10": "house",  # Economic Opportunity
+    "hsvr11": "house",  # Technology Modernization
+    # Senate Veterans' Affairs - Full Committee
     "ssva00": "senate",
 }
 
 # Committee names for display
 VA_COMMITTEE_NAMES = {
+    # House VA
     "hsvr00": "House Veterans' Affairs Committee",
+    "hsvr01": "House VA Subcommittee on Compensation, Pension and Insurance",
+    "hsvr02": "House VA Subcommittee on Education, Training and Employment",
+    "hsvr03": "House VA Subcommittee on Health",
+    "hsvr04": "House VA Subcommittee on Housing and Memorial Affairs",
+    "hsvr08": "House VA Subcommittee on Oversight and Investigations",
+    "hsvr10": "House VA Subcommittee on Economic Opportunity",
+    "hsvr11": "House VA Subcommittee on Technology Modernization",
+    # Senate VA
     "ssva00": "Senate Veterans' Affairs Committee",
 }
 

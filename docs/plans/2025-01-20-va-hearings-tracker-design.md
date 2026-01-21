@@ -7,7 +7,16 @@ Track upcoming VA committee hearings from Congress.gov API. Detect new hearings 
 ## Data Sources
 
 - **Congress.gov API** - `/committee-meeting/{congress}/{chamber}`
-- **VA Committees**: `hsvr00` (House), `ssva00` (Senate)
+- **VA Committees**:
+  - `hsvr00` (House VA full committee)
+  - `hsvr01` - Compensation, Pension and Insurance
+  - `hsvr02` - Education, Training and Employment
+  - `hsvr03` - Health
+  - `hsvr04` - Housing and Memorial Affairs
+  - `hsvr08` - Oversight and Investigations
+  - `hsvr10` - Economic Opportunity
+  - `hsvr11` - Technology Modernization
+  - `ssva00` (Senate VA full committee)
 - **API Key**: Existing `congress-api` in macOS Keychain
 
 ## Schema
