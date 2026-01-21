@@ -224,6 +224,49 @@
             </div>
         </section>
 
+        <!-- VA Legislation Section -->
+        <section class="card legislation-section collapsible-section" id="legislation-section">
+            <div class="card-header collapsible-header" onclick="toggleSection('legislation-section')">
+                <div class="header-title-group">
+                    <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                    <h2>VA Legislation</h2>
+                </div>
+                <span class="badge" id="bills-count">0 bills</span>
+            </div>
+            <div class="collapsible-content">
+                <div class="bills-stats" id="bills-stats">
+                    <div class="bills-stat">
+                        <span class="bills-stat-value" id="bills-total">--</span>
+                        <span class="bills-stat-label">Total Bills</span>
+                    </div>
+                    <div class="bills-stat">
+                        <span class="bills-stat-value" id="bills-new-week">--</span>
+                        <span class="bills-stat-label">New This Week</span>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="bills-table">
+                        <thead>
+                            <tr>
+                                <th>Bill ID</th>
+                                <th>Title</th>
+                                <th>Sponsor</th>
+                                <th>Latest Action</th>
+                                <th>Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bills-tbody">
+                            <tr class="loading-row">
+                                <td colspan="5">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
         <!-- Documents Section -->
         <section class="card documents-section collapsible-section" id="documents-section">
             <div class="card-header collapsible-header" onclick="toggleSection('documents-section')">

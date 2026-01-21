@@ -28,6 +28,8 @@ const state = {
     summarizedDocIds: new Set(),
     driftEvents: [],
     driftStats: null,
+    bills: [],
+    billStats: null,
     charts: {
         runsChart: null,
         statusChart: null
@@ -49,7 +51,8 @@ const state = {
         frDocs: true,
         ecfrDocs: true,
         summaries: true,
-        drift: true
+        drift: true,
+        bills: true
     }
 };
 
@@ -89,7 +92,12 @@ const elements = {
     driftMembers: document.getElementById('drift-members'),
     driftUtterances: document.getElementById('drift-utterances'),
     driftBaselines: document.getElementById('drift-baselines'),
-    driftEvents: document.getElementById('drift-events')
+    driftEvents: document.getElementById('drift-events'),
+    // Bills elements
+    billsCount: document.getElementById('bills-count'),
+    billsTotal: document.getElementById('bills-total'),
+    billsNewWeek: document.getElementById('bills-new-week'),
+    billsTbody: document.getElementById('bills-tbody')
 };
 
 // Utility Functions
@@ -531,6 +539,25 @@ async function loadDriftStats() {
     }
 }
 
+async function loadBills() {
+    state.loading.bills = true;
+    renderBillsTable();
+    const data = await fetchApi('/bills?limit=50');
+    state.loading.bills = false;
+    if (data) {
+        state.bills = data.bills || [];
+        renderBillsTable();
+    }
+}
+
+async function loadBillStats() {
+    const data = await fetchApi('/bills/stats');
+    if (data) {
+        state.billStats = data;
+        updateBillStats();
+    }
+}
+
 // Render Functions
 function updateHealthCards() {
     const stats = state.stats;
@@ -867,6 +894,99 @@ function renderDriftEvents() {
     // Update count badge
     if (elements.driftCount) {
         elements.driftCount.textContent = `${events.length} flagged`;
+    }
+}
+
+function updateBillStats() {
+    const stats = state.billStats;
+    if (!stats) return;
+
+    if (elements.billsTotal) {
+        elements.billsTotal.textContent = stats.total_bills ?? '--';
+    }
+    if (elements.billsNewWeek) {
+        elements.billsNewWeek.textContent = stats.new_this_week ?? '--';
+    }
+    if (elements.billsCount) {
+        const count = state.bills.length;
+        elements.billsCount.textContent = `${stats.total_bills ?? count} bills`;
+    }
+}
+
+function renderBillsTable() {
+    if (!elements.billsTbody) return;
+
+    const bills = state.bills;
+
+    if (state.loading.bills) {
+        elements.billsTbody.innerHTML = `
+            <tr class="loading-row">
+                <td colspan="5">Loading...</td>
+            </tr>
+        `;
+        return;
+    }
+
+    if (bills.length === 0) {
+        elements.billsTbody.innerHTML = `
+            <tr class="empty-state-row">
+                <td colspan="5" class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <p>No bills tracked yet</p>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    elements.billsTbody.innerHTML = bills.map(bill => {
+        const billType = (bill.bill_type || '').toUpperCase();
+        const billNum = bill.bill_number;
+        const displayId = `${billType} ${billNum}`;
+        const congressUrl = `https://www.congress.gov/bill/${bill.congress}th-congress/${bill.bill_type.toLowerCase()}-bill/${billNum}`;
+
+        // Sponsor display
+        let sponsorDisplay = '--';
+        if (bill.sponsor_name) {
+            const party = bill.sponsor_party ? ` (${bill.sponsor_party})` : '';
+            const state = bill.sponsor_state ? `-${bill.sponsor_state}` : '';
+            sponsorDisplay = `${escapeHtml(bill.sponsor_name)}${party}${state}`;
+        }
+
+        // Title truncation
+        const titleDisplay = bill.title && bill.title.length > 80
+            ? escapeHtml(bill.title.substring(0, 80)) + '...'
+            : escapeHtml(bill.title || '--');
+
+        // Latest action
+        const actionDisplay = bill.latest_action_text && bill.latest_action_text.length > 60
+            ? escapeHtml(bill.latest_action_text.substring(0, 60)) + '...'
+            : escapeHtml(bill.latest_action_text || '--');
+
+        return `
+            <tr>
+                <td>
+                    <a href="${escapeHtml(congressUrl)}" target="_blank" rel="noopener noreferrer" class="bill-link">
+                        ${escapeHtml(displayId)}
+                    </a>
+                </td>
+                <td class="bill-title" title="${escapeHtml(bill.title || '')}">${titleDisplay}</td>
+                <td class="bill-sponsor">${sponsorDisplay}</td>
+                <td class="bill-action" title="${escapeHtml(bill.latest_action_text || '')}">${actionDisplay}</td>
+                <td>${formatRelativeTime(bill.latest_action_date || bill.first_seen_at)}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // Update count badge
+    if (elements.billsCount) {
+        const total = state.billStats?.total_bills ?? bills.length;
+        elements.billsCount.textContent = `${total} bills`;
     }
 }
 
@@ -1396,7 +1516,9 @@ async function refreshAll() {
         loadSummaries(),
         loadSummarizedDocIds(),
         loadDriftEvents(),
-        loadDriftStats()
+        loadDriftStats(),
+        loadBills(),
+        loadBillStats()
     ]);
 
     // Re-render FR table to show summary badges (after summarizedDocIds is loaded)

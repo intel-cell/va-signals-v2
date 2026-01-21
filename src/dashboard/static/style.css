@@ -1747,3 +1747,72 @@ body {
     padding-top: 0;
     padding-bottom: 0;
 }
+
+/* VA Legislation Section */
+.legislation-section {
+    margin-bottom: 2rem;
+}
+
+.bills-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.bills-stat {
+    text-align: center;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
+.bills-stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.bills-stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.bill-link {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 600;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 0.8125rem;
+    transition: var(--transition);
+}
+
+.bill-link:hover {
+    color: #60a5fa;
+    text-decoration: underline;
+}
+
+.bill-title {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bill-sponsor {
+    white-space: nowrap;
+    font-size: 0.8125rem;
+}
+
+.bill-action {
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}

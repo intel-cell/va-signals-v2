@@ -1,4 +1,4 @@
-.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift
+.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills
 
 init:
 	python3 -m venv .venv
@@ -39,3 +39,6 @@ embed:
 
 agenda-drift:
 	./.venv/bin/python -m src.run_agenda_drift --all
+
+bills:
+	./.venv/bin/python -m src.run_bills

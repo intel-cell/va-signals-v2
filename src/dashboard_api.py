@@ -162,6 +162,32 @@ class ADMemberStats(BaseModel):
     avg_zscore: float
 
 
+class BillResponse(BaseModel):
+    bill_id: str
+    congress: int
+    bill_type: str
+    bill_number: int
+    title: str
+    sponsor_name: Optional[str]
+    sponsor_party: Optional[str]
+    sponsor_state: Optional[str]
+    latest_action_date: Optional[str]
+    latest_action_text: Optional[str]
+    first_seen_at: str
+
+
+class BillsResponse(BaseModel):
+    bills: list[BillResponse]
+    count: int
+
+
+class BillStatsResponse(BaseModel):
+    total_bills: int
+    new_this_week: int
+    by_type: dict[str, int]
+    by_congress: dict[int, int]
+
+
 # --- FastAPI App ---
 
 app = FastAPI(
@@ -823,6 +849,112 @@ def get_ad_member_history(
         "events": events,
         "count": total,
     }
+
+
+# --- Bills Endpoints ---
+
+@app.get("/api/bills", response_model=BillsResponse)
+def get_bills(
+    limit: int = Query(50, ge=1, le=500, description="Number of bills to return"),
+    congress: Optional[int] = Query(None, description="Filter by congress number"),
+):
+    """List tracked VA bills."""
+    con = connect()
+    cur = con.cursor()
+
+    # Check if bills table exists
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='bills'")
+    if not cur.fetchone():
+        con.close()
+        return BillsResponse(bills=[], count=0)
+
+    query = """
+        SELECT bill_id, congress, bill_type, bill_number, title,
+               sponsor_name, sponsor_party, sponsor_state,
+               latest_action_date, latest_action_text, first_seen_at
+        FROM bills
+        WHERE 1=1
+    """
+    params: list[Any] = []
+
+    if congress is not None:
+        query += " AND congress = ?"
+        params.append(congress)
+
+    query += " ORDER BY latest_action_date DESC NULLS LAST, first_seen_at DESC LIMIT ?"
+    params.append(limit)
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+
+    # Get total count
+    count_query = "SELECT COUNT(*) FROM bills"
+    if congress is not None:
+        count_query += " WHERE congress = ?"
+        cur.execute(count_query, (congress,))
+    else:
+        cur.execute(count_query)
+    total = cur.fetchone()[0]
+
+    con.close()
+
+    bills = [
+        BillResponse(
+            bill_id=row[0],
+            congress=row[1],
+            bill_type=row[2],
+            bill_number=row[3],
+            title=row[4],
+            sponsor_name=row[5],
+            sponsor_party=row[6],
+            sponsor_state=row[7],
+            latest_action_date=row[8],
+            latest_action_text=row[9],
+            first_seen_at=row[10],
+        )
+        for row in rows
+    ]
+
+    return BillsResponse(bills=bills, count=total)
+
+
+@app.get("/api/bills/stats", response_model=BillStatsResponse)
+def get_bill_stats():
+    """Get bill summary statistics."""
+    con = connect()
+    cur = con.cursor()
+
+    # Check if bills table exists
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='bills'")
+    if not cur.fetchone():
+        con.close()
+        return BillStatsResponse(total_bills=0, new_this_week=0, by_type={}, by_congress={})
+
+    # Total bills
+    cur.execute("SELECT COUNT(*) FROM bills")
+    total_bills = cur.fetchone()[0]
+
+    # New this week
+    seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+    cur.execute("SELECT COUNT(*) FROM bills WHERE first_seen_at >= ?", (seven_days_ago,))
+    new_this_week = cur.fetchone()[0]
+
+    # By type
+    cur.execute("SELECT bill_type, COUNT(*) FROM bills GROUP BY bill_type")
+    by_type = dict(cur.fetchall())
+
+    # By congress
+    cur.execute("SELECT congress, COUNT(*) FROM bills GROUP BY congress ORDER BY congress DESC")
+    by_congress = {int(row[0]): row[1] for row in cur.fetchall()}
+
+    con.close()
+
+    return BillStatsResponse(
+        total_bills=total_bills,
+        new_this_week=new_this_week,
+        by_type=by_type,
+        by_congress=by_congress,
+    )
 
 
 # Mount static files last (catch-all for SPA)

@@ -88,3 +88,35 @@ CREATE TABLE IF NOT EXISTS ad_deviation_events (
   FOREIGN KEY (utterance_id) REFERENCES ad_utterances(utterance_id),
   FOREIGN KEY (baseline_id) REFERENCES ad_baselines(id)
 );
+
+-- VA Bills tracking
+CREATE TABLE IF NOT EXISTS bills (
+  bill_id TEXT PRIMARY KEY,
+  congress INTEGER NOT NULL,
+  bill_type TEXT NOT NULL,
+  bill_number INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  sponsor_name TEXT,
+  sponsor_bioguide_id TEXT,
+  sponsor_party TEXT,
+  sponsor_state TEXT,
+  introduced_date TEXT,
+  latest_action_date TEXT,
+  latest_action_text TEXT,
+  policy_area TEXT,
+  committees_json TEXT,
+  cosponsors_count INTEGER DEFAULT 0,
+  first_seen_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bill_actions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bill_id TEXT NOT NULL,
+  action_date TEXT NOT NULL,
+  action_text TEXT NOT NULL,
+  action_type TEXT,
+  first_seen_at TEXT NOT NULL,
+  FOREIGN KEY (bill_id) REFERENCES bills(bill_id),
+  UNIQUE(bill_id, action_date, action_text)
+);
