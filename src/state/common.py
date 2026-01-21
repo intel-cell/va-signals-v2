@@ -39,11 +39,11 @@ PROGRAM_PATTERNS = {
         r"choice program",
         r"mission act",
         r"provider network",
-        r"ccn",
+        r"\bccn\b",
     ],
     "vha": [
         r"veterans health administration",
-        r"vha",
+        r"\bvha\b",
         r"va hospital",
         r"va medical center",
         r"vamc",
@@ -51,16 +51,18 @@ PROGRAM_PATTERNS = {
     ],
 }
 
+_COMPILED_PROGRAM_PATTERNS = {
+    program: [re.compile(p, re.IGNORECASE) for p in patterns]
+    for program, patterns in PROGRAM_PATTERNS.items()
+}
+
 
 def detect_program(text: str) -> Optional[str]:
     """Detect which federal program a signal relates to."""
-    text_lower = text.lower()
-
-    for program, patterns in PROGRAM_PATTERNS.items():
-        for pattern in patterns:
-            if re.search(pattern, text_lower):
+    for program, compiled_patterns in _COMPILED_PROGRAM_PATTERNS.items():
+        for pattern in compiled_patterns:
+            if pattern.search(text):
                 return program
-
     return None
 
 
@@ -69,8 +71,6 @@ def detect_program(text: str) -> Optional[str]:
 VETERAN_KEYWORDS = [
     "veteran",
     "veterans",
-    "va ",
-    "v.a.",
     "military",
     "service member",
     "servicemember",
@@ -80,8 +80,17 @@ VETERAN_KEYWORDS = [
     "floridavets",
 ]
 
+# Separate pattern for "VA" and "V.A." with word boundaries
+VA_PATTERN = re.compile(r"\bva\b|\bv\.a\.", re.IGNORECASE)
+
 
 def is_veteran_relevant(text: str) -> bool:
     """Check if text is relevant to veterans."""
     text_lower = text.lower()
-    return any(kw.lower() in text_lower for kw in VETERAN_KEYWORDS)
+    # Check keyword list
+    if any(kw.lower() in text_lower for kw in VETERAN_KEYWORDS):
+        return True
+    # Check VA pattern with word boundaries
+    if VA_PATTERN.search(text):
+        return True
+    return False

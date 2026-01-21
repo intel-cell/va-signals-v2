@@ -75,3 +75,29 @@ def test_is_veteran_relevant_false():
 def test_is_veteran_relevant_va_mention():
     text = "VA healthcare expansion announced"
     assert is_veteran_relevant(text) is True
+
+
+def test_detect_program_case_insensitive():
+    text = "PACT ACT INITIATIVE ANNOUNCED"
+    program = detect_program(text)
+    assert program == "pact_act"
+
+
+def test_is_veteran_relevant_false_positive_java():
+    """Verify 'java' doesn't match as veteran-relevant."""
+    text = "Java programming tutorial available"
+    assert is_veteran_relevant(text) is False
+
+
+def test_is_veteran_relevant_false_positive_evacuation():
+    """Verify 'evacuation' doesn't match."""
+    text = "Emergency evacuation plans released"
+    assert is_veteran_relevant(text) is False
+
+
+def test_detect_program_empty_string():
+    assert detect_program("") is None
+
+
+def test_is_veteran_relevant_empty_string():
+    assert is_veteran_relevant("") is False
