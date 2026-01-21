@@ -19,3 +19,6 @@ __pycache__/
 *.pem
 *.key
 credentials.json
+
+# Git worktrees
+.worktrees/
