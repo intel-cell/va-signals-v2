@@ -3,6 +3,7 @@
 from .base import Evaluator, get_field_value, ALLOWED_TOP_LEVEL_FIELDS
 from .text import ContainsAnyEvaluator
 from .field_match import FieldInEvaluator, FieldIntersectsEvaluator
+from .comparison import EqualsEvaluator, GtEvaluator
 
 __all__ = [
     "Evaluator",
@@ -11,4 +12,6 @@ __all__ = [
     "ContainsAnyEvaluator",
     "FieldInEvaluator",
     "FieldIntersectsEvaluator",
+    "EqualsEvaluator",
+    "GtEvaluator",
 ]
