@@ -52,13 +52,68 @@ def format_state_alert(signals: list[dict]) -> dict | None:
 
 def format_state_digest(signals_by_state: dict[str, list[dict]]) -> dict | None:
     """
-    Format weekly digest grouped by state.
+    Format weekly digest grouped by state, then by program.
 
     Args:
-        signals_by_state: Dict mapping state code to list of signals
+        signals_by_state: Dict mapping state code to list of signal dicts.
+            Each signal should have: title, url, program, severity, pub_date
 
     Returns:
-        Slack message dict or None if empty.
+        Slack message dict with 'text' key, or None if no signals.
+
+    Format:
+        *State Intelligence Weekly Digest*
+
+        *Texas*
+        _PACT Act_ (2 signals)
+        * Signal title 1
+        * Signal title 2
+
+        _Community Care_ (1 signal)
+        * Signal title 3
+
+        *California*
+        ...
     """
-    # Implementation for Task 7.2
-    pass
+    if not signals_by_state:
+        return None
+
+    # Filter out empty state lists
+    signals_by_state = {k: v for k, v in signals_by_state.items() if v}
+    if not signals_by_state:
+        return None
+
+    lines = ["*State Intelligence Weekly Digest*", ""]
+
+    for state in sorted(signals_by_state.keys()):
+        signals = signals_by_state[state]
+        lines.append(f"*{state}*")
+
+        # Group by program
+        by_program: dict[str, list[dict]] = {}
+        for sig in signals:
+            prog = sig.get("program") or "General"
+            by_program.setdefault(prog, []).append(sig)
+
+        for program in sorted(by_program.keys()):
+            prog_signals = by_program[program]
+            count = len(prog_signals)
+            plural = "signal" if count == 1 else "signals"
+            lines.append(f"_{program}_ ({count} {plural})")
+
+            for sig in prog_signals[:5]:  # Limit to 5 per program
+                title = sig.get("title", "Unknown")
+                url = sig.get("url", "")
+                if url:
+                    lines.append(f"  \u2022 <{url}|{title}>")
+                else:
+                    lines.append(f"  \u2022 {title}")
+
+            if len(prog_signals) > 5:
+                lines.append(f"  \u2022 (+{len(prog_signals) - 5} more)")
+
+            lines.append("")  # Blank line between programs
+
+        lines.append("")  # Blank line between states
+
+    return {"text": "\n".join(lines).rstrip()}
