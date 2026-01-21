@@ -194,29 +194,32 @@
         <!-- Agenda Drift Section -->
         <section class="card agenda-drift-section">
             <div class="card-header">
-                <h2>Agenda Drift Detection</h2>
+                <div class="header-with-subtitle">
+                    <h2>Message Shift Detection <span class="info-hint clickable" onclick="showDriftExplanation('main')">ⓘ</span></h2>
+                    <p class="section-subtitle">Flagging when committee members talk differently than usual about VA topics</p>
+                </div>
                 <div style="display: flex; gap: 0.75rem; align-items: center;">
-                    <span class="badge drift-badge" id="drift-count">0 deviations</span>
+                    <span class="badge drift-badge" id="drift-count">0 flagged</span>
                 </div>
             </div>
             <div class="drift-stats" id="drift-stats">
-                <div class="drift-stat">
+                <div class="drift-stat clickable" onclick="showDriftExplanation('members')">
                     <span class="drift-stat-value" id="drift-members">--</span>
-                    <span class="drift-stat-label">Members Tracked</span>
+                    <span class="drift-stat-label">Congress Members <span class="info-hint">ⓘ</span></span>
                 </div>
-                <div class="drift-stat">
+                <div class="drift-stat clickable" onclick="showDriftExplanation('statements')">
                     <span class="drift-stat-value" id="drift-utterances">--</span>
-                    <span class="drift-stat-label">Utterances</span>
+                    <span class="drift-stat-label">Statements Analyzed <span class="info-hint">ⓘ</span></span>
                 </div>
-                <div class="drift-stat">
+                <div class="drift-stat clickable" onclick="showDriftExplanation('baselines')">
                     <span class="drift-stat-value" id="drift-baselines">--</span>
-                    <span class="drift-stat-label">Baselines Built</span>
+                    <span class="drift-stat-label">Ready to Monitor <span class="info-hint">ⓘ</span></span>
                 </div>
             </div>
             <div class="drift-events-container">
-                <h3 class="drift-events-title">Recent Deviations</h3>
+                <h3 class="drift-events-title">Unusual Statements <span class="info-hint clickable" onclick="showDriftExplanation('unusual')">ⓘ</span></h3>
                 <div class="drift-events" id="drift-events">
-                    <div class="loading-state">Loading agenda drift data...</div>
+                    <div class="loading-state">Loading...</div>
                 </div>
             </div>
         </section>

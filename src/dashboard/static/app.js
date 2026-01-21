@@ -815,7 +815,7 @@ function renderDriftEvents() {
     const events = state.driftEvents;
 
     if (state.loading.drift) {
-        elements.driftEvents.innerHTML = '<div class="loading-state">Loading agenda drift data...</div>';
+        elements.driftEvents.innerHTML = '<div class="loading-state">Loading...</div>';
         return;
     }
 
@@ -825,8 +825,8 @@ function renderDriftEvents() {
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
                 </svg>
-                <p>No deviations detected</p>
-                <span class="empty-drift-hint">Run <code>make agenda-drift</code> to analyze hearings</span>
+                <p>No unusual statements detected yet</p>
+                <span class="empty-drift-hint">Statements are flagged when members talk differently than usual</span>
             </div>
         `;
         return;
@@ -834,19 +834,23 @@ function renderDriftEvents() {
 
     elements.driftEvents.innerHTML = events.map(event => {
         const zscoreClass = event.zscore >= 3 ? 'high' : event.zscore >= 2.5 ? 'medium' : 'low';
+        const unusualLabel = event.zscore >= 3 ? 'Very unusual' : event.zscore >= 2.5 ? 'Unusual' : 'Slightly unusual';
+
+        // Parse hearing ID for friendlier display (e.g., "118-senate-54761" -> "Senate Hearing #54761")
+        const hearingParts = event.hearing_id.split('-');
+        const chamber = hearingParts[1] === 'senate' ? 'Senate' : 'House';
+        const hearingNum = hearingParts[2] || event.hearing_id;
+        const hearingDisplay = `${chamber} Hearing #${hearingNum}`;
+
         return `
             <div class="drift-event">
                 <div class="drift-event-header">
                     <span class="drift-member">${escapeHtml(event.member_name)}</span>
-                    <span class="drift-zscore ${zscoreClass}">z=${event.zscore.toFixed(2)}</span>
+                    <span class="drift-zscore ${zscoreClass}" title="Unusualness score: ${event.zscore.toFixed(2)} standard deviations from their normal">${unusualLabel}</span>
                 </div>
                 <div class="drift-event-details">
-                    <span class="drift-hearing">${escapeHtml(event.hearing_id)}</span>
+                    <span class="drift-hearing">${escapeHtml(hearingDisplay)}</span>
                     <span class="drift-time">${formatRelativeTime(event.detected_at)}</span>
-                </div>
-                <div class="drift-event-metric">
-                    <span class="drift-dist-label">Cosine distance:</span>
-                    <span class="drift-dist-value">${event.cos_dist.toFixed(4)}</span>
                 </div>
             </div>
         `;
@@ -854,7 +858,7 @@ function renderDriftEvents() {
 
     // Update count badge
     if (elements.driftCount) {
-        elements.driftCount.textContent = `${events.length} deviation${events.length !== 1 ? 's' : ''}`;
+        elements.driftCount.textContent = `${events.length} flagged`;
     }
 }
 
@@ -1202,6 +1206,96 @@ function showColumnExplanation(column) {
     elements.errorModal.classList.add('active');
 }
 
+function showDriftExplanation(topic) {
+    const explanations = {
+        main: `
+            <div class="explanation-content">
+                <h3>What is Message Shift Detection?</h3>
+                <p>This feature monitors how <strong>Congress members talk about VA issues</strong> in committee hearings.</p>
+
+                <p>We analyze each member's speaking patterns over time. When someone suddenly talks very differently than usual, it gets flagged.</p>
+
+                <div class="explanation-breakdown">
+                    <div class="explanation-item">
+                        <span class="label">Why it matters</span>
+                        <span class="value">Sudden shifts might signal new priorities, external influence, or emerging issues</span>
+                    </div>
+                </div>
+
+                <p class="explanation-note">
+                    <strong>Example:</strong> If a member usually focuses on healthcare but suddenly starts emphasizing budget cuts, that's a "shift" worth investigating.
+                </p>
+            </div>
+        `,
+        members: `
+            <div class="explanation-content">
+                <h3>Congress Members</h3>
+                <p>The number of <strong>Senators and Representatives</strong> we're tracking from VA-related committee hearings.</p>
+
+                <p class="explanation-note">
+                    We extract who said what from official hearing transcripts published by Congress.gov.
+                </p>
+            </div>
+        `,
+        statements: `
+            <div class="explanation-content">
+                <h3>Statements Analyzed</h3>
+                <p>The total number of <strong>individual things members said</strong> during hearings that we've processed.</p>
+
+                <p>Each statement is converted into a mathematical representation (embedding) that captures its meaning, so we can compare statements to each other.</p>
+
+                <p class="explanation-note">
+                    More statements = better understanding of how each member typically talks.
+                </p>
+            </div>
+        `,
+        baselines: `
+            <div class="explanation-content">
+                <h3>Ready to Monitor</h3>
+                <p>Members who have <strong>enough historical data</strong> for us to detect unusual statements.</p>
+
+                <p>We need at least 5 past statements from a member to understand their "normal" speaking pattern. Once we have that, we can spot when they deviate.</p>
+
+                <div class="explanation-breakdown">
+                    <div class="explanation-item">
+                        <span class="label">Not ready yet?</span>
+                        <span class="value">Some members are new or rarely speak — we need more data</span>
+                    </div>
+                </div>
+            </div>
+        `,
+        unusual: `
+            <div class="explanation-content">
+                <h3>What makes a statement "unusual"?</h3>
+                <p>A statement is flagged when it's <strong>significantly different</strong> from how that member typically talks.</p>
+
+                <div class="explanation-breakdown">
+                    <div class="explanation-item">
+                        <span class="label">Unusualness Score (z)</span>
+                        <span class="value">How many standard deviations from their average</span>
+                    </div>
+                    <div class="explanation-item">
+                        <span class="label">z ≥ 2.0</span>
+                        <span class="value">Flagged — only ~5% of statements are this different</span>
+                    </div>
+                    <div class="explanation-item">
+                        <span class="label">z ≥ 3.0</span>
+                        <span class="value">Very unusual — less than 1% are this different</span>
+                    </div>
+                </div>
+
+                <p class="explanation-note">
+                    Higher scores = more unusual. But unusual isn't always bad — it might just be a new topic.
+                </p>
+            </div>
+        `
+    };
+
+    const content = explanations[topic] || '<p>No explanation available.</p>';
+    elements.errorDetails.innerHTML = content;
+    elements.errorModal.classList.add('active');
+}
+
 function showHealthyExplanation() {
     const stats = state.stats;
     const total = stats?.total_runs ?? 0;
@@ -1384,6 +1478,7 @@ window.showErrorDetails = showErrorDetails;
 window.showErrorFromButton = showErrorFromButton;
 window.showColumnExplanation = showColumnExplanation;
 window.showHealthyExplanation = showHealthyExplanation;
+window.showDriftExplanation = showDriftExplanation;
 window.showSummaryModal = showSummaryModal;
 window.toggleSummaryDetails = toggleSummaryDetails;
 window.downloadReport = downloadReport;

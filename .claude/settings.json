@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "write edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "• python3 ~/hooks/validate_changes.py"
+          }
+        ]
+      }
+    ]
+  }
+}
