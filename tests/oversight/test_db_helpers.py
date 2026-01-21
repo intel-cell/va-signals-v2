@@ -11,6 +11,7 @@ from src.oversight.db_helpers import (
     get_om_events_for_digest,
     insert_om_escalation_signal,
     get_active_escalation_signals,
+    seed_default_escalation_signals,
 )
 from src.db import init_db
 
@@ -119,3 +120,14 @@ def test_escalation_signals():
     signals = get_active_escalation_signals()
 
     assert any(s["signal_pattern"] == "test signal" for s in signals)
+
+
+def test_seed_default_escalation_signals():
+    seed_default_escalation_signals()
+    signals = get_active_escalation_signals()
+
+    # Should have the default signals
+    patterns = [s["signal_pattern"] for s in signals]
+    assert "criminal referral" in patterns
+    assert "subpoena" in patterns
+    assert "whistleblower" in patterns

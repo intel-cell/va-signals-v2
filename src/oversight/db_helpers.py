@@ -249,3 +249,32 @@ def get_active_escalation_signals() -> list[dict]:
         }
         for row in rows
     ]
+
+
+DEFAULT_ESCALATION_SIGNALS = [
+    {"signal_pattern": "criminal referral", "signal_type": "phrase", "severity": "critical", "description": "GAO/OIG referred matter for prosecution"},
+    {"signal_pattern": "subpoena", "signal_type": "keyword", "severity": "critical", "description": "Congressional subpoena issued"},
+    {"signal_pattern": "emergency hearing", "signal_type": "phrase", "severity": "critical", "description": "Unscheduled urgent hearing"},
+    {"signal_pattern": "whistleblower", "signal_type": "keyword", "severity": "high", "description": "Whistleblower testimony or complaint"},
+    {"signal_pattern": "investigation launched", "signal_type": "phrase", "severity": "high", "description": "New formal investigation opened"},
+    {"signal_pattern": "fraud", "signal_type": "keyword", "severity": "high", "description": "Fraud allegation or finding"},
+    {"signal_pattern": "arrest", "signal_type": "keyword", "severity": "critical", "description": "Criminal arrest related to VA"},
+    {"signal_pattern": "first-ever", "signal_type": "phrase", "severity": "medium", "description": "Unprecedented action"},
+    {"signal_pattern": "reversal", "signal_type": "keyword", "severity": "medium", "description": "Policy or legal reversal"},
+    {"signal_pattern": "bipartisan letter", "signal_type": "phrase", "severity": "medium", "description": "Cross-party congressional action"},
+    {"signal_pattern": "precedential opinion", "signal_type": "phrase", "severity": "high", "description": "CAFC precedential ruling"},
+]
+
+
+def seed_default_escalation_signals() -> int:
+    """Seed default escalation signals if not already present. Returns count inserted."""
+    existing = get_active_escalation_signals()
+    existing_patterns = {s["signal_pattern"] for s in existing}
+
+    inserted = 0
+    for signal in DEFAULT_ESCALATION_SIGNALS:
+        if signal["signal_pattern"] not in existing_patterns:
+            insert_om_escalation_signal(signal)
+            inserted += 1
+
+    return inserted
