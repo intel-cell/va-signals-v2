@@ -5,6 +5,7 @@ from .text import ContainsAnyEvaluator
 from .field_match import FieldInEvaluator, FieldIntersectsEvaluator
 from .comparison import EqualsEvaluator, GtEvaluator
 from .existence import FieldExistsEvaluator, NestedFieldInEvaluator
+from .registry import EvaluatorRegistry, EVALUATOR_WHITELIST
 
 __all__ = [
     "Evaluator",
@@ -17,4 +18,6 @@ __all__ = [
     "GtEvaluator",
     "FieldExistsEvaluator",
     "NestedFieldInEvaluator",
+    "EvaluatorRegistry",
+    "EVALUATOR_WHITELIST",
 ]

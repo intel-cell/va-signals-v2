@@ -31,6 +31,10 @@ RSS_FEEDS: dict[str, list[FeedInfo]] = {
     ],
     "CA": [
         {
+            "name": "CalVet Connect Blog",
+            "url": "https://calvetconnect.blog/feed/",
+        },
+        {
             "name": "CalMatters",
             "url": "https://calmatters.org/feed/",
         },
