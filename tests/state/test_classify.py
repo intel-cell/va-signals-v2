@@ -131,3 +131,67 @@ def test_classify_none_content():
         content=None,
     )
     assert result.severity == "low"
+
+
+from unittest.mock import patch, MagicMock
+
+
+def test_classify_by_llm_high_severity():
+    mock_response = {
+        "is_specific_event": True,
+        "federal_program": "pact_act",
+        "severity": "high",
+        "reasoning": "Reports suspension of PACT Act program",
+    }
+
+    with patch("src.state.classify._call_haiku") as mock_haiku:
+        mock_haiku.return_value = mock_response
+
+        from src.state.classify import classify_by_llm
+
+        result = classify_by_llm(
+            title="Texas suspends PACT Act outreach",
+            content="The state has suspended...",
+            state="TX",
+        )
+
+        assert result.severity == "high"
+        assert result.method == "llm"
+
+
+def test_classify_by_llm_filters_noise():
+    mock_response = {
+        "is_specific_event": False,
+        "federal_program": None,
+        "severity": "noise",
+        "reasoning": "General explainer article, no specific event",
+    }
+
+    with patch("src.state.classify._call_haiku") as mock_haiku:
+        mock_haiku.return_value = mock_response
+
+        from src.state.classify import classify_by_llm
+
+        result = classify_by_llm(
+            title="How to apply for VA benefits",
+            content="Veterans can apply by...",
+            state="TX",
+        )
+
+        assert result.severity == "noise"
+
+
+def test_classify_by_llm_fallback_on_error():
+    with patch("src.state.classify._call_haiku") as mock_haiku:
+        mock_haiku.side_effect = Exception("API error")
+
+        from src.state.classify import classify_by_llm
+
+        result = classify_by_llm(
+            title="Important veteran news",
+            content="Something happened...",
+            state="TX",
+        )
+
+        # Should fall back to keyword classification
+        assert result.method == "keyword"

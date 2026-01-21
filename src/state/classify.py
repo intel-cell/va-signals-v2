@@ -1,6 +1,9 @@
 """Classification for state intelligence signals."""
 
+import json
+import logging
 import re
+import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -164,3 +167,92 @@ def classify_by_keywords(
         method="keyword",
         keywords_matched=[],
     )
+
+
+logger = logging.getLogger(__name__)
+
+HAIKU_PROMPT = """Analyze this news article about veterans in {state}.
+
+Title: {title}
+Content: {content}
+
+Questions:
+1. Does this report a SPECIFIC, DATED event (not a general explainer)?
+2. Does it indicate a problem with federal program implementation (PACT Act, Community Care, VHA)?
+3. Severity: Is this a disruption/failure (HIGH), policy shift (MEDIUM), or routine/positive news (LOW)?
+
+Respond as JSON only:
+{{"is_specific_event": bool, "federal_program": str|null, "severity": "high"|"medium"|"low"|"noise", "reasoning": str}}"""
+
+
+def _get_api_key() -> str:
+    """Get Anthropic API key from Keychain."""
+    result = subprocess.run(
+        ["security", "find-generic-password", "-s", "claude-api", "-w"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise ValueError("Could not retrieve claude-api key from Keychain")
+    return result.stdout.strip()
+
+
+def _call_haiku(prompt: str) -> dict:
+    """Call Haiku model and return parsed JSON response."""
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=_get_api_key())
+
+    response = client.messages.create(
+        model="claude-3-haiku-20240307",
+        max_tokens=500,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    # Extract text and parse JSON
+    text = response.content[0].text
+    # Find JSON in response
+    start = text.find("{")
+    end = text.rfind("}") + 1
+    if start >= 0 and end > start:
+        return json.loads(text[start:end])
+    raise ValueError(f"Could not parse JSON from response: {text}")
+
+
+def classify_by_llm(
+    title: str,
+    content: Optional[str],
+    state: str,
+) -> ClassificationResult:
+    """
+    Classify signal using LLM (Haiku).
+
+    Used for news sources where content is unstructured.
+    Falls back to keyword classification on error.
+    """
+    try:
+        prompt = HAIKU_PROMPT.format(
+            state=state,
+            title=title,
+            content=content or "(no content)",
+        )
+
+        result = _call_haiku(prompt)
+
+        # Filter out noise (non-events, explainers)
+        if not result.get("is_specific_event") or result.get("severity") == "noise":
+            return ClassificationResult(
+                severity="noise",
+                method="llm",
+                llm_reasoning=result.get("reasoning"),
+            )
+
+        return ClassificationResult(
+            severity=result["severity"],
+            method="llm",
+            llm_reasoning=result.get("reasoning"),
+        )
+
+    except Exception as e:
+        logger.warning(f"LLM classification failed, falling back to keywords: {e}")
+        return classify_by_keywords(title, content)
