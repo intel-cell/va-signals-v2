@@ -8,6 +8,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from .agents.gao import GAOAgent
+from .agents.oig import OIGAgent
+from .agents.crs import CRSAgent
+from .agents.congressional_record import CongressionalRecordAgent
+from .agents.committee_press import CommitteePressAgent
+from .agents.news_wire import NewsWireAgent
+from .agents.investigative import InvestigativeAgent
+from .agents.trade_press import TradePressAgent
+from .agents.cafc import CAFCAgent
 from .agents.base import RawEvent, TimestampResult
 from .db_helpers import (
     insert_om_event,
@@ -29,6 +37,14 @@ logger = logging.getLogger(__name__)
 # Registry of available agents
 AGENT_REGISTRY = {
     "gao": GAOAgent,
+    "oig": OIGAgent,
+    "crs": CRSAgent,
+    "congressional_record": CongressionalRecordAgent,
+    "committee_press": CommitteePressAgent,
+    "news_wire": NewsWireAgent,
+    "investigative": InvestigativeAgent,
+    "trade_press": TradePressAgent,
+    "cafc": CAFCAgent,
 }
 
 
