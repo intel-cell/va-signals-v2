@@ -13,14 +13,6 @@ from src.oversight.db_helpers import (
     get_active_escalation_signals,
     seed_default_escalation_signals,
 )
-from src.db import init_db
-
-
-@pytest.fixture(autouse=True)
-def setup_db():
-    """Initialize DB before each test."""
-    init_db()
-    yield
 
 
 def test_insert_and_get_om_event():
