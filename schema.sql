@@ -344,3 +344,21 @@ CREATE TABLE IF NOT EXISTS state_source_health (
 );
 
 CREATE INDEX IF NOT EXISTS idx_state_source_health_source_id ON state_source_health(source_id);
+
+-- ============================================================================
+-- SIGNALS ROUTING TABLES
+-- ============================================================================
+
+-- Signals routing suppression state
+CREATE TABLE IF NOT EXISTS signal_suppression (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    dedupe_key TEXT UNIQUE NOT NULL,
+    trigger_id TEXT NOT NULL,
+    authority_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    last_fired_at TEXT NOT NULL,
+    cooldown_until TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_signal_suppression_dedupe ON signal_suppression(dedupe_key);
+CREATE INDEX IF NOT EXISTS idx_signal_suppression_cooldown ON signal_suppression(cooldown_until);
