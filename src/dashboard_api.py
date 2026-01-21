@@ -188,6 +188,31 @@ class BillStatsResponse(BaseModel):
     by_congress: dict[int, int]
 
 
+class HearingResponse(BaseModel):
+    event_id: str
+    congress: int
+    chamber: str
+    committee_name: Optional[str]
+    hearing_date: str
+    hearing_time: Optional[str]
+    title: Optional[str]
+    meeting_type: Optional[str]
+    status: str
+    url: Optional[str]
+
+
+class HearingsResponse(BaseModel):
+    hearings: list[HearingResponse]
+    count: int
+
+
+class HearingStatsResponse(BaseModel):
+    total_hearings: int
+    upcoming_count: int
+    by_committee: dict[str, int]
+    by_status: dict[str, int]
+
+
 # --- FastAPI App ---
 
 app = FastAPI(
@@ -954,6 +979,140 @@ def get_bill_stats():
         new_this_week=new_this_week,
         by_type=by_type,
         by_congress=by_congress,
+    )
+
+
+# --- Hearings Endpoints ---
+
+@app.get("/api/hearings", response_model=HearingsResponse)
+def get_hearings(
+    upcoming: bool = Query(True, description="Show only upcoming hearings"),
+    limit: int = Query(20, ge=1, le=100, description="Number of hearings to return"),
+):
+    """List hearings - default to upcoming only."""
+    con = connect()
+    cur = con.cursor()
+
+    # Check if hearings table exists
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hearings'")
+    if not cur.fetchone():
+        con.close()
+        return HearingsResponse(hearings=[], count=0)
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    if upcoming:
+        query = """
+            SELECT event_id, congress, chamber, committee_name, hearing_date,
+                   hearing_time, title, meeting_type, status, url
+            FROM hearings
+            WHERE hearing_date >= ?
+            ORDER BY hearing_date ASC, hearing_time ASC
+            LIMIT ?
+        """
+        cur.execute(query, (today, limit))
+    else:
+        query = """
+            SELECT event_id, congress, chamber, committee_name, hearing_date,
+                   hearing_time, title, meeting_type, status, url
+            FROM hearings
+            ORDER BY hearing_date DESC, hearing_time DESC
+            LIMIT ?
+        """
+        cur.execute(query, (limit,))
+
+    rows = cur.fetchall()
+
+    # Get total count
+    if upcoming:
+        cur.execute("SELECT COUNT(*) FROM hearings WHERE hearing_date >= ?", (today,))
+    else:
+        cur.execute("SELECT COUNT(*) FROM hearings")
+    total = cur.fetchone()[0]
+
+    con.close()
+
+    hearings = [
+        HearingResponse(
+            event_id=row[0],
+            congress=row[1],
+            chamber=row[2],
+            committee_name=row[3],
+            hearing_date=row[4],
+            hearing_time=row[5],
+            title=row[6],
+            meeting_type=row[7],
+            status=row[8],
+            url=row[9],
+        )
+        for row in rows
+    ]
+
+    return HearingsResponse(hearings=hearings, count=total)
+
+
+@app.get("/api/hearings/stats", response_model=HearingStatsResponse)
+def get_hearing_stats():
+    """Get hearing summary statistics."""
+    con = connect()
+    cur = con.cursor()
+
+    # Check if hearings table exists
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hearings'")
+    if not cur.fetchone():
+        con.close()
+        return HearingStatsResponse(
+            total_hearings=0, upcoming_count=0, by_committee={}, by_status={}
+        )
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Total hearings
+    cur.execute("SELECT COUNT(*) FROM hearings")
+    total_hearings = cur.fetchone()[0]
+
+    # Upcoming count
+    cur.execute("SELECT COUNT(*) FROM hearings WHERE hearing_date >= ?", (today,))
+    upcoming_count = cur.fetchone()[0]
+
+    # By committee (upcoming only)
+    cur.execute(
+        """
+        SELECT committee_name, COUNT(*) FROM hearings
+        WHERE hearing_date >= ?
+        GROUP BY committee_name
+        ORDER BY COUNT(*) DESC
+        """,
+        (today,),
+    )
+    by_committee = {}
+    for row in cur.fetchall():
+        name = row[0] or "Unknown"
+        # Abbreviate common committee names
+        if "Veterans" in name and "House" in name:
+            name = "HVAC"
+        elif "Veterans" in name and "Senate" in name:
+            name = "SVAC"
+        by_committee[name] = row[1]
+
+    # By status (upcoming only)
+    cur.execute(
+        """
+        SELECT status, COUNT(*) FROM hearings
+        WHERE hearing_date >= ?
+        GROUP BY status
+        """,
+        (today,),
+    )
+    by_status = dict(cur.fetchall())
+
+    con.close()
+
+    return HearingStatsResponse(
+        total_hearings=total_hearings,
+        upcoming_count=upcoming_count,
+        by_committee=by_committee,
+        by_status=by_status,
     )
 
 

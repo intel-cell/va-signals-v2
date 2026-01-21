@@ -120,3 +120,32 @@ CREATE TABLE IF NOT EXISTS bill_actions (
   FOREIGN KEY (bill_id) REFERENCES bills(bill_id),
   UNIQUE(bill_id, action_date, action_text)
 );
+
+-- Committee hearings
+CREATE TABLE IF NOT EXISTS hearings (
+  event_id TEXT PRIMARY KEY,
+  congress INTEGER NOT NULL,
+  chamber TEXT NOT NULL,
+  committee_code TEXT NOT NULL,
+  committee_name TEXT,
+  hearing_date TEXT NOT NULL,
+  hearing_time TEXT,
+  title TEXT,
+  meeting_type TEXT,
+  status TEXT NOT NULL,
+  location TEXT,
+  url TEXT,
+  witnesses_json TEXT,
+  first_seen_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS hearing_updates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id TEXT NOT NULL,
+  field_changed TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  detected_at TEXT NOT NULL,
+  FOREIGN KEY (event_id) REFERENCES hearings(event_id)
+);

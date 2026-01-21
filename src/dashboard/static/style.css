@@ -1816,3 +1816,207 @@ body {
     font-size: 0.8125rem;
     color: var(--text-muted);
 }
+
+/* Hearings Section */
+.hearings-section {
+    margin-bottom: 2rem;
+}
+
+.hearings-badge {
+    background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+    color: white;
+}
+
+.hearings-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.hearings-stat {
+    text-align: center;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+}
+
+.hearings-stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+}
+
+.hearings-stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.hearings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 1.5rem;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.hearing-card {
+    padding: 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-primary);
+    transition: var(--transition);
+}
+
+.hearing-card:hover {
+    background: var(--border-color);
+}
+
+.hearing-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.hearing-date-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.hearing-date {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9375rem;
+}
+
+.hearing-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.hearing-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.hearing-committee {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.hearing-committee.hvac {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+}
+
+.hearing-committee.svac {
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+}
+
+.hearing-status {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+}
+
+.hearing-status.scheduled {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+}
+
+.hearing-status.cancelled {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+}
+
+.hearing-status.rescheduled {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--warning);
+}
+
+.hearing-title {
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.hearing-title a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: var(--transition);
+}
+
+.hearing-title a:hover {
+    color: var(--accent-primary);
+    text-decoration: underline;
+}
+
+.hearing-title span {
+    color: var(--text-secondary);
+}
+
+.hearing-type {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.empty-hearings {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
+.empty-hearings svg {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-hearings p {
+    font-size: 0.9375rem;
+}
+
+@media (max-width: 768px) {
+    .hearings-stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+    }
+
+    .hearings-stat {
+        padding: 0.5rem;
+    }
+
+    .hearings-stat-value {
+        font-size: 1.25rem;
+    }
+
+    .hearings-list {
+        padding: 0.75rem 1rem;
+    }
+
+    .hearing-card-header {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}

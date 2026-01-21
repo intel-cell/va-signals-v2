@@ -794,3 +794,342 @@ def get_bill_stats() -> dict:
         "by_party": by_party,
         "most_recent": most_recent,
     }
+
+
+# --- VA Hearings helpers ---
+
+def _hearing_row_to_dict(row) -> dict:
+    """Convert a hearing row to a dictionary."""
+    return {
+        "event_id": row[0],
+        "congress": row[1],
+        "chamber": row[2],
+        "committee_code": row[3],
+        "committee_name": row[4],
+        "hearing_date": row[5],
+        "hearing_time": row[6],
+        "title": row[7],
+        "meeting_type": row[8],
+        "status": row[9],
+        "location": row[10],
+        "url": row[11],
+        "witnesses_json": row[12],
+        "first_seen_at": row[13],
+        "updated_at": row[14],
+    }
+
+
+def upsert_hearing(hearing: dict) -> tuple[bool, list[dict]]:
+    """
+    Insert or update a hearing. Returns (is_new, changes_list).
+    is_new is True if this is a new hearing.
+    changes_list contains dicts with field_changed, old_value, new_value for any changed fields.
+
+    Expected keys: event_id, congress, chamber, committee_code, committee_name,
+    hearing_date, hearing_time, title, meeting_type, status, location, url, witnesses_json.
+    """
+    con = connect()
+    cur = con.cursor()
+    now = _utc_now_iso()
+
+    # Check if exists and get current values
+    cur.execute(
+        """SELECT event_id, congress, chamber, committee_code, committee_name,
+           hearing_date, hearing_time, title, meeting_type, status, location, url,
+           witnesses_json, first_seen_at, updated_at
+           FROM hearings WHERE event_id = ?""",
+        (hearing["event_id"],),
+    )
+    existing = cur.fetchone()
+
+    if existing is None:
+        # New hearing - insert
+        cur.execute(
+            """INSERT INTO hearings(event_id, congress, chamber, committee_code, committee_name,
+               hearing_date, hearing_time, title, meeting_type, status, location, url,
+               witnesses_json, first_seen_at, updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                hearing["event_id"],
+                hearing["congress"],
+                hearing["chamber"],
+                hearing["committee_code"],
+                hearing.get("committee_name"),
+                hearing["hearing_date"],
+                hearing.get("hearing_time"),
+                hearing.get("title"),
+                hearing.get("meeting_type"),
+                hearing["status"],
+                hearing.get("location"),
+                hearing.get("url"),
+                hearing.get("witnesses_json"),
+                now,
+                now,
+            ),
+        )
+        con.commit()
+        con.close()
+        return (True, [])
+
+    # Existing hearing - check for changes
+    existing_dict = _hearing_row_to_dict(existing)
+    changes = []
+
+    # Fields to track for changes
+    tracked_fields = ["status", "hearing_date", "hearing_time", "title", "location", "witnesses_json"]
+
+    for field in tracked_fields:
+        old_val = existing_dict.get(field)
+        new_val = hearing.get(field)
+        # Normalize None vs empty string comparison
+        if old_val != new_val and not (old_val is None and new_val == "") and not (old_val == "" and new_val is None):
+            changes.append({
+                "field_changed": field,
+                "old_value": old_val,
+                "new_value": new_val,
+            })
+
+    # Update the record if there are changes
+    if changes:
+        cur.execute(
+            """UPDATE hearings SET congress=?, chamber=?, committee_code=?, committee_name=?,
+               hearing_date=?, hearing_time=?, title=?, meeting_type=?, status=?, location=?,
+               url=?, witnesses_json=?, updated_at=?
+               WHERE event_id=?""",
+            (
+                hearing["congress"],
+                hearing["chamber"],
+                hearing["committee_code"],
+                hearing.get("committee_name"),
+                hearing["hearing_date"],
+                hearing.get("hearing_time"),
+                hearing.get("title"),
+                hearing.get("meeting_type"),
+                hearing["status"],
+                hearing.get("location"),
+                hearing.get("url"),
+                hearing.get("witnesses_json"),
+                now,
+                hearing["event_id"],
+            ),
+        )
+
+        # Record each change in hearing_updates
+        for change in changes:
+            cur.execute(
+                """INSERT INTO hearing_updates(event_id, field_changed, old_value, new_value, detected_at)
+                   VALUES(?,?,?,?,?)""",
+                (
+                    hearing["event_id"],
+                    change["field_changed"],
+                    change["old_value"],
+                    change["new_value"],
+                    now,
+                ),
+            )
+        con.commit()
+
+    con.close()
+    return (False, changes)
+
+
+def get_hearing(event_id: str) -> dict | None:
+    """Get a single hearing by event_id."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT event_id, congress, chamber, committee_code, committee_name,
+           hearing_date, hearing_time, title, meeting_type, status, location, url,
+           witnesses_json, first_seen_at, updated_at
+           FROM hearings WHERE event_id = ?""",
+        (event_id,),
+    )
+    row = cur.fetchone()
+    con.close()
+    if not row:
+        return None
+    return _hearing_row_to_dict(row)
+
+
+def get_hearings(upcoming: bool = True, limit: int = 20, committee: str = None) -> list[dict]:
+    """
+    Get hearings, optionally filtered.
+    If upcoming=True, returns hearings with hearing_date >= today.
+    If committee is provided, filters by committee_code.
+    """
+    con = connect()
+    cur = con.cursor()
+
+    from datetime import date
+    today = date.today().isoformat()
+
+    query = """SELECT event_id, congress, chamber, committee_code, committee_name,
+               hearing_date, hearing_time, title, meeting_type, status, location, url,
+               witnesses_json, first_seen_at, updated_at
+               FROM hearings WHERE 1=1"""
+    params = []
+
+    if upcoming:
+        query += " AND hearing_date >= ?"
+        params.append(today)
+
+    if committee:
+        query += " AND committee_code = ?"
+        params.append(committee)
+
+    query += " ORDER BY hearing_date ASC, hearing_time ASC LIMIT ?"
+    params.append(limit)
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    con.close()
+    return [_hearing_row_to_dict(r) for r in rows]
+
+
+def insert_hearing_update(event_id: str, field: str, old_val: str, new_val: str) -> int:
+    """Insert a hearing update record manually. Returns the new record ID."""
+    con = connect()
+    cur = con.cursor()
+    now = _utc_now_iso()
+    cur.execute(
+        """INSERT INTO hearing_updates(event_id, field_changed, old_value, new_value, detected_at)
+           VALUES(?,?,?,?,?)""",
+        (event_id, field, old_val, new_val, now),
+    )
+    update_id = cur.lastrowid
+    con.commit()
+    con.close()
+    return update_id
+
+
+def get_hearing_updates(event_id: str = None, limit: int = 50) -> list[dict]:
+    """
+    Get hearing updates, optionally filtered by event_id.
+    Returns updates ordered by detected_at descending.
+    """
+    con = connect()
+    cur = con.cursor()
+
+    if event_id:
+        cur.execute(
+            """SELECT u.id, u.event_id, u.field_changed, u.old_value, u.new_value, u.detected_at,
+                      h.title, h.committee_name
+               FROM hearing_updates u
+               JOIN hearings h ON u.event_id = h.event_id
+               WHERE u.event_id = ?
+               ORDER BY u.detected_at DESC LIMIT ?""",
+            (event_id, limit),
+        )
+    else:
+        cur.execute(
+            """SELECT u.id, u.event_id, u.field_changed, u.old_value, u.new_value, u.detected_at,
+                      h.title, h.committee_name
+               FROM hearing_updates u
+               JOIN hearings h ON u.event_id = h.event_id
+               ORDER BY u.detected_at DESC LIMIT ?""",
+            (limit,),
+        )
+
+    rows = cur.fetchall()
+    con.close()
+    return [
+        {
+            "id": r[0],
+            "event_id": r[1],
+            "field_changed": r[2],
+            "old_value": r[3],
+            "new_value": r[4],
+            "detected_at": r[5],
+            "hearing_title": r[6],
+            "committee_name": r[7],
+        }
+        for r in rows
+    ]
+
+
+def get_new_hearings_since(since: str) -> list[dict]:
+    """Get hearings first seen after the given ISO timestamp."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT event_id, congress, chamber, committee_code, committee_name,
+           hearing_date, hearing_time, title, meeting_type, status, location, url,
+           witnesses_json, first_seen_at, updated_at
+           FROM hearings WHERE first_seen_at > ?
+           ORDER BY first_seen_at DESC""",
+        (since,),
+    )
+    rows = cur.fetchall()
+    con.close()
+    return [_hearing_row_to_dict(r) for r in rows]
+
+
+def get_hearing_changes_since(since: str) -> list[dict]:
+    """Get hearing updates detected after the given ISO timestamp."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT u.id, u.event_id, u.field_changed, u.old_value, u.new_value, u.detected_at,
+                  h.title, h.committee_name, h.hearing_date
+           FROM hearing_updates u
+           JOIN hearings h ON u.event_id = h.event_id
+           WHERE u.detected_at > ?
+           ORDER BY u.detected_at DESC""",
+        (since,),
+    )
+    rows = cur.fetchall()
+    con.close()
+    return [
+        {
+            "id": r[0],
+            "event_id": r[1],
+            "field_changed": r[2],
+            "old_value": r[3],
+            "new_value": r[4],
+            "detected_at": r[5],
+            "hearing_title": r[6],
+            "committee_name": r[7],
+            "hearing_date": r[8],
+        }
+        for r in rows
+    ]
+
+
+def get_hearing_stats() -> dict:
+    """
+    Get summary statistics for hearings tracking.
+    Returns {total, upcoming, by_committee, by_status}.
+    """
+    con = connect()
+    cur = con.cursor()
+
+    from datetime import date
+    today = date.today().isoformat()
+
+    # Total hearings
+    cur.execute("SELECT COUNT(*) FROM hearings")
+    total = cur.fetchone()[0]
+
+    # Upcoming hearings (hearing_date >= today)
+    cur.execute("SELECT COUNT(*) FROM hearings WHERE hearing_date >= ?", (today,))
+    upcoming = cur.fetchone()[0]
+
+    # By committee
+    cur.execute(
+        """SELECT committee_code, committee_name, COUNT(*)
+           FROM hearings GROUP BY committee_code
+           ORDER BY COUNT(*) DESC"""
+    )
+    by_committee = {r[0]: {"name": r[1], "count": r[2]} for r in cur.fetchall()}
+
+    # By status
+    cur.execute("SELECT status, COUNT(*) FROM hearings GROUP BY status")
+    by_status = {r[0]: r[1] for r in cur.fetchall()}
+
+    con.close()
+    return {
+        "total": total,
+        "upcoming": upcoming,
+        "by_committee": by_committee,
+        "by_status": by_status,
+    }

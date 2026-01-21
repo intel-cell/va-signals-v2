@@ -30,6 +30,8 @@ const state = {
     driftStats: null,
     bills: [],
     billStats: null,
+    hearings: [],
+    hearingStats: null,
     charts: {
         runsChart: null,
         statusChart: null
@@ -52,7 +54,8 @@ const state = {
         ecfrDocs: true,
         summaries: true,
         drift: true,
-        bills: true
+        bills: true,
+        hearings: true
     }
 };
 
@@ -97,7 +100,13 @@ const elements = {
     billsCount: document.getElementById('bills-count'),
     billsTotal: document.getElementById('bills-total'),
     billsNewWeek: document.getElementById('bills-new-week'),
-    billsTbody: document.getElementById('bills-tbody')
+    billsTbody: document.getElementById('bills-tbody'),
+    // Hearings elements
+    hearingsCount: document.getElementById('hearings-count'),
+    hearingsHvac: document.getElementById('hearings-hvac'),
+    hearingsSvac: document.getElementById('hearings-svac'),
+    hearingsTotal: document.getElementById('hearings-total'),
+    hearingsList: document.getElementById('hearings-list')
 };
 
 // Utility Functions
@@ -558,6 +567,25 @@ async function loadBillStats() {
     }
 }
 
+async function loadHearings() {
+    state.loading.hearings = true;
+    renderHearings();
+    const data = await fetchApi('/hearings?upcoming=true&limit=20');
+    state.loading.hearings = false;
+    if (data) {
+        state.hearings = data.hearings || [];
+        renderHearings();
+    }
+}
+
+async function loadHearingStats() {
+    const data = await fetchApi('/hearings/stats');
+    if (data) {
+        state.hearingStats = data;
+        updateHearingStats();
+    }
+}
+
 // Render Functions
 function updateHealthCards() {
     const stats = state.stats;
@@ -1000,6 +1028,119 @@ function renderBillsTable() {
     if (elements.billsCount) {
         const total = state.billStats?.total_bills ?? bills.length;
         elements.billsCount.textContent = `${total} bills`;
+    }
+}
+
+function formatHearingDate(dateString) {
+    if (!dateString) return '--';
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatHearingTime(timeString) {
+    if (!timeString) return '';
+    // Time might come as "HH:MM:SS" or "HH:MM"
+    const parts = timeString.split(':');
+    if (parts.length < 2) return timeString;
+    let hours = parseInt(parts[0], 10);
+    const mins = parts[1];
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${hours}:${mins} ${ampm}`;
+}
+
+function getHearingStatusClass(status) {
+    if (!status) return 'scheduled';
+    const s = status.toLowerCase();
+    if (s.includes('cancel')) return 'cancelled';
+    if (s.includes('reschedule') || s.includes('postpone')) return 'rescheduled';
+    return 'scheduled';
+}
+
+function updateHearingStats() {
+    const stats = state.hearingStats;
+    if (!stats) return;
+
+    if (elements.hearingsHvac) {
+        elements.hearingsHvac.textContent = stats.by_committee?.HVAC ?? 0;
+    }
+    if (elements.hearingsSvac) {
+        elements.hearingsSvac.textContent = stats.by_committee?.SVAC ?? 0;
+    }
+    if (elements.hearingsTotal) {
+        elements.hearingsTotal.textContent = stats.upcoming_count ?? '--';
+    }
+    if (elements.hearingsCount) {
+        const count = stats.upcoming_count ?? 0;
+        elements.hearingsCount.textContent = `${count} upcoming`;
+    }
+}
+
+function renderHearings() {
+    if (!elements.hearingsList) return;
+
+    const hearings = state.hearings;
+
+    if (state.loading.hearings) {
+        elements.hearingsList.innerHTML = '<div class="loading-state">Loading hearings...</div>';
+        return;
+    }
+
+    if (hearings.length === 0) {
+        elements.hearingsList.innerHTML = `
+            <div class="empty-hearings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="16" y1="2" x2="16" y2="6"/>
+                    <line x1="8" y1="2" x2="8" y2="6"/>
+                    <line x1="3" y1="10" x2="21" y2="10"/>
+                </svg>
+                <p>No upcoming hearings scheduled</p>
+            </div>
+        `;
+        return;
+    }
+
+    elements.hearingsList.innerHTML = hearings.map(hearing => {
+        const statusClass = getHearingStatusClass(hearing.status);
+        const chamberLabel = hearing.chamber === 'House' ? 'HVAC' : 'SVAC';
+        const chamberClass = hearing.chamber === 'House' ? 'hvac' : 'svac';
+
+        // Build title display
+        const titleDisplay = hearing.title
+            ? (hearing.title.length > 100 ? escapeHtml(hearing.title.substring(0, 100)) + '...' : escapeHtml(hearing.title))
+            : 'Committee Hearing';
+
+        // Format date nicely
+        const dateDisplay = formatHearingDate(hearing.hearing_date);
+        const timeDisplay = formatHearingTime(hearing.hearing_time);
+
+        return `
+            <div class="hearing-card">
+                <div class="hearing-card-header">
+                    <div class="hearing-date-badge">
+                        <span class="hearing-date">${escapeHtml(dateDisplay)}</span>
+                        ${timeDisplay ? `<span class="hearing-time">${escapeHtml(timeDisplay)}</span>` : ''}
+                    </div>
+                    <div class="hearing-badges">
+                        <span class="hearing-committee ${chamberClass}">${escapeHtml(chamberLabel)}</span>
+                        <span class="hearing-status ${statusClass}">${escapeHtml(hearing.status || 'Scheduled')}</span>
+                    </div>
+                </div>
+                <div class="hearing-title">
+                    ${hearing.url
+                        ? `<a href="${escapeHtml(hearing.url)}" target="_blank" rel="noopener noreferrer">${titleDisplay}</a>`
+                        : `<span>${titleDisplay}</span>`
+                    }
+                </div>
+                ${hearing.meeting_type ? `<div class="hearing-type">${escapeHtml(hearing.meeting_type)}</div>` : ''}
+            </div>
+        `;
+    }).join('');
+
+    // Update count badge
+    if (elements.hearingsCount) {
+        elements.hearingsCount.textContent = `${hearings.length} upcoming`;
     }
 }
 
@@ -1531,7 +1672,9 @@ async function refreshAll() {
         loadDriftEvents(),
         loadDriftStats(),
         loadBills(),
-        loadBillStats()
+        loadBillStats(),
+        loadHearings(),
+        loadHearingStats()
     ]);
 
     // Re-render FR table to show summary badges (after summarizedDocIds is loaded)

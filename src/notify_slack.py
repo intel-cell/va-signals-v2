@@ -177,3 +177,164 @@ def format_bill_status_alert(actions: list[dict]) -> Optional[Dict[str, Any]]:
         lines.append(f"(+{count - 10} more)")
 
     return {"text": "\n".join(lines)}
+
+
+def format_new_hearings_alert(hearings: list[dict]) -> Optional[Dict[str, Any]]:
+    """
+    Format new hearings alert for Slack.
+
+    Format: "VA Signals — N new hearing(s) scheduled"
+    - Jan 25: HVAC Hearing - Veterans Healthcare Oversight
+    - Jan 28: SVAC Hearing - Benefits Modernization
+
+    Args:
+        hearings: List of hearing dicts with keys:
+            hearing_date, hearing_time, committee_code, committee_name, title, status
+
+    Returns:
+        Slack payload dict or None if no hearings
+    """
+    if not hearings:
+        return None
+
+    count = len(hearings)
+    plural = "s" if count != 1 else ""
+    lines = [f"VA Signals — {count} new hearing{plural} scheduled"]
+
+    for hearing in hearings[:10]:
+        # Format date (e.g., "Jan 25")
+        date_str = ""
+        hearing_date = hearing.get("hearing_date", "")
+        if hearing_date:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(hearing_date, "%Y-%m-%d")
+                date_str = dt.strftime("%b %d")
+            except (ValueError, TypeError):
+                date_str = hearing_date
+
+        # Format committee (HVAC or SVAC)
+        committee_code = hearing.get("committee_code", "").lower()
+        if committee_code.startswith("h"):
+            committee = "HVAC"
+        elif committee_code.startswith("s"):
+            committee = "SVAC"
+        else:
+            committee = committee_code.upper()
+
+        # Format title
+        title = hearing.get("title", "(No title)")
+        if len(title) > 50:
+            title = title[:47] + "..."
+
+        # Build line
+        line = f"- {date_str}: {committee} Hearing - {title}"
+        lines.append(line)
+
+    if count > 10:
+        lines.append(f"(+{count - 10} more)")
+
+    return {"text": "\n".join(lines)}
+
+
+def format_hearing_changes_alert(changes: list[dict]) -> Optional[Dict[str, Any]]:
+    """
+    Format hearing changes alert for Slack.
+
+    Format: "VA Signals — Hearing updates"
+    - HVAC Jan 25: CANCELLED (was Scheduled)
+    - SVAC: Rescheduled from Jan 28 to Feb 3
+
+    Args:
+        changes: List of change dicts with keys:
+            event_id, field_changed, old_value, new_value, hearing_title,
+            committee_name, hearing_date
+
+    Returns:
+        Slack payload dict or None if no changes
+    """
+    if not changes:
+        return None
+
+    count = len(changes)
+    plural = "s" if count != 1 else ""
+    lines = [f"VA Signals — {count} hearing update{plural}"]
+
+    for change in changes[:10]:
+        # Determine committee abbreviation from committee_name
+        committee_name = change.get("committee_name", "")
+        if "house" in committee_name.lower():
+            committee = "HVAC"
+        elif "senate" in committee_name.lower():
+            committee = "SVAC"
+        else:
+            committee = "Committee"
+
+        # Format date
+        date_str = ""
+        hearing_date = change.get("hearing_date", "")
+        if hearing_date:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(hearing_date, "%Y-%m-%d")
+                date_str = dt.strftime("%b %d")
+            except (ValueError, TypeError):
+                date_str = hearing_date
+
+        field = change.get("field_changed", "")
+        old_val = change.get("old_value", "")
+        new_val = change.get("new_value", "")
+
+        # Format based on field type
+        if field == "status":
+            # Status change: "HVAC Jan 25: CANCELLED (was Scheduled)"
+            new_status = (new_val or "Unknown").upper()
+            old_status = old_val or "Unknown"
+            line = f"- {committee} {date_str}: {new_status} (was {old_status})"
+
+        elif field == "hearing_date":
+            # Date change: "SVAC: Rescheduled from Jan 28 to Feb 3"
+            old_date_str = old_val or "Unknown"
+            new_date_str = new_val or "Unknown"
+            try:
+                from datetime import datetime
+                if old_val:
+                    old_dt = datetime.strptime(old_val, "%Y-%m-%d")
+                    old_date_str = old_dt.strftime("%b %d")
+                if new_val:
+                    new_dt = datetime.strptime(new_val, "%Y-%m-%d")
+                    new_date_str = new_dt.strftime("%b %d")
+            except (ValueError, TypeError):
+                pass
+            line = f"- {committee}: Rescheduled from {old_date_str} to {new_date_str}"
+
+        elif field == "hearing_time":
+            # Time change
+            old_time = old_val or "TBD"
+            new_time = new_val or "TBD"
+            line = f"- {committee} {date_str}: Time changed from {old_time} to {new_time}"
+
+        elif field == "location":
+            # Location change
+            new_loc = new_val or "TBD"
+            if len(new_loc) > 30:
+                new_loc = new_loc[:27] + "..."
+            line = f"- {committee} {date_str}: Location changed to {new_loc}"
+
+        elif field == "title":
+            # Title change - show new title
+            new_title = new_val or "(No title)"
+            if len(new_title) > 40:
+                new_title = new_title[:37] + "..."
+            line = f"- {committee} {date_str}: Title updated: {new_title}"
+
+        else:
+            # Generic change
+            line = f"- {committee} {date_str}: {field} changed"
+
+        lines.append(line)
+
+    if count > 10:
+        lines.append(f"(+{count - 10} more)")
+
+    return {"text": "\n".join(lines)}
