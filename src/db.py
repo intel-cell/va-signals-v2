@@ -369,3 +369,80 @@ def get_ad_recent_deviations_for_hearing(member_id: str, hearing_id: str, limit:
     rows = cur.fetchall()
     con.close()
     return [{"cos_dist": r[0], "zscore": r[1]} for r in rows]
+
+
+def get_ad_utterance_by_id(utterance_id: str) -> dict | None:
+    """Get a single utterance by ID."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT u.utterance_id, u.member_id, u.hearing_id, u.content, u.spoken_at, m.name
+           FROM ad_utterances u
+           JOIN ad_members m ON u.member_id = m.member_id
+           WHERE u.utterance_id = ?""",
+        (utterance_id,),
+    )
+    row = cur.fetchone()
+    con.close()
+    if not row:
+        return None
+    return {
+        "utterance_id": row[0],
+        "member_id": row[1],
+        "hearing_id": row[2],
+        "content": row[3],
+        "spoken_at": row[4],
+        "member_name": row[5],
+    }
+
+
+def get_ad_typical_utterances(member_id: str, exclude_utterance_id: str = None, limit: int = 5) -> list[dict]:
+    """
+    Get typical utterances for a member (ones closest to their baseline centroid).
+    Excludes the specified utterance if provided.
+    Returns utterances with their content for LLM comparison.
+    """
+    con = connect()
+    cur = con.cursor()
+
+    # Get utterances that have embeddings and are NOT flagged as deviations
+    # This gives us "normal" utterances for the member
+    if exclude_utterance_id:
+        cur.execute(
+            """SELECT u.utterance_id, u.content, u.spoken_at
+               FROM ad_utterances u
+               JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
+               LEFT JOIN ad_deviation_events d ON u.utterance_id = d.utterance_id
+               WHERE u.member_id = ? AND u.utterance_id != ? AND d.id IS NULL
+               ORDER BY u.spoken_at DESC LIMIT ?""",
+            (member_id, exclude_utterance_id, limit),
+        )
+    else:
+        cur.execute(
+            """SELECT u.utterance_id, u.content, u.spoken_at
+               FROM ad_utterances u
+               JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
+               LEFT JOIN ad_deviation_events d ON u.utterance_id = d.utterance_id
+               WHERE u.member_id = ? AND d.id IS NULL
+               ORDER BY u.spoken_at DESC LIMIT ?""",
+            (member_id, limit),
+        )
+
+    rows = cur.fetchall()
+    con.close()
+    return [
+        {"utterance_id": row[0], "content": row[1], "spoken_at": row[2]}
+        for row in rows
+    ]
+
+
+def update_ad_deviation_note(event_id: int, note: str) -> None:
+    """Update the note field for a deviation event."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        "UPDATE ad_deviation_events SET note = ? WHERE id = ?",
+        (note, event_id),
+    )
+    con.commit()
+    con.close()

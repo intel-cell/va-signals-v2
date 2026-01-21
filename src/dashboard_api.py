@@ -58,6 +58,8 @@ class StatsResponse(BaseModel):
     success_rate: float
     error_rate: float
     healthy_rate: float  # SUCCESS + NO_DATA (ran without errors)
+    runs_today: int
+    new_docs_today: int
     runs_by_source: list[RunsBySource]
     runs_by_day: list[RunsByDay]
 
@@ -274,6 +276,15 @@ def get_runs_stats():
     )
     runs_by_day = [RunsByDay(date=row[0], count=row[1]) for row in cur.fetchall()]
 
+    # Runs in last 24 hours
+    twenty_four_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    cur.execute("SELECT COUNT(*) FROM source_runs WHERE ended_at >= ?", (twenty_four_hours_ago,))
+    runs_today = cur.fetchone()[0]
+
+    # New docs in last 24 hours
+    cur.execute("SELECT COUNT(*) FROM fr_seen WHERE first_seen_at >= ?", (twenty_four_hours_ago,))
+    new_docs_today = cur.fetchone()[0]
+
     con.close()
 
     return StatsResponse(
@@ -284,6 +295,8 @@ def get_runs_stats():
         success_rate=round(success_rate, 2),
         error_rate=round(error_rate, 2),
         healthy_rate=round(healthy_rate, 2),
+        runs_today=runs_today,
+        new_docs_today=new_docs_today,
         runs_by_source=runs_by_source,
         runs_by_day=runs_by_day,
     )

@@ -6,7 +6,12 @@ Compares new utterances against a member's historical baseline centroid.
 """
 
 import math
+import os
+import time
 from datetime import datetime, timezone
+from typing import Optional
+
+import requests
 
 from .db import (
     get_ad_embeddings_for_member,
@@ -14,6 +19,8 @@ from .db import (
     get_latest_ad_baseline,
     insert_ad_deviation_event,
     get_ad_recent_deviations_for_hearing,
+    get_ad_utterance_by_id,
+    get_ad_typical_utterances,
 )
 
 # Thresholds (tunable)
@@ -195,3 +202,144 @@ def detect_with_debounce(
 
     event["debounce_passed"] = True
     return event
+
+
+# -----------------------------------------------------------------------------
+# LLM-powered deviation explanation
+# -----------------------------------------------------------------------------
+
+# Claude API config (matches src/summarize.py)
+CLAUDE_MODEL = "claude-sonnet-4-20250514"
+CLAUDE_MAX_TOKENS = 256
+CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
+
+DEVIATION_SYSTEM_PROMPT = """You are an expert analyst specializing in Congressional hearing transcripts and political rhetoric.
+
+Your task is to briefly explain why a committee member's statement differs from their typical focus areas.
+
+Guidelines:
+1. Be concise - respond in 1-2 sentences only
+2. Focus on the topic/framing shift, not the quality of the statement
+3. Use plain language accessible to a general audience
+4. Be factual and neutral - do not editorialize
+
+Example output: "This statement focuses on budget cuts, while they typically discuss veteran healthcare access."
+"""
+
+
+def _get_anthropic_key() -> Optional[str]:
+    """Get Anthropic API key from environment."""
+    return os.environ.get("ANTHROPIC_API_KEY")
+
+
+def _call_claude_for_explanation(
+    system_prompt: str,
+    user_prompt: str,
+    api_key: str,
+    timeout: int = 30,
+) -> Optional[str]:
+    """
+    Make a message request to Claude API for deviation explanation.
+
+    Args:
+        system_prompt: System message content
+        user_prompt: User message content
+        api_key: Anthropic API key
+        timeout: Request timeout in seconds
+
+    Returns:
+        Text response or None on error
+    """
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": CLAUDE_MODEL,
+        "max_tokens": CLAUDE_MAX_TOKENS,
+        "system": system_prompt,
+        "messages": [
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+
+    try:
+        r = requests.post(CLAUDE_API_URL, headers=headers, json=payload, timeout=timeout)
+        r.raise_for_status()
+
+        data = r.json()
+        content = data.get("content", [{}])[0].get("text", "")
+        return content.strip() if content else None
+
+    except requests.exceptions.RequestException as e:
+        print(f"Claude API request error: {e}")
+        return None
+    except Exception as e:
+        print(f"Claude API error: {e}")
+        return None
+
+
+def explain_deviation(member_id: str, flagged_utterance_id: str) -> Optional[str]:
+    """
+    Generate an LLM explanation for why an utterance deviates from a member's baseline.
+
+    Args:
+        member_id: The committee member ID
+        flagged_utterance_id: The utterance ID that was flagged as a deviation
+
+    Returns:
+        A 1-2 sentence explanation string, or None if unable to generate
+    """
+    api_key = _get_anthropic_key()
+    if not api_key:
+        return None
+
+    # Fetch the flagged utterance
+    flagged = get_ad_utterance_by_id(flagged_utterance_id)
+    if not flagged:
+        return None
+
+    # Fetch 3-5 typical utterances for comparison
+    typical = get_ad_typical_utterances(
+        member_id,
+        exclude_utterance_id=flagged_utterance_id,
+        limit=5,
+    )
+
+    if len(typical) < 3:
+        # Not enough typical utterances for meaningful comparison
+        return None
+
+    # Build the user prompt
+    member_name = flagged.get("member_name", member_id)
+
+    typical_texts = "\n\n".join(
+        f"Typical statement {i+1}: \"{u['content'][:500]}...\""
+        if len(u["content"]) > 500 else f"Typical statement {i+1}: \"{u['content']}\""
+        for i, u in enumerate(typical[:5])
+    )
+
+    flagged_text = flagged["content"]
+    if len(flagged_text) > 500:
+        flagged_text = flagged_text[:500] + "..."
+
+    user_prompt = f"""Committee member: {member_name}
+
+Here are some of their typical statements:
+
+{typical_texts}
+
+Here is the statement that was flagged as unusual:
+
+Flagged statement: "{flagged_text}"
+
+In 1-2 sentences, explain what topic or framing shift makes the flagged statement different from their typical focus areas."""
+
+    explanation = _call_claude_for_explanation(
+        DEVIATION_SYSTEM_PROMPT,
+        user_prompt,
+        api_key,
+    )
+
+    return explanation

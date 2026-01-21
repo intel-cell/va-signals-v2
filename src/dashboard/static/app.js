@@ -842,6 +842,14 @@ function renderDriftEvents() {
         const hearingNum = hearingParts[2] || event.hearing_id;
         const hearingDisplay = `${chamber} Hearing #${hearingNum}`;
 
+        // Build the explanation/note section if present
+        const noteHtml = event.note ? `
+                <div class="drift-explanation">
+                    <span class="drift-explanation-label">Why flagged:</span>
+                    <p class="drift-explanation-text">${escapeHtml(event.note)}</p>
+                </div>
+            ` : '';
+
         return `
             <div class="drift-event">
                 <div class="drift-event-header">
@@ -851,7 +859,7 @@ function renderDriftEvents() {
                 <div class="drift-event-details">
                     <span class="drift-hearing">${escapeHtml(hearingDisplay)}</span>
                     <span class="drift-time">${formatRelativeTime(event.detected_at)}</span>
-                </div>
+                </div>${noteHtml}
             </div>
         `;
     }).join('');
