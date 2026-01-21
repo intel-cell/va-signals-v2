@@ -13,7 +13,7 @@ from src.state.sources.base import StateSource
 
 logger = logging.getLogger(__name__)
 
-CALVET_NEWS_URL = "https://calvet.ca.gov/news"
+CALVET_NEWS_URL = "https://www.calvet.ca.gov/news"
 
 
 class CAOfficialSource(StateSource):

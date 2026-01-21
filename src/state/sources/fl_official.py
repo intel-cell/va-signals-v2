@@ -13,7 +13,7 @@ from src.state.sources.base import StateSource
 
 logger = logging.getLogger(__name__)
 
-FL_DVA_NEWS_URL = "https://floridavets.org/news"
+FL_DVA_NEWS_URL = "https://floridavets.org/news/"
 
 
 class FLOfficialSource(StateSource):

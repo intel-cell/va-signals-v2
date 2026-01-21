@@ -13,7 +13,7 @@ from src.state.sources.base import StateSource
 
 logger = logging.getLogger(__name__)
 
-TVC_NEWS_URL = "https://tvc.texas.gov/news"
+TVC_NEWS_URL = "https://tvc.texas.gov/news/"
 
 
 class TXOfficialSource(StateSource):
