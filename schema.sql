@@ -149,3 +149,113 @@ CREATE TABLE IF NOT EXISTS hearing_updates (
   detected_at TEXT NOT NULL,
   FOREIGN KEY (event_id) REFERENCES hearings(event_id)
 );
+
+-- ============================================================================
+-- OVERSIGHT MONITOR TABLES
+-- ============================================================================
+
+-- Canonical events (deduplicated, entity-centric)
+CREATE TABLE IF NOT EXISTS om_events (
+  event_id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  theme TEXT,
+  primary_source_type TEXT NOT NULL,
+  primary_url TEXT NOT NULL,
+
+  pub_timestamp TEXT,
+  pub_precision TEXT NOT NULL,
+  pub_source TEXT NOT NULL,
+  event_timestamp TEXT,
+  event_precision TEXT,
+  event_source TEXT,
+
+  title TEXT NOT NULL,
+  summary TEXT,
+  raw_content TEXT,
+
+  is_escalation INTEGER DEFAULT 0,
+  escalation_signals TEXT,
+  is_deviation INTEGER DEFAULT 0,
+  deviation_reason TEXT,
+  canonical_refs TEXT,
+
+  surfaced INTEGER DEFAULT 0,
+  surfaced_at TEXT,
+  surfaced_via TEXT,
+
+  fetched_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_om_events_theme ON om_events(theme);
+CREATE INDEX IF NOT EXISTS idx_om_events_pub_timestamp ON om_events(pub_timestamp);
+CREATE INDEX IF NOT EXISTS idx_om_events_surfaced ON om_events(surfaced, surfaced_at);
+CREATE INDEX IF NOT EXISTS idx_om_events_source_type ON om_events(primary_source_type);
+
+-- Related coverage
+CREATE TABLE IF NOT EXISTS om_related_coverage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT,
+  pub_timestamp TEXT,
+  pub_precision TEXT,
+  fetched_at TEXT NOT NULL,
+  FOREIGN KEY (event_id) REFERENCES om_events(event_id),
+  UNIQUE(event_id, url)
+);
+
+-- Rolling baseline summaries
+CREATE TABLE IF NOT EXISTS om_baselines (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_type TEXT NOT NULL,
+  theme TEXT,
+  window_start TEXT NOT NULL,
+  window_end TEXT NOT NULL,
+  event_count INTEGER NOT NULL,
+  summary TEXT NOT NULL,
+  topic_distribution TEXT,
+  built_at TEXT NOT NULL,
+  UNIQUE(source_type, theme, window_end)
+);
+
+-- Rejected events (audit log)
+CREATE TABLE IF NOT EXISTS om_rejected (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_type TEXT NOT NULL,
+  url TEXT NOT NULL,
+  title TEXT,
+  pub_timestamp TEXT,
+  rejection_reason TEXT NOT NULL,
+  routine_explanation TEXT,
+  fetched_at TEXT NOT NULL,
+  rejected_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_om_rejected_date ON om_rejected(rejected_at);
+
+-- Configurable escalation signals
+CREATE TABLE IF NOT EXISTS om_escalation_signals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  signal_pattern TEXT NOT NULL,
+  signal_type TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  description TEXT,
+  active INTEGER DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Weekly digest history
+CREATE TABLE IF NOT EXISTS om_digests (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  digest_type TEXT NOT NULL,
+  period_start TEXT NOT NULL,
+  period_end TEXT NOT NULL,
+  event_ids TEXT NOT NULL,
+  theme_groups TEXT NOT NULL,
+  delivered_at TEXT,
+  delivered_via TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
