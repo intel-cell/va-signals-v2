@@ -12,3 +12,6 @@ uvicorn[standard]>=0.32.0
 
 # LLM Summaries
 openai>=1.0.0
+
+# Embeddings for agenda drift
+sentence-transformers>=2.2.0

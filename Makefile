@@ -1,4 +1,4 @@
-.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize
+.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift
 
 init:
 	python3 -m venv .venv
@@ -30,3 +30,12 @@ report-weekly:
 
 summarize:
 	ANTHROPIC_API_KEY=$$(security find-generic-password -s "claude-api" -a "$$USER" -w) ./.venv/bin/python -m src.summarize --pending
+
+fetch-transcripts:
+	CONGRESS_API_KEY=$$(security find-generic-password -s "congress-api" -a "$$USER" -w) ./.venv/bin/python -m src.fetch_transcripts --limit 10
+
+embed:
+	./.venv/bin/python -m src.embed_utterances
+
+agenda-drift:
+	./.venv/bin/python -m src.run_agenda_drift --all

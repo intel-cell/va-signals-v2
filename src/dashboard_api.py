@@ -684,15 +684,39 @@ def get_ad_events(
 
 @app.get("/api/agenda-drift/stats")
 def get_ad_stats():
-    """Get per-member deviation statistics."""
+    """Get agenda drift system statistics."""
     con = connect()
     cur = con.cursor()
 
-    # Check if table exists
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ad_deviation_events'")
+    # Check if tables exist
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ad_members'")
     if not cur.fetchone():
         con.close()
-        return {"members": [], "total_events": 0, "checked_at": _utc_now_iso()}
+        return {
+            "total_members": 0,
+            "total_utterances": 0,
+            "total_embeddings": 0,
+            "members_with_baselines": 0,
+            "total_events": 0,
+            "members": [],
+            "checked_at": _utc_now_iso()
+        }
+
+    # Total members
+    cur.execute("SELECT COUNT(*) FROM ad_members")
+    total_members = cur.fetchone()[0]
+
+    # Total utterances
+    cur.execute("SELECT COUNT(*) FROM ad_utterances")
+    total_utterances = cur.fetchone()[0]
+
+    # Total embeddings
+    cur.execute("SELECT COUNT(*) FROM ad_embeddings")
+    total_embeddings = cur.fetchone()[0]
+
+    # Members with baselines
+    cur.execute("SELECT COUNT(DISTINCT member_id) FROM ad_baselines")
+    members_with_baselines = cur.fetchone()[0]
 
     # Total events
     cur.execute("SELECT COUNT(*) FROM ad_deviation_events")
@@ -719,7 +743,15 @@ def get_ad_stats():
         for r in rows
     ]
 
-    return {"members": [m.model_dump() for m in members], "total_events": total_events, "checked_at": _utc_now_iso()}
+    return {
+        "total_members": total_members,
+        "total_utterances": total_utterances,
+        "total_embeddings": total_embeddings,
+        "members_with_baselines": members_with_baselines,
+        "total_events": total_events,
+        "members": [m.model_dump() for m in members],
+        "checked_at": _utc_now_iso()
+    }
 
 
 @app.get("/api/agenda-drift/members/{member_id}/history")

@@ -26,6 +26,8 @@ const state = {
     errors: [],
     summaries: [],
     summarizedDocIds: new Set(),
+    driftEvents: [],
+    driftStats: null,
     charts: {
         runsChart: null,
         statusChart: null
@@ -46,7 +48,8 @@ const state = {
         stats: true,
         frDocs: true,
         ecfrDocs: true,
-        summaries: true
+        summaries: true,
+        drift: true
     }
 };
 
@@ -80,7 +83,13 @@ const elements = {
     clearFrFilters: document.getElementById('clear-fr-filters'),
     exportFrCsv: document.getElementById('export-fr-csv'),
     exportSummariesCsv: document.getElementById('export-summaries-csv'),
-    frResultsCount: document.getElementById('fr-results-count')
+    frResultsCount: document.getElementById('fr-results-count'),
+    // Agenda drift elements
+    driftCount: document.getElementById('drift-count'),
+    driftMembers: document.getElementById('drift-members'),
+    driftUtterances: document.getElementById('drift-utterances'),
+    driftBaselines: document.getElementById('drift-baselines'),
+    driftEvents: document.getElementById('drift-events')
 };
 
 // Utility Functions
@@ -503,6 +512,25 @@ async function loadSummarizedDocIds() {
     }
 }
 
+async function loadDriftEvents() {
+    state.loading.drift = true;
+    renderDriftEvents();
+    const data = await fetchApi('/agenda-drift/events?limit=20');
+    state.loading.drift = false;
+    if (data) {
+        state.driftEvents = data.events || [];
+        renderDriftEvents();
+    }
+}
+
+async function loadDriftStats() {
+    const data = await fetchApi('/agenda-drift/stats');
+    if (data) {
+        state.driftStats = data;
+        updateDriftStats();
+    }
+}
+
 // Render Functions
 function updateHealthCards() {
     const stats = state.stats;
@@ -759,6 +787,74 @@ function toggleSummaryDetails(index) {
                 spanEl.textContent = detailsEl.classList.contains('visible') ? 'Hide details' : 'Show details';
             }
         }
+    }
+}
+
+function updateDriftStats() {
+    const stats = state.driftStats;
+    if (!stats) return;
+
+    if (elements.driftMembers) {
+        elements.driftMembers.textContent = stats.total_members ?? '--';
+    }
+    if (elements.driftUtterances) {
+        elements.driftUtterances.textContent = stats.total_utterances ?? '--';
+    }
+    if (elements.driftBaselines) {
+        elements.driftBaselines.textContent = stats.members_with_baselines ?? '--';
+    }
+    if (elements.driftCount) {
+        const count = state.driftEvents.length;
+        elements.driftCount.textContent = `${count} deviation${count !== 1 ? 's' : ''}`;
+    }
+}
+
+function renderDriftEvents() {
+    if (!elements.driftEvents) return;
+
+    const events = state.driftEvents;
+
+    if (state.loading.drift) {
+        elements.driftEvents.innerHTML = '<div class="loading-state">Loading agenda drift data...</div>';
+        return;
+    }
+
+    if (events.length === 0) {
+        elements.driftEvents.innerHTML = `
+            <div class="empty-drift">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                </svg>
+                <p>No deviations detected</p>
+                <span class="empty-drift-hint">Run <code>make agenda-drift</code> to analyze hearings</span>
+            </div>
+        `;
+        return;
+    }
+
+    elements.driftEvents.innerHTML = events.map(event => {
+        const zscoreClass = event.zscore >= 3 ? 'high' : event.zscore >= 2.5 ? 'medium' : 'low';
+        return `
+            <div class="drift-event">
+                <div class="drift-event-header">
+                    <span class="drift-member">${escapeHtml(event.member_name)}</span>
+                    <span class="drift-zscore ${zscoreClass}">z=${event.zscore.toFixed(2)}</span>
+                </div>
+                <div class="drift-event-details">
+                    <span class="drift-hearing">${escapeHtml(event.hearing_id)}</span>
+                    <span class="drift-time">${formatRelativeTime(event.detected_at)}</span>
+                </div>
+                <div class="drift-event-metric">
+                    <span class="drift-dist-label">Cosine distance:</span>
+                    <span class="drift-dist-value">${event.cos_dist.toFixed(4)}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Update count badge
+    if (elements.driftCount) {
+        elements.driftCount.textContent = `${events.length} deviation${events.length !== 1 ? 's' : ''}`;
     }
 }
 
@@ -1196,7 +1292,9 @@ async function refreshAll() {
         loadHealth(),
         loadErrors(),
         loadSummaries(),
-        loadSummarizedDocIds()
+        loadSummarizedDocIds(),
+        loadDriftEvents(),
+        loadDriftStats()
     ]);
 
     // Re-render FR table to show summary badges (after summarizedDocIds is loaded)
@@ -1259,6 +1357,28 @@ function initEventListeners() {
     });
 }
 
+// Section collapse toggle
+function toggleSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (section) {
+        section.classList.toggle('collapsed');
+        // Save state to localStorage
+        const isCollapsed = section.classList.contains('collapsed');
+        localStorage.setItem(`section_${sectionId}_collapsed`, isCollapsed);
+    }
+}
+
+// Restore collapsed states from localStorage
+function restoreCollapsedStates() {
+    const sections = document.querySelectorAll('.collapsible-section');
+    sections.forEach(section => {
+        const isCollapsed = localStorage.getItem(`section_${section.id}_collapsed`) === 'true';
+        if (isCollapsed) {
+            section.classList.add('collapsed');
+        }
+    });
+}
+
 // Make functions available globally for onclick handlers
 window.showErrorDetails = showErrorDetails;
 window.showErrorFromButton = showErrorFromButton;
@@ -1267,11 +1387,13 @@ window.showHealthyExplanation = showHealthyExplanation;
 window.showSummaryModal = showSummaryModal;
 window.toggleSummaryDetails = toggleSummaryDetails;
 window.downloadReport = downloadReport;
+window.toggleSection = toggleSection;
 
 // Initialize
 async function init() {
     initTabs();
     initEventListeners();
+    restoreCollapsedStates();
     await refreshAll();
     startAutoRefresh();
 }
