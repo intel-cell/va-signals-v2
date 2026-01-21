@@ -489,6 +489,60 @@ def get_recent_state_runs(limit: int = 20, state: str = None, run_type: str = No
     ]
 
 
+# Alias for dashboard API compatibility
+get_recent_runs = get_recent_state_runs
+
+
+def get_signal_count_by_state() -> dict[str, int]:
+    """Get count of signals grouped by state."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT state, COUNT(*) FROM state_signals GROUP BY state"""
+    )
+    rows = cur.fetchall()
+    con.close()
+    return {r[0]: r[1] for r in rows}
+
+
+def get_signal_count_by_severity() -> dict[str, int]:
+    """Get count of signals grouped by severity."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT c.severity, COUNT(*)
+           FROM state_classifications c
+           GROUP BY c.severity"""
+    )
+    rows = cur.fetchall()
+    con.close()
+    return {r[0]: r[1] for r in rows}
+
+
+def get_latest_run() -> dict | None:
+    """Get the most recent state run."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        """SELECT id, run_type, state, status, signals_found, high_severity_count, started_at, finished_at
+           FROM state_runs ORDER BY started_at DESC LIMIT 1"""
+    )
+    row = cur.fetchone()
+    con.close()
+    if not row:
+        return None
+    return {
+        "id": row[0],
+        "run_type": row[1],
+        "state": row[2],
+        "status": row[3],
+        "signals_found": row[4],
+        "high_severity_count": row[5],
+        "started_at": row[6],
+        "finished_at": row[7],
+    }
+
+
 # --- Source health tracking ---
 
 
