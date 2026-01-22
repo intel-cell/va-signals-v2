@@ -1,7 +1,10 @@
 """Slack alert formatter for signal triggers."""
 
+import logging
 from typing import Any
 from src.signals.engine.evaluator import EvaluationResult
+
+logger = logging.getLogger(__name__)
 
 
 def format_slack_alert(
@@ -89,5 +92,6 @@ def send_slack_alert(
             merged_payload["blocks"] = payload["blocks"]
         post_slack(merged_payload)
         return True
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to send Slack alert: {e}")
         return False
