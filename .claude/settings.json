@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "• python3 ~/hooks/validate_changes.py"
+            "command": "python3 ~/hooks/validate_changes.py"
           }
         ]
       }
