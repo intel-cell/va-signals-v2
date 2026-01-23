@@ -9,7 +9,7 @@ import feedparser
 from .base import OversightAgent, RawEvent, TimestampResult
 
 
-OIG_RSS_URL = "https://www.va.gov/oig/rss/pubs-all.xml"
+OIG_RSS_URL = "https://www.vaoig.gov/rss.xml"
 OIG_REPORT_PATTERN = re.compile(r"(\d{2})-(\d{5})-(\d+)", re.IGNORECASE)
 
 

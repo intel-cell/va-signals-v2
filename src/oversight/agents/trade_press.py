@@ -10,8 +10,10 @@ from .base import OversightAgent, RawEvent, TimestampResult
 
 # VA-focused trade publications
 TRADE_FEEDS = {
-    "nextgov_va": "https://www.nextgov.com/rss/veterans-affairs/",
+    "military_times_veterans": "https://www.militarytimes.com/arc/outboundfeeds/rss/category/veterans/",
+    "military_times_benefits": "https://www.militarytimes.com/arc/outboundfeeds/rss/category/pay-benefits/",
     "federal_news": "https://federalnewsnetwork.com/category/all-news/feed/",
+    "stars_stripes": "https://www.stripes.com/rss/",
 }
 
 
