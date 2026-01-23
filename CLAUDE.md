@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VA Signals is a fail-closed monitoring system for Veterans Affairs-relevant signals. It tracks Federal Register publications, eCFR regulations, Congressional bills, and committee member rhetoric patterns. The system alerts via Slack only when decision-relevant changes occur.
+VA Signals is a fail-closed monitoring system for Veterans Affairs-relevant signals. It tracks Federal Register publications, eCFR regulations, Congressional bills, committee hearings, oversight reports, and member rhetoric patterns. The system alerts via Slack only when decision-relevant changes occur.
 
 ## Commands
 
@@ -14,11 +14,22 @@ make test              # Run pytest
 make db-init           # Initialize SQLite schema
 make dashboard         # Run FastAPI dashboard on port 8000
 
-# Data pipelines
+# Federal data pipelines
 make fr-delta          # Federal Register delta detection
 make ecfr-delta        # eCFR Title 38 delta detection
 make bills             # Sync VA committee bills from Congress.gov
+make hearings          # Sync committee hearings
 make agenda-drift      # Run agenda drift detection (baselines + deviations)
+
+# Oversight monitor (multi-agent)
+./.venv/bin/python -m src.run_oversight --all           # Run all agents
+./.venv/bin/python -m src.run_oversight --agent gao     # Single agent
+
+# State intelligence
+make state-monitor          # Run all state sources
+make state-monitor-morning  # Morning run type
+make state-monitor-dry      # Dry run (no alerts)
+make state-digest           # Generate weekly state digest
 
 # Supporting commands
 make summarize         # LLM summarization of pending FR docs
@@ -55,7 +66,45 @@ External Sources → Fetch Modules → SQLite (data/signals.db) → Dashboard AP
 | Federal Register | `fr_seen`, `fr_summaries` | `run_fr_delta.py` |
 | eCFR Title 38 | `ecfr_seen` | `run_ecfr_delta.py` |
 | VA Bills | `bills`, `bill_actions` | `run_bills.py` |
+| Hearings | `hearings`, `hearing_updates` | `run_hearings.py` |
 | Agenda Drift | `ad_members`, `ad_utterances`, `ad_embeddings`, `ad_baselines`, `ad_deviation_events` | `run_agenda_drift.py` |
+| Oversight Monitor | `om_events`, `om_related_coverage`, `om_baselines`, `om_rejected` | `run_oversight.py` |
+| State Intelligence | `state_signals`, `state_classifications`, `state_runs` | `src/state/runner.py` |
+
+### Oversight Monitor (`src/oversight/`)
+
+Multi-agent system that monitors oversight bodies for VA-relevant events:
+
+| Agent | Source |
+|-------|--------|
+| `gao` | GAO reports |
+| `oig` | VA Office of Inspector General |
+| `crs` | Congressional Research Service |
+| `congressional_record` | Congressional Record |
+| `committee_press` | Committee press releases |
+| `news_wire` | News wire services |
+| `investigative` | Investigative journalism |
+| `trade_press` | Trade publications |
+| `cafc` | Court of Appeals for Federal Circuit |
+
+Pipeline: Raw events → Quality gate → Deduplication → Escalation detection → Storage
+
+### Signals Routing (`src/signals/`)
+
+Rule-based routing engine for processing events through indicators and triggers:
+- `envelope.py` - Standardized event wrapper
+- `schema/` - YAML-based signal category definitions
+- `engine/` - Expression parser and evaluator
+- `evaluators/` - Field matchers, text patterns, comparisons
+- `adapters/` - Convert source events (hearings, bills) to envelopes
+- `suppression.py` - Cooldown-based deduplication
+
+### State Intelligence (`src/state/`)
+
+Monitors state-level VA news and official sources:
+- `sources/` - State-specific scrapers (TX, FL, CA) + NewsAPI + RSS
+- `classify.py` - Keyword + LLM severity classification
+- `runner.py` - Orchestrates morning/evening runs
 
 ### Run Status Convention
 
