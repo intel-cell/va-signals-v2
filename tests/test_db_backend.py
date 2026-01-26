@@ -15,6 +15,7 @@ def test_schema_path_defaults_to_sqlite(monkeypatch):
     [
         "postgres://user:pass@localhost:5432/va_signals",
         "postgresql://user:pass@localhost:5432/va_signals",
+        "postgresql+psycopg2://user:pass@localhost:5432/va_signals",
     ],
 )
 def test_schema_path_uses_postgres_when_database_url_set(monkeypatch, url):
@@ -28,5 +29,12 @@ def test_schema_path_uses_postgres_when_database_url_set(monkeypatch, url):
 def test_init_db_raises_for_postgres_backend(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/va_signals")
 
-    with pytest.raises(RuntimeError, match="Postgres init"):
+    with pytest.raises(RuntimeError, match="Postgres backend"):
         db.init_db()
+
+
+def test_connect_raises_for_postgres_backend(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg2://user:pass@localhost:5432/va_signals")
+
+    with pytest.raises(RuntimeError, match="Postgres backend"):
+        db.connect()

@@ -1,5 +1,6 @@
 import json, os, sqlite3
 from pathlib import Path
+from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data" / "signals.db"
@@ -7,10 +8,19 @@ SCHEMA_PATH = ROOT / "schema.sql"
 SCHEMA_POSTGRES_PATH = ROOT / "schema.postgres.sql"
 
 def get_db_backend() -> str:
-  db_url = os.environ.get("DATABASE_URL", "").strip().lower()
-  if db_url.startswith(("postgres://", "postgresql://")):
+  db_url = os.environ.get("DATABASE_URL", "").strip()
+  if not db_url:
+    return "sqlite"
+  scheme = urlparse(db_url).scheme.lower()
+  if scheme.startswith("postgres"):
     return "postgres"
   return "sqlite"
+
+def _assert_sqlite_backend() -> None:
+  if get_db_backend() == "postgres":
+    raise RuntimeError(
+      "Postgres backend is not supported until Task 4; refusing to use sqlite."
+    )
 
 def get_schema_path() -> Path:
   if get_db_backend() == "postgres":
@@ -18,14 +28,11 @@ def get_schema_path() -> Path:
   return SCHEMA_PATH
 
 def connect():
+  _assert_sqlite_backend()
   DB_PATH.parent.mkdir(parents=True, exist_ok=True)
   return sqlite3.connect(DB_PATH)
 
 def init_db():
-  if get_db_backend() == "postgres":
-    raise RuntimeError(
-      "Postgres init_db is not supported until Task 4; refusing to run Postgres schema with sqlite."
-    )
   con = connect()
   con.executescript(get_schema_path().read_text(encoding="utf-8"))
   con.commit()
