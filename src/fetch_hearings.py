@@ -16,10 +16,13 @@ import json
 import os
 import subprocess
 import sys
+import ssl
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 from typing import Optional
+
+import certifi
 
 from . import db
 
@@ -91,7 +94,8 @@ def _fetch_json(url: str, api_key: str) -> dict:
         "Accept": "application/json",
         "User-Agent": "VA-Signals/1.0",
     })
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(req, timeout=30, context=context) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
