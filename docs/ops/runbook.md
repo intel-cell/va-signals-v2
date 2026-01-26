@@ -200,8 +200,11 @@ Raw events → quality gate → deduplication → escalation/deviation checks �
 - Start: `make dashboard`
 
 ### Migrate SQLite to Postgres (one-time)
+- Apply the Postgres schema first: `psql "$DATABASE_URL" -f schema.postgres.sql`
 - Dry run (counts only): `DB_PATH=/path/to/signals.db python scripts/migrate_sqlite_to_postgres.py --dry-run`
 - Full migration: `DB_PATH=/path/to/signals.db DATABASE_URL=postgresql://... python scripts/migrate_sqlite_to_postgres.py`
+  - Preflight foreign key checks run by default (use `--skip-fk-checks` to bypass).
+  - Identity sequences are reset to the max inserted `id` values.
 - Use `--sqlite-path` to override `DB_PATH`; dry-run does not require `DATABASE_URL`.
 
 ### Reset SQLite DB (destructive)
