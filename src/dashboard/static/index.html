@@ -74,6 +74,13 @@
                 </svg>
                 Federal
             </button>
+            <button class="main-tab" data-tab="oversight">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Oversight
+            </button>
             <button class="main-tab" data-tab="state">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
@@ -407,6 +414,103 @@
         </section>
 
         </div><!-- end federal-panel -->
+
+        <!-- Oversight Monitor Tab Content -->
+        <div class="tab-panel" id="oversight-panel">
+
+            <!-- Oversight Health Cards -->
+            <section class="health-cards">
+                <div class="card health-card">
+                    <div class="card-icon runs-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="oversight-total-events">--</span>
+                        <span class="card-label">Total Events</span>
+                    </div>
+                </div>
+                <div class="card health-card">
+                    <div class="card-icon error-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="8" x2="12" y2="12"/>
+                            <line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="oversight-escalations">--</span>
+                        <span class="card-label">Escalations</span>
+                    </div>
+                </div>
+                <div class="card health-card">
+                    <div class="card-icon docs-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="oversight-deviations">--</span>
+                        <span class="card-label">Deviations</span>
+                    </div>
+                </div>
+                <div class="card health-card">
+                    <div class="card-icon success-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-value" id="oversight-surfaced">--</span>
+                        <span class="card-label">Surfaced</span>
+                    </div>
+                </div>
+            </section>
+
+            <div class="main-grid">
+                <!-- Recent Events -->
+                <section class="card runs-section">
+                    <div class="card-header">
+                        <h2>Recent Events</h2>
+                        <span class="badge" id="oversight-events-count">0 events</span>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="oversight-events-table">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th>Title</th>
+                                    <th>Published</th>
+                                    <th>Escalation</th>
+                                    <th>Deviation</th>
+                                    <th>Surfaced</th>
+                                </tr>
+                            </thead>
+                            <tbody id="oversight-events-tbody">
+                                <tr class="loading-row">
+                                    <td colspan="6">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Source Breakdown -->
+                <section class="card">
+                    <div class="card-header">
+                        <h2>By Source</h2>
+                        <span class="badge" id="oversight-last-event">Last event: --</span>
+                    </div>
+                    <div class="oversight-source-list" id="oversight-source-list">
+                        <div class="loading-state">Loading...</div>
+                    </div>
+                </section>
+            </div>
+
+        </div><!-- end oversight-panel -->
 
         <!-- State Monitor Tab Content -->
         <div class="tab-panel" id="state-panel">

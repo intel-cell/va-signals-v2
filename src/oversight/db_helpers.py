@@ -278,3 +278,98 @@ def seed_default_escalation_signals() -> int:
             inserted += 1
 
     return inserted
+
+
+def get_oversight_stats() -> dict:
+    """Return aggregate statistics for oversight events."""
+    con = connect()
+    cur = con.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM om_events")
+    total_events = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM om_events WHERE is_escalation = 1")
+    escalations = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM om_events WHERE is_deviation = 1")
+    deviations = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM om_events WHERE surfaced = 1")
+    surfaced = cur.fetchone()[0]
+
+    cur.execute("SELECT MAX(fetched_at) FROM om_events")
+    last_event_at = cur.fetchone()[0]
+
+    cur.execute(
+        """
+        SELECT primary_source_type, COUNT(*)
+        FROM om_events
+        GROUP BY primary_source_type
+        ORDER BY COUNT(*) DESC
+        """
+    )
+    by_source = {row[0]: row[1] for row in cur.fetchall()}
+
+    con.close()
+    return {
+        "total_events": total_events,
+        "escalations": escalations,
+        "deviations": deviations,
+        "surfaced": surfaced,
+        "last_event_at": last_event_at,
+        "by_source": by_source,
+    }
+
+
+def get_oversight_events(
+    limit: int = 50,
+    source_type: str | None = None,
+    escalations_only: bool = False,
+    deviations_only: bool = False,
+    surfaced_only: bool = False,
+) -> list[dict]:
+    """Return recent oversight events with optional filters."""
+    con = connect()
+    cur = con.cursor()
+
+    query = """
+        SELECT event_id, title, primary_source_type, primary_url,
+               pub_timestamp, is_escalation, is_deviation, surfaced,
+               surfaced_at, fetched_at
+        FROM om_events
+        WHERE 1=1
+    """
+    params: list = []
+
+    if source_type:
+        query += " AND primary_source_type = ?"
+        params.append(source_type)
+    if escalations_only:
+        query += " AND is_escalation = 1"
+    if deviations_only:
+        query += " AND is_deviation = 1"
+    if surfaced_only:
+        query += " AND surfaced = 1"
+
+    query += " ORDER BY COALESCE(pub_timestamp, fetched_at) DESC LIMIT ?"
+    params.append(limit)
+
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    con.close()
+
+    return [
+        {
+            "event_id": row[0],
+            "title": row[1],
+            "primary_source_type": row[2],
+            "primary_url": row[3],
+            "pub_timestamp": row[4],
+            "is_escalation": bool(row[5]),
+            "is_deviation": bool(row[6]),
+            "surfaced": bool(row[7]),
+            "surfaced_at": row[8],
+            "fetched_at": row[9],
+        }
+        for row in rows
+    ]
