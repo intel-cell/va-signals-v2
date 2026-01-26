@@ -25,6 +25,7 @@ from .state.db_helpers import (
     get_signal_count_by_severity,
     get_latest_run,
 )
+from .oversight.db_helpers import get_oversight_stats, get_oversight_events
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "src" / "dashboard" / "static"
@@ -259,6 +260,34 @@ class StateStatsResponse(BaseModel):
     by_severity: dict[str, int]
     last_run: Optional[dict] = None
 
+
+# --- Oversight Monitor Models ---
+
+class OversightEvent(BaseModel):
+    event_id: str
+    title: str
+    primary_source_type: str
+    primary_url: str
+    pub_timestamp: Optional[str]
+    is_escalation: bool
+    is_deviation: bool
+    surfaced: bool
+    surfaced_at: Optional[str]
+    fetched_at: str
+
+
+class OversightEventsResponse(BaseModel):
+    events: list[OversightEvent]
+    count: int
+
+
+class OversightStatsResponse(BaseModel):
+    total_events: int
+    escalations: int
+    deviations: int
+    surfaced: int
+    last_event_at: Optional[str]
+    by_source: dict[str, int]
 
 # --- FastAPI App ---
 
@@ -1236,6 +1265,61 @@ def get_state_stats_endpoint():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+
+# --- Oversight Monitor Endpoints ---
+
+@app.get("/api/oversight/stats", response_model=OversightStatsResponse)
+def get_oversight_stats_endpoint():
+    """Get oversight monitor aggregate statistics."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='om_events'"
+    )
+    if not cur.fetchone():
+        con.close()
+        return OversightStatsResponse(
+            total_events=0,
+            escalations=0,
+            deviations=0,
+            surfaced=0,
+            last_event_at=None,
+            by_source={},
+        )
+    con.close()
+    stats = get_oversight_stats()
+    return OversightStatsResponse(**stats)
+
+
+@app.get("/api/oversight/events", response_model=OversightEventsResponse)
+def get_oversight_events_endpoint(
+    limit: int = Query(50, ge=1, le=500, description="Max events to return"),
+    source_type: Optional[str] = Query(None, description="Filter by source type"),
+    escalations_only: bool = Query(False, description="Only escalation events"),
+    deviations_only: bool = Query(False, description="Only deviation events"),
+    surfaced_only: bool = Query(False, description="Only surfaced events"),
+):
+    """Get recent oversight monitor events."""
+    con = connect()
+    cur = con.cursor()
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='om_events'"
+    )
+    if not cur.fetchone():
+        con.close()
+        return OversightEventsResponse(events=[], count=0)
+    con.close()
+    events = get_oversight_events(
+        limit=limit,
+        source_type=source_type,
+        escalations_only=escalations_only,
+        deviations_only=deviations_only,
+        surfaced_only=surfaced_only,
+    )
+    return OversightEventsResponse(
+        events=[OversightEvent(**e) for e in events],
+        count=len(events),
+    )
 
 # Mount static files last (catch-all for SPA)
 if STATIC_DIR.exists():

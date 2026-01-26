@@ -32,6 +32,9 @@ const state = {
     billStats: null,
     hearings: [],
     hearingStats: null,
+    // Oversight monitor
+    oversightStats: null,
+    oversightEvents: [],
     // State monitor
     stateStats: null,
     stateSignals: [],
@@ -62,6 +65,8 @@ const state = {
         drift: true,
         bills: true,
         hearings: true,
+        oversightStats: true,
+        oversightEvents: true,
         stateStats: true,
         stateSignals: true,
         stateRuns: true
@@ -116,6 +121,15 @@ const elements = {
     hearingsSvac: document.getElementById('hearings-svac'),
     hearingsTotal: document.getElementById('hearings-total'),
     hearingsList: document.getElementById('hearings-list'),
+    // Oversight elements
+    oversightTotalEvents: document.getElementById('oversight-total-events'),
+    oversightEscalations: document.getElementById('oversight-escalations'),
+    oversightDeviations: document.getElementById('oversight-deviations'),
+    oversightSurfaced: document.getElementById('oversight-surfaced'),
+    oversightLastEvent: document.getElementById('oversight-last-event'),
+    oversightEventsTbody: document.getElementById('oversight-events-tbody'),
+    oversightEventsCount: document.getElementById('oversight-events-count'),
+    oversightSourceList: document.getElementById('oversight-source-list'),
     // State monitor elements
     stateTotalSignals: document.getElementById('state-total-signals'),
     stateHighSeverity: document.getElementById('state-high-severity'),
@@ -186,6 +200,10 @@ function getStatusClass(status) {
         case 'NO_DATA': return 'no-data';
         default: return 'no-data';
     }
+}
+
+function renderFlagBadge(value) {
+    return `<span class="flag-badge ${value ? 'yes' : 'no'}">${value ? 'Yes' : 'No'}</span>`;
 }
 
 // Toast Notification System
@@ -1669,6 +1687,125 @@ function hideErrorModal() {
 
 // Tab Functions
 // ============================================
+// Oversight Monitor Functions
+// ============================================
+
+async function fetchOversightStats() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/oversight/stats`);
+        if (!response.ok) throw new Error('Failed to fetch oversight stats');
+        state.oversightStats = await response.json();
+        renderOversightStats();
+    } catch (error) {
+        console.error('Error fetching oversight stats:', error);
+    } finally {
+        state.loading.oversightStats = false;
+    }
+}
+
+async function fetchOversightEvents() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/oversight/events`);
+        if (!response.ok) throw new Error('Failed to fetch oversight events');
+        const data = await response.json();
+        state.oversightEvents = data.events || [];
+        renderOversightEvents();
+    } catch (error) {
+        console.error('Error fetching oversight events:', error);
+    } finally {
+        state.loading.oversightEvents = false;
+    }
+}
+
+function renderOversightStats() {
+    if (!state.oversightStats) return;
+    const stats = state.oversightStats;
+
+    if (elements.oversightTotalEvents) {
+        elements.oversightTotalEvents.textContent = stats.total_events ?? 0;
+    }
+    if (elements.oversightEscalations) {
+        elements.oversightEscalations.textContent = stats.escalations ?? 0;
+    }
+    if (elements.oversightDeviations) {
+        elements.oversightDeviations.textContent = stats.deviations ?? 0;
+    }
+    if (elements.oversightSurfaced) {
+        elements.oversightSurfaced.textContent = stats.surfaced ?? 0;
+    }
+    if (elements.oversightLastEvent) {
+        const last = stats.last_event_at ? formatRelativeTime(stats.last_event_at) : '--';
+        elements.oversightLastEvent.textContent = `Last event: ${last}`;
+    }
+
+    if (elements.oversightSourceList) {
+        const entries = Object.entries(stats.by_source || {})
+            .sort((a, b) => b[1] - a[1]);
+
+        if (entries.length === 0) {
+            elements.oversightSourceList.innerHTML = '<div class="empty-state">No events yet</div>';
+            return;
+        }
+
+        elements.oversightSourceList.innerHTML = entries.map(([source, count]) => `
+            <div class="oversight-source-row">
+                <span class="oversight-source-name">
+                    <span class="source-badge ${getSourceClass(source)}">${escapeHtml(source)}</span>
+                </span>
+                <span class="oversight-source-count">${count}</span>
+            </div>
+        `).join('');
+    }
+}
+
+function renderOversightEvents() {
+    if (!elements.oversightEventsTbody) return;
+
+    if (elements.oversightEventsCount) {
+        elements.oversightEventsCount.textContent = `${state.oversightEvents.length} events`;
+    }
+
+    if (state.loading.oversightEvents) {
+        elements.oversightEventsTbody.innerHTML = `
+            <tr class="loading-row">
+                <td colspan="6">Loading...</td>
+            </tr>
+        `;
+        return;
+    }
+
+    if (state.oversightEvents.length === 0) {
+        elements.oversightEventsTbody.innerHTML = `
+            <tr class="empty-state-row">
+                <td colspan="6" class="empty-state">No events yet</td>
+            </tr>
+        `;
+        return;
+    }
+
+    elements.oversightEventsTbody.innerHTML = state.oversightEvents.slice(0, 50).map(event => {
+        const published = event.pub_timestamp || event.fetched_at;
+        return `
+            <tr>
+                <td><span class="source-badge ${getSourceClass(event.primary_source_type)}">${escapeHtml(event.primary_source_type)}</span></td>
+                <td><a href="${escapeHtml(event.primary_url)}" target="_blank" rel="noopener">${escapeHtml(event.title)}</a></td>
+                <td>${formatDateTime(published)}</td>
+                <td>${renderFlagBadge(event.is_escalation)}</td>
+                <td>${renderFlagBadge(event.is_deviation)}</td>
+                <td>${renderFlagBadge(event.surfaced)}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function refreshOversightData() {
+    await Promise.all([
+        fetchOversightStats(),
+        fetchOversightEvents()
+    ]);
+}
+
+// ============================================
 // State Monitor Functions
 // ============================================
 
@@ -1846,6 +1983,10 @@ function initMainTabs() {
             if (tabId === 'state' && state.loading.stateStats) {
                 await refreshStateData();
             }
+            // Load oversight data when switching to oversight tab
+            if (tabId === 'oversight' && (state.loading.oversightStats || state.loading.oversightEvents)) {
+                await refreshOversightData();
+            }
         });
     });
 
@@ -1916,6 +2057,10 @@ async function refreshAll() {
     // Load state data if on state tab
     if (state.activeMainTab === 'state') {
         federalPromises.push(refreshStateData());
+    }
+    // Load oversight data if on oversight tab
+    if (state.activeMainTab === 'oversight') {
+        federalPromises.push(refreshOversightData());
     }
 
     await Promise.all(federalPromises);

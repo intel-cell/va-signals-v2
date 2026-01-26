@@ -417,6 +417,52 @@ body {
     color: var(--error);
 }
 
+/* Oversight flags */
+.flag-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 9999px;
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+}
+
+.flag-badge.yes {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--success);
+}
+
+.flag-badge.no {
+    background: rgba(148, 163, 184, 0.15);
+    color: var(--text-secondary);
+}
+
+/* Oversight source list */
+.oversight-source-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.oversight-source-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.oversight-source-row:last-child {
+    border-bottom: none;
+}
+
+.oversight-source-count {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
 /* Error Button */
 .error-btn {
     background: rgba(239, 68, 68, 0.1);
