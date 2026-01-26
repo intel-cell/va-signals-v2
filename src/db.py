@@ -22,6 +22,10 @@ def connect():
   return sqlite3.connect(DB_PATH)
 
 def init_db():
+  if get_db_backend() == "postgres":
+    raise RuntimeError(
+      "Postgres init_db is not supported until Task 4; refusing to run Postgres schema with sqlite."
+    )
   con = connect()
   con.executescript(get_schema_path().read_text(encoding="utf-8"))
   con.commit()

@@ -23,3 +23,10 @@ def test_schema_path_uses_postgres_when_database_url_set(monkeypatch, url):
     assert db.get_db_backend() == "postgres"
     assert db.get_schema_path() == db.ROOT / "schema.postgres.sql"
     assert db.get_schema_path().exists()
+
+
+def test_init_db_raises_for_postgres_backend(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/va_signals")
+
+    with pytest.raises(RuntimeError, match="Postgres init"):
+        db.init_db()
