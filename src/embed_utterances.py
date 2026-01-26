@@ -21,14 +21,14 @@ DEFAULT_MODEL = "all-MiniLM-L6-v2"
 def get_utterances_without_embeddings(limit: int = 1000) -> list[dict]:
     """Get utterances that don't have embeddings yet."""
     con = db.connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = db.execute(
+        con,
         """SELECT u.utterance_id, u.member_id, u.content
            FROM ad_utterances u
            LEFT JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
            WHERE e.utterance_id IS NULL
-           LIMIT ?""",
-        (limit,),
+           LIMIT :limit""",
+        {"limit": limit},
     )
     rows = cur.fetchall()
     con.close()
@@ -38,18 +38,18 @@ def get_utterances_without_embeddings(limit: int = 1000) -> list[dict]:
 def get_embedding_stats() -> dict:
     """Get statistics about embeddings."""
     con = db.connect()
-    cur = con.cursor()
 
-    cur.execute("SELECT COUNT(*) FROM ad_utterances")
+    cur = db.execute(con, "SELECT COUNT(*) FROM ad_utterances")
     total_utterances = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM ad_embeddings")
+    cur = db.execute(con, "SELECT COUNT(*) FROM ad_embeddings")
     total_embeddings = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(DISTINCT member_id) FROM ad_utterances")
+    cur = db.execute(con, "SELECT COUNT(DISTINCT member_id) FROM ad_utterances")
     total_members = cur.fetchone()[0]
 
-    cur.execute(
+    cur = db.execute(
+        con,
         """SELECT COUNT(DISTINCT u.member_id)
            FROM ad_utterances u
            JOIN ad_embeddings e ON u.utterance_id = e.utterance_id"""

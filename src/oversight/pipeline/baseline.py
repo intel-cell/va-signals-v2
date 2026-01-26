@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from src.db import connect
+from src.db import connect, execute, insert_returning_id
 
 
 @dataclass
@@ -31,24 +31,27 @@ def _get_events_in_window(
 ) -> list[dict]:
     """Get events in the specified window."""
     con = connect()
-    con.row_factory = None
 
     query = """
         SELECT event_id, event_type, theme, title, summary, pub_timestamp
         FROM om_events
-        WHERE primary_source_type = ?
-          AND pub_timestamp >= ?
-          AND pub_timestamp <= ?
+        WHERE primary_source_type = :source_type
+          AND pub_timestamp >= :window_start
+          AND pub_timestamp <= :window_end
     """
-    params = [source_type, window_start, window_end]
+    params: dict[str, object] = {
+        "source_type": source_type,
+        "window_start": window_start,
+        "window_end": window_end,
+    }
 
     if theme:
-        query += " AND theme = ?"
-        params.append(theme)
+        query += " AND theme = :theme"
+        params["theme"] = theme
 
     query += " ORDER BY pub_timestamp DESC"
 
-    cur = con.execute(query, params)
+    cur = execute(con, query, params)
     rows = cur.fetchall()
     con.close()
 
@@ -189,25 +192,28 @@ def build_baseline(
 def _save_baseline(baseline: BaselineSummary) -> int:
     """Save baseline to database. Returns row ID."""
     con = connect()
-    cur = con.execute(
+    row_id = insert_returning_id(
+        con,
         """
         INSERT INTO om_baselines (
             source_type, theme, window_start, window_end,
             event_count, summary, topic_distribution, built_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (
+            :source_type, :theme, :window_start, :window_end,
+            :event_count, :summary, :topic_distribution, :built_at
+        )
         """,
-        (
-            baseline.source_type,
-            baseline.theme,
-            baseline.window_start,
-            baseline.window_end,
-            baseline.event_count,
-            baseline.summary,
-            json.dumps(baseline.topic_distribution),
-            datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        ),
+        {
+            "source_type": baseline.source_type,
+            "theme": baseline.theme,
+            "window_start": baseline.window_start,
+            "window_end": baseline.window_end,
+            "event_count": baseline.event_count,
+            "summary": baseline.summary,
+            "topic_distribution": json.dumps(baseline.topic_distribution),
+            "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
     )
-    row_id = cur.lastrowid
     con.commit()
     con.close()
     return row_id
@@ -225,31 +231,32 @@ def get_latest_baseline(source_type: str, theme: Optional[str] = None) -> Option
         Baseline dict or None
     """
     con = connect()
-    con.row_factory = None
 
     if theme:
-        cur = con.execute(
+        cur = execute(
+            con,
             """
             SELECT id, source_type, theme, window_start, window_end,
                    event_count, summary, topic_distribution, built_at
             FROM om_baselines
-            WHERE source_type = ? AND theme = ?
+            WHERE source_type = :source_type AND theme = :theme
             ORDER BY built_at DESC
             LIMIT 1
             """,
-            (source_type, theme),
+            {"source_type": source_type, "theme": theme},
         )
     else:
-        cur = con.execute(
+        cur = execute(
+            con,
             """
             SELECT id, source_type, theme, window_start, window_end,
                    event_count, summary, topic_distribution, built_at
             FROM om_baselines
-            WHERE source_type = ? AND theme IS NULL
+            WHERE source_type = :source_type AND theme IS NULL
             ORDER BY built_at DESC
             LIMIT 1
             """,
-            (source_type,),
+            {"source_type": source_type},
         )
 
     row = cur.fetchone()
@@ -283,9 +290,7 @@ def build_all_baselines(window_days: int = 90, save: bool = True) -> list[Baseli
         List of built baselines
     """
     con = connect()
-    cur = con.execute(
-        "SELECT DISTINCT primary_source_type FROM om_events"
-    )
+    cur = execute(con, "SELECT DISTINCT primary_source_type FROM om_events")
     source_types = [row[0] for row in cur.fetchall()]
     con.close()
 

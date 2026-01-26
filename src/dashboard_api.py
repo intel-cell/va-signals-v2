@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .db import connect
+from .db import connect, execute, table_exists
 from .reports import generate_report
 from .state.db_helpers import (
     get_signals_by_state,
@@ -330,23 +330,21 @@ def get_runs(
 ):
     """Get recent source runs with optional filters."""
     con = connect()
-    con.row_factory = None
-    cur = con.cursor()
 
     query = "SELECT id, source_id, started_at, ended_at, status, records_fetched, errors_json FROM source_runs WHERE 1=1"
-    params: list[Any] = []
+    params: dict[str, Any] = {}
 
     if source_id:
-        query += " AND source_id = ?"
-        params.append(source_id)
+        query += " AND source_id = :source_id"
+        params["source_id"] = source_id
     if status:
-        query += " AND status = ?"
-        params.append(status)
+        query += " AND status = :status"
+        params["status"] = status
 
-    query += " ORDER BY ended_at DESC LIMIT ?"
-    params.append(limit)
+    query += " ORDER BY ended_at DESC LIMIT :limit"
+    params["limit"] = limit
 
-    cur.execute(query, params)
+    cur = execute(con, query, params)
     rows = cur.fetchall()
     con.close()
 
@@ -370,10 +368,9 @@ def get_runs(
 def get_runs_stats():
     """Get aggregated statistics for source runs."""
     con = connect()
-    cur = con.cursor()
 
     # Total counts by status
-    cur.execute("SELECT status, COUNT(*) FROM source_runs GROUP BY status")
+    cur = execute(con, "SELECT status, COUNT(*) FROM source_runs GROUP BY status")
     status_counts = dict(cur.fetchall())
 
     total_runs = sum(status_counts.values())
@@ -386,30 +383,42 @@ def get_runs_stats():
     healthy_rate = ((success_count + no_data_count) / total_runs * 100) if total_runs > 0 else 0.0
 
     # Runs by source
-    cur.execute("SELECT source_id, COUNT(*) FROM source_runs GROUP BY source_id ORDER BY COUNT(*) DESC")
+    cur = execute(
+        con,
+        "SELECT source_id, COUNT(*) FROM source_runs GROUP BY source_id ORDER BY COUNT(*) DESC",
+    )
     runs_by_source = [RunsBySource(source_id=row[0], count=row[1]) for row in cur.fetchall()]
 
     # Runs by day (last 7 days)
     seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT DATE(ended_at) as day, COUNT(*)
         FROM source_runs
-        WHERE DATE(ended_at) >= ?
+        WHERE DATE(ended_at) >= :seven_days_ago
         GROUP BY day
         ORDER BY day DESC
         """,
-        (seven_days_ago,),
+        {"seven_days_ago": seven_days_ago},
     )
     runs_by_day = [RunsByDay(date=row[0], count=row[1]) for row in cur.fetchall()]
 
     # Runs in last 24 hours
     twenty_four_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-    cur.execute("SELECT COUNT(*) FROM source_runs WHERE ended_at >= ?", (twenty_four_hours_ago,))
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM source_runs WHERE ended_at >= :since",
+        {"since": twenty_four_hours_ago},
+    )
     runs_today = cur.fetchone()[0]
 
     # New docs in last 24 hours
-    cur.execute("SELECT COUNT(*) FROM fr_seen WHERE first_seen_at >= ?", (twenty_four_hours_ago,))
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM fr_seen WHERE first_seen_at >= :since",
+        {"since": twenty_four_hours_ago},
+    )
     new_docs_today = cur.fetchone()[0]
 
     con.close()
@@ -435,21 +444,20 @@ def get_fr_documents(
 ):
     """Get recent Federal Register documents."""
     con = connect()
-    cur = con.cursor()
-
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT doc_id, published_date, first_seen_at, source_url
         FROM fr_seen
         ORDER BY first_seen_at DESC
-        LIMIT ?
+        LIMIT :limit
         """,
-        (limit,),
+        {"limit": limit},
     )
     rows = cur.fetchall()
 
     # Get total count
-    cur.execute("SELECT COUNT(*) FROM fr_seen")
+    cur = execute(con, "SELECT COUNT(*) FROM fr_seen")
     total_count = cur.fetchone()[0]
 
     con.close()
@@ -471,9 +479,8 @@ def get_fr_documents(
 def get_ecfr_documents():
     """Get eCFR tracking status."""
     con = connect()
-    cur = con.cursor()
-
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT doc_id, last_modified, etag, first_seen_at, source_url
         FROM ecfr_seen
@@ -501,10 +508,9 @@ def get_ecfr_documents():
 def get_health():
     """Get health status for each source: last successful run and time since."""
     con = connect()
-    cur = con.cursor()
 
     # Get distinct source IDs
-    cur.execute("SELECT DISTINCT source_id FROM source_runs")
+    cur = execute(con, "SELECT DISTINCT source_id FROM source_runs")
     source_ids = [row[0] for row in cur.fetchall()]
 
     now = datetime.now(timezone.utc)
@@ -512,24 +518,26 @@ def get_health():
 
     for source_id in source_ids:
         # Last successful run
-        cur.execute(
+        cur = execute(
+            con,
             """
             SELECT ended_at FROM source_runs
-            WHERE source_id = ? AND status = 'SUCCESS'
+            WHERE source_id = :source_id AND status = 'SUCCESS'
             ORDER BY ended_at DESC LIMIT 1
             """,
-            (source_id,),
+            {"source_id": source_id},
         )
         success_row = cur.fetchone()
 
         # Last run (any status)
-        cur.execute(
+        cur = execute(
+            con,
             """
             SELECT status FROM source_runs
-            WHERE source_id = ?
+            WHERE source_id = :source_id
             ORDER BY ended_at DESC LIMIT 1
             """,
-            (source_id,),
+            {"source_id": source_id},
         )
         last_row = cur.fetchone()
 
@@ -568,17 +576,16 @@ def get_errors(
 ):
     """Get recent runs with errors."""
     con = connect()
-    cur = con.cursor()
-
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT id, source_id, ended_at, status, errors_json
         FROM source_runs
         WHERE status = 'ERROR' OR errors_json != '[]'
         ORDER BY ended_at DESC
-        LIMIT ?
+        LIMIT :limit
         """,
-        (limit,),
+        {"limit": limit},
     )
     rows = cur.fetchall()
     con.close()
@@ -604,27 +611,23 @@ def get_summaries(
 ):
     """Get recent document summaries with source URLs."""
     con = connect()
-    cur = con.cursor()
-
     # Check if fr_summaries table exists
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='fr_summaries'"
-    )
-    if not cur.fetchone():
+    if not table_exists(con, "fr_summaries"):
         con.close()
         return SummariesResponse(summaries=[], count=0)
 
     # Join with fr_seen to get source_url
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT s.doc_id, s.summary, s.bullet_points, s.veteran_impact, s.tags,
                s.summarized_at, f.source_url
         FROM fr_summaries s
         LEFT JOIN fr_seen f ON s.doc_id = f.doc_id
         ORDER BY s.summarized_at DESC
-        LIMIT ?
+        LIMIT :limit
         """,
-        (limit,),
+        {"limit": limit},
     )
     rows = cur.fetchall()
     con.close()
@@ -660,25 +663,21 @@ def get_summaries(
 def get_summary(doc_id: str):
     """Get a specific document summary by doc_id."""
     con = connect()
-    cur = con.cursor()
-
     # Check if fr_summaries table exists
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='fr_summaries'"
-    )
-    if not cur.fetchone():
+    if not table_exists(con, "fr_summaries"):
         con.close()
         raise HTTPException(status_code=404, detail="Summary not found")
 
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT s.doc_id, s.summary, s.bullet_points, s.veteran_impact, s.tags,
                s.summarized_at, f.source_url
         FROM fr_summaries s
         LEFT JOIN fr_seen f ON s.doc_id = f.doc_id
-        WHERE s.doc_id = ?
+        WHERE s.doc_id = :doc_id
         """,
-        (doc_id,),
+        {"doc_id": doc_id},
     )
     row = cur.fetchone()
     con.close()
@@ -711,17 +710,16 @@ def get_summary(doc_id: str):
 def check_summary_exists(doc_id: str):
     """Check if a summary exists for a given doc_id."""
     con = connect()
-    cur = con.cursor()
-
     # Check if fr_summaries table exists
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='fr_summaries'"
-    )
-    if not cur.fetchone():
+    if not table_exists(con, "fr_summaries"):
         con.close()
         return {"exists": False}
 
-    cur.execute("SELECT 1 FROM fr_summaries WHERE doc_id = ?", (doc_id,))
+    cur = execute(
+        con,
+        "SELECT 1 FROM fr_summaries WHERE doc_id = :doc_id",
+        {"doc_id": doc_id},
+    )
     exists = cur.fetchone() is not None
     con.close()
 
@@ -732,17 +730,12 @@ def check_summary_exists(doc_id: str):
 def get_summarized_doc_ids():
     """Get list of all doc_ids that have summaries."""
     con = connect()
-    cur = con.cursor()
-
     # Check if fr_summaries table exists
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='fr_summaries'"
-    )
-    if not cur.fetchone():
+    if not table_exists(con, "fr_summaries"):
         con.close()
         return {"doc_ids": []}
 
-    cur.execute("SELECT doc_id FROM fr_summaries")
+    cur = execute(con, "SELECT doc_id FROM fr_summaries")
     doc_ids = [row[0] for row in cur.fetchall()]
     con.close()
 
@@ -781,26 +774,29 @@ def get_ad_events(
 ):
     """Get recent agenda drift deviation events."""
     con = connect()
-    cur = con.cursor()
 
     # Check if table exists
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ad_deviation_events'")
-    if not cur.fetchone():
+    if not table_exists(con, "ad_deviation_events"):
         con.close()
         return ADDeviationResponse(events=[], count=0)
 
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT e.id, e.member_id, m.name, e.hearing_id, e.utterance_id,
                   e.cos_dist, e.zscore, e.detected_at, e.note
            FROM ad_deviation_events e
            JOIN ad_members m ON e.member_id = m.member_id
-           WHERE e.zscore >= ?
-           ORDER BY e.detected_at DESC LIMIT ?""",
-        (min_zscore, limit),
+           WHERE e.zscore >= :min_zscore
+           ORDER BY e.detected_at DESC LIMIT :limit""",
+        {"min_zscore": min_zscore, "limit": limit},
     )
     rows = cur.fetchall()
 
-    cur.execute("SELECT COUNT(*) FROM ad_deviation_events WHERE zscore >= ?", (min_zscore,))
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM ad_deviation_events WHERE zscore >= :min_zscore",
+        {"min_zscore": min_zscore},
+    )
     total = cur.fetchone()[0]
     con.close()
 
@@ -826,11 +822,9 @@ def get_ad_events(
 def get_ad_stats():
     """Get agenda drift system statistics."""
     con = connect()
-    cur = con.cursor()
 
     # Check if tables exist
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ad_members'")
-    if not cur.fetchone():
+    if not table_exists(con, "ad_members"):
         con.close()
         return {
             "total_members": 0,
@@ -843,27 +837,28 @@ def get_ad_stats():
         }
 
     # Total members
-    cur.execute("SELECT COUNT(*) FROM ad_members")
+    cur = execute(con, "SELECT COUNT(*) FROM ad_members")
     total_members = cur.fetchone()[0]
 
     # Total utterances
-    cur.execute("SELECT COUNT(*) FROM ad_utterances")
+    cur = execute(con, "SELECT COUNT(*) FROM ad_utterances")
     total_utterances = cur.fetchone()[0]
 
     # Total embeddings
-    cur.execute("SELECT COUNT(*) FROM ad_embeddings")
+    cur = execute(con, "SELECT COUNT(*) FROM ad_embeddings")
     total_embeddings = cur.fetchone()[0]
 
     # Members with baselines
-    cur.execute("SELECT COUNT(DISTINCT member_id) FROM ad_baselines")
+    cur = execute(con, "SELECT COUNT(DISTINCT member_id) FROM ad_baselines")
     members_with_baselines = cur.fetchone()[0]
 
     # Total events
-    cur.execute("SELECT COUNT(*) FROM ad_deviation_events")
+    cur = execute(con, "SELECT COUNT(*) FROM ad_deviation_events")
     total_events = cur.fetchone()[0]
 
     # Per-member stats
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT m.member_id, m.name, COUNT(*) as event_count, AVG(e.zscore) as avg_zscore
            FROM ad_deviation_events e
            JOIN ad_members m ON e.member_id = m.member_id
@@ -901,16 +896,18 @@ def get_ad_member_history(
 ):
     """Get deviation history for a specific member."""
     con = connect()
-    cur = con.cursor()
 
     # Check if table exists
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='ad_deviation_events'")
-    if not cur.fetchone():
+    if not table_exists(con, "ad_deviation_events"):
         con.close()
         return {"member_id": member_id, "events": [], "count": 0}
 
     # Get member name
-    cur.execute("SELECT name FROM ad_members WHERE member_id = ?", (member_id,))
+    cur = execute(
+        con,
+        "SELECT name FROM ad_members WHERE member_id = :member_id",
+        {"member_id": member_id},
+    )
     member_row = cur.fetchone()
     if not member_row:
         con.close()
@@ -918,16 +915,21 @@ def get_ad_member_history(
 
     member_name = member_row[0]
 
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT id, hearing_id, utterance_id, cos_dist, zscore, detected_at, note
            FROM ad_deviation_events
-           WHERE member_id = ?
-           ORDER BY detected_at DESC LIMIT ?""",
-        (member_id, limit),
+           WHERE member_id = :member_id
+           ORDER BY detected_at DESC LIMIT :limit""",
+        {"member_id": member_id, "limit": limit},
     )
     rows = cur.fetchall()
 
-    cur.execute("SELECT COUNT(*) FROM ad_deviation_events WHERE member_id = ?", (member_id,))
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM ad_deviation_events WHERE member_id = :member_id",
+        {"member_id": member_id},
+    )
     total = cur.fetchone()[0]
     con.close()
 
@@ -961,11 +963,9 @@ def get_bills(
 ):
     """List tracked VA bills."""
     con = connect()
-    cur = con.cursor()
 
     # Check if bills table exists
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='bills'")
-    if not cur.fetchone():
+    if not table_exists(con, "bills"):
         con.close()
         return BillsResponse(bills=[], count=0)
 
@@ -976,25 +976,25 @@ def get_bills(
         FROM bills
         WHERE 1=1
     """
-    params: list[Any] = []
+    params: dict[str, Any] = {}
 
     if congress is not None:
-        query += " AND congress = ?"
-        params.append(congress)
+        query += " AND congress = :congress"
+        params["congress"] = congress
 
-    query += " ORDER BY latest_action_date DESC NULLS LAST, first_seen_at DESC LIMIT ?"
-    params.append(limit)
+    query += " ORDER BY latest_action_date DESC NULLS LAST, first_seen_at DESC LIMIT :limit"
+    params["limit"] = limit
 
-    cur.execute(query, params)
+    cur = execute(con, query, params)
     rows = cur.fetchall()
 
     # Get total count
     count_query = "SELECT COUNT(*) FROM bills"
     if congress is not None:
-        count_query += " WHERE congress = ?"
-        cur.execute(count_query, (congress,))
+        count_query += " WHERE congress = :congress"
+        cur = execute(con, count_query, {"congress": congress})
     else:
-        cur.execute(count_query)
+        cur = execute(con, count_query)
     total = cur.fetchone()[0]
 
     con.close()
@@ -1023,29 +1023,31 @@ def get_bills(
 def get_bill_stats():
     """Get bill summary statistics."""
     con = connect()
-    cur = con.cursor()
 
     # Check if bills table exists
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='bills'")
-    if not cur.fetchone():
+    if not table_exists(con, "bills"):
         con.close()
         return BillStatsResponse(total_bills=0, new_this_week=0, by_type={}, by_congress={})
 
     # Total bills
-    cur.execute("SELECT COUNT(*) FROM bills")
+    cur = execute(con, "SELECT COUNT(*) FROM bills")
     total_bills = cur.fetchone()[0]
 
     # New this week
     seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
-    cur.execute("SELECT COUNT(*) FROM bills WHERE first_seen_at >= ?", (seven_days_ago,))
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM bills WHERE first_seen_at >= :since",
+        {"since": seven_days_ago},
+    )
     new_this_week = cur.fetchone()[0]
 
     # By type
-    cur.execute("SELECT bill_type, COUNT(*) FROM bills GROUP BY bill_type")
+    cur = execute(con, "SELECT bill_type, COUNT(*) FROM bills GROUP BY bill_type")
     by_type = dict(cur.fetchall())
 
     # By congress
-    cur.execute("SELECT congress, COUNT(*) FROM bills GROUP BY congress ORDER BY congress DESC")
+    cur = execute(con, "SELECT congress, COUNT(*) FROM bills GROUP BY congress ORDER BY congress DESC")
     by_congress = {int(row[0]): row[1] for row in cur.fetchall()}
 
     con.close()
@@ -1067,11 +1069,9 @@ def get_hearings(
 ):
     """List hearings - default to upcoming only."""
     con = connect()
-    cur = con.cursor()
 
     # Check if hearings table exists
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hearings'")
-    if not cur.fetchone():
+    if not table_exists(con, "hearings"):
         con.close()
         return HearingsResponse(hearings=[], count=0)
 
@@ -1082,28 +1082,32 @@ def get_hearings(
             SELECT event_id, congress, chamber, committee_name, hearing_date,
                    hearing_time, title, meeting_type, status, url
             FROM hearings
-            WHERE hearing_date >= ?
+            WHERE hearing_date >= :today
             ORDER BY hearing_date ASC, hearing_time ASC
-            LIMIT ?
+            LIMIT :limit
         """
-        cur.execute(query, (today, limit))
+        cur = execute(con, query, {"today": today, "limit": limit})
     else:
         query = """
             SELECT event_id, congress, chamber, committee_name, hearing_date,
                    hearing_time, title, meeting_type, status, url
             FROM hearings
             ORDER BY hearing_date DESC, hearing_time DESC
-            LIMIT ?
+            LIMIT :limit
         """
-        cur.execute(query, (limit,))
+        cur = execute(con, query, {"limit": limit})
 
     rows = cur.fetchall()
 
     # Get total count
     if upcoming:
-        cur.execute("SELECT COUNT(*) FROM hearings WHERE hearing_date >= ?", (today,))
+        cur = execute(
+            con,
+            "SELECT COUNT(*) FROM hearings WHERE hearing_date >= :today",
+            {"today": today},
+        )
     else:
-        cur.execute("SELECT COUNT(*) FROM hearings")
+        cur = execute(con, "SELECT COUNT(*) FROM hearings")
     total = cur.fetchone()[0]
 
     con.close()
@@ -1131,11 +1135,9 @@ def get_hearings(
 def get_hearing_stats():
     """Get hearing summary statistics."""
     con = connect()
-    cur = con.cursor()
 
     # Check if hearings table exists
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='hearings'")
-    if not cur.fetchone():
+    if not table_exists(con, "hearings"):
         con.close()
         return HearingStatsResponse(
             total_hearings=0, upcoming_count=0, by_committee={}, by_status={}
@@ -1144,21 +1146,26 @@ def get_hearing_stats():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     # Total hearings
-    cur.execute("SELECT COUNT(*) FROM hearings")
+    cur = execute(con, "SELECT COUNT(*) FROM hearings")
     total_hearings = cur.fetchone()[0]
 
     # Upcoming count
-    cur.execute("SELECT COUNT(*) FROM hearings WHERE hearing_date >= ?", (today,))
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM hearings WHERE hearing_date >= :today",
+        {"today": today},
+    )
     upcoming_count = cur.fetchone()[0]
 
     # By chamber (upcoming only) - group all House VA (full + subcommittees) and Senate VA
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT chamber, COUNT(*) FROM hearings
-        WHERE hearing_date >= ?
+        WHERE hearing_date >= :today
         GROUP BY chamber
         """,
-        (today,),
+        {"today": today},
     )
     by_committee = {}
     for row in cur.fetchall():
@@ -1171,13 +1178,14 @@ def get_hearing_stats():
             by_committee[chamber] = row[1]
 
     # By status (upcoming only)
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT status, COUNT(*) FROM hearings
-        WHERE hearing_date >= ?
+        WHERE hearing_date >= :today
         GROUP BY status
         """,
-        (today,),
+        {"today": today},
     )
     by_status = dict(cur.fetchall())
 
@@ -1272,11 +1280,7 @@ def get_state_stats_endpoint():
 def get_oversight_stats_endpoint():
     """Get oversight monitor aggregate statistics."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='om_events'"
-    )
-    if not cur.fetchone():
+    if not table_exists(con, "om_events"):
         con.close()
         return OversightStatsResponse(
             total_events=0,
@@ -1301,11 +1305,7 @@ def get_oversight_events_endpoint(
 ):
     """Get recent oversight monitor events."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='om_events'"
-    )
-    if not cur.fetchone():
+    if not table_exists(con, "om_events"):
         con.close()
         return OversightEventsResponse(events=[], count=0)
     con.close()

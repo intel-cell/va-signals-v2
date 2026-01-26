@@ -1,9 +1,7 @@
 """Database helpers for state intelligence module."""
-
-import sqlite3
 from datetime import datetime, timezone
 
-from src.db import connect
+from src.db import connect, execute, insert_returning_id
 
 
 # Default sources for TX, CA, FL
@@ -92,24 +90,20 @@ def insert_state_source(source: dict) -> None:
     Expected keys: source_id, state, source_type, name, url, enabled (optional).
     """
     con = connect()
-    cur = con.cursor()
-    cur.execute("SELECT source_id FROM state_sources WHERE source_id = ?", (source["source_id"],))
-    if cur.fetchone() is not None:
-        con.close()
-        return
-
-    cur.execute(
+    execute(
+        con,
         """INSERT INTO state_sources(source_id, state, source_type, name, url, enabled, created_at)
-           VALUES(?,?,?,?,?,?,?)""",
-        (
-            source["source_id"],
-            source["state"],
-            source["source_type"],
-            source["name"],
-            source["url"],
-            source.get("enabled", 1),
-            _utc_now_iso(),
-        ),
+           VALUES(:source_id, :state, :source_type, :name, :url, :enabled, :created_at)
+           ON CONFLICT(source_id) DO NOTHING""",
+        {
+            "source_id": source["source_id"],
+            "state": source["state"],
+            "source_type": source["source_type"],
+            "name": source["name"],
+            "url": source["url"],
+            "enabled": source.get("enabled", 1),
+            "created_at": _utc_now_iso(),
+        },
     )
     con.commit()
     con.close()
@@ -118,11 +112,11 @@ def insert_state_source(source: dict) -> None:
 def get_state_source(source_id: str) -> dict | None:
     """Get a source by ID."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT source_id, state, source_type, name, url, enabled, created_at
-           FROM state_sources WHERE source_id = ?""",
-        (source_id,),
+           FROM state_sources WHERE source_id = :source_id""",
+        {"source_id": source_id},
     )
     row = cur.fetchone()
     con.close()
@@ -142,20 +136,21 @@ def get_state_source(source_id: str) -> dict | None:
 def get_sources_by_state(state: str, enabled_only: bool = True) -> list[dict]:
     """Get all sources for a state."""
     con = connect()
-    cur = con.cursor()
     if enabled_only:
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT source_id, state, source_type, name, url, enabled, created_at
-               FROM state_sources WHERE state = ? AND enabled = 1
+               FROM state_sources WHERE state = :state AND enabled = 1
                ORDER BY source_type, name""",
-            (state,),
+            {"state": state},
         )
     else:
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT source_id, state, source_type, name, url, enabled, created_at
-               FROM state_sources WHERE state = ?
+               FROM state_sources WHERE state = :state
                ORDER BY source_type, name""",
-            (state,),
+            {"state": state},
         )
     rows = cur.fetchall()
     con.close()
@@ -183,27 +178,25 @@ def insert_state_signal(signal: dict) -> None:
     Optional: program, content, pub_date, event_date.
     """
     con = connect()
-    cur = con.cursor()
-    cur.execute("SELECT signal_id FROM state_signals WHERE signal_id = ?", (signal["signal_id"],))
-    if cur.fetchone() is not None:
-        con.close()
-        return
-
-    cur.execute(
-        """INSERT INTO state_signals(signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?)""",
-        (
-            signal["signal_id"],
-            signal["state"],
-            signal["source_id"],
-            signal.get("program"),
-            signal["title"],
-            signal.get("content"),
-            signal["url"],
-            signal.get("pub_date"),
-            signal.get("event_date"),
-            _utc_now_iso(),
-        ),
+    execute(
+        con,
+        """INSERT INTO state_signals(
+               signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
+           ) VALUES (
+               :signal_id, :state, :source_id, :program, :title, :content, :url, :pub_date, :event_date, :fetched_at
+           ) ON CONFLICT(signal_id) DO NOTHING""",
+        {
+            "signal_id": signal["signal_id"],
+            "state": signal["state"],
+            "source_id": signal["source_id"],
+            "program": signal.get("program"),
+            "title": signal["title"],
+            "content": signal.get("content"),
+            "url": signal["url"],
+            "pub_date": signal.get("pub_date"),
+            "event_date": signal.get("event_date"),
+            "fetched_at": _utc_now_iso(),
+        },
     )
     con.commit()
     con.close()
@@ -212,11 +205,11 @@ def insert_state_signal(signal: dict) -> None:
 def get_state_signal(signal_id: str) -> dict | None:
     """Get a signal by ID."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
-           FROM state_signals WHERE signal_id = ?""",
-        (signal_id,),
+           FROM state_signals WHERE signal_id = :signal_id""",
+        {"signal_id": signal_id},
     )
     row = cur.fetchone()
     con.close()
@@ -240,8 +233,11 @@ def get_state_signal(signal_id: str) -> dict | None:
 def signal_exists(signal_id: str) -> bool:
     """Check if a signal exists."""
     con = connect()
-    cur = con.cursor()
-    cur.execute("SELECT 1 FROM state_signals WHERE signal_id = ?", (signal_id,))
+    cur = execute(
+        con,
+        "SELECT 1 FROM state_signals WHERE signal_id = :signal_id",
+        {"signal_id": signal_id},
+    )
     exists = cur.fetchone() is not None
     con.close()
     return exists
@@ -255,20 +251,21 @@ def get_signals_by_state(
     If `since` is provided, filter by fetched_at >= since.
     """
     con = connect()
-    cur = con.cursor()
     if since:
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
-               FROM state_signals WHERE state = ? AND fetched_at >= ?
-               ORDER BY pub_date DESC, fetched_at DESC LIMIT ?""",
-            (state, since, limit),
+               FROM state_signals WHERE state = :state AND fetched_at >= :since
+               ORDER BY pub_date DESC, fetched_at DESC LIMIT :limit""",
+            {"state": state, "since": since, "limit": limit},
         )
     else:
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
-               FROM state_signals WHERE state = ?
-               ORDER BY pub_date DESC, fetched_at DESC LIMIT ?""",
-            (state, limit),
+               FROM state_signals WHERE state = :state
+               ORDER BY pub_date DESC, fetched_at DESC LIMIT :limit""",
+            {"state": state, "limit": limit},
         )
     rows = cur.fetchall()
     con.close()
@@ -300,23 +297,21 @@ def insert_state_classification(classification: dict) -> None:
     Optional: keywords_matched, llm_reasoning.
     """
     con = connect()
-    cur = con.cursor()
-    cur.execute("SELECT signal_id FROM state_classifications WHERE signal_id = ?", (classification["signal_id"],))
-    if cur.fetchone() is not None:
-        con.close()
-        return
-
-    cur.execute(
-        """INSERT INTO state_classifications(signal_id, severity, classification_method, keywords_matched, llm_reasoning, classified_at)
-           VALUES(?,?,?,?,?,?)""",
-        (
-            classification["signal_id"],
-            classification["severity"],
-            classification["classification_method"],
-            classification.get("keywords_matched"),
-            classification.get("llm_reasoning"),
-            _utc_now_iso(),
-        ),
+    execute(
+        con,
+        """INSERT INTO state_classifications(
+               signal_id, severity, classification_method, keywords_matched, llm_reasoning, classified_at
+           ) VALUES (
+               :signal_id, :severity, :classification_method, :keywords_matched, :llm_reasoning, :classified_at
+           ) ON CONFLICT(signal_id) DO NOTHING""",
+        {
+            "signal_id": classification["signal_id"],
+            "severity": classification["severity"],
+            "classification_method": classification["classification_method"],
+            "keywords_matched": classification.get("keywords_matched"),
+            "llm_reasoning": classification.get("llm_reasoning"),
+            "classified_at": _utc_now_iso(),
+        },
     )
     con.commit()
     con.close()
@@ -325,11 +320,11 @@ def insert_state_classification(classification: dict) -> None:
 def get_state_classification(signal_id: str) -> dict | None:
     """Get classification for a signal."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT signal_id, severity, classification_method, keywords_matched, llm_reasoning, classified_at
-           FROM state_classifications WHERE signal_id = ?""",
-        (signal_id,),
+           FROM state_classifications WHERE signal_id = :signal_id""",
+        {"signal_id": signal_id},
     )
     row = cur.fetchone()
     con.close()
@@ -351,28 +346,29 @@ def get_unnotified_signals(severity: str | None = None, limit: int = 100) -> lis
     Optionally filter by severity.
     """
     con = connect()
-    cur = con.cursor()
     if severity:
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT s.signal_id, s.state, s.source_id, s.title, s.url, s.pub_date,
                       c.severity, c.classification_method, c.classified_at
                FROM state_signals s
                JOIN state_classifications c ON s.signal_id = c.signal_id
                LEFT JOIN state_notifications n ON s.signal_id = n.signal_id
-               WHERE n.signal_id IS NULL AND c.severity = ?
-               ORDER BY c.classified_at DESC LIMIT ?""",
-            (severity, limit),
+               WHERE n.signal_id IS NULL AND c.severity = :severity
+               ORDER BY c.classified_at DESC LIMIT :limit""",
+            {"severity": severity, "limit": limit},
         )
     else:
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT s.signal_id, s.state, s.source_id, s.title, s.url, s.pub_date,
                       c.severity, c.classification_method, c.classified_at
                FROM state_signals s
                JOIN state_classifications c ON s.signal_id = c.signal_id
                LEFT JOIN state_notifications n ON s.signal_id = n.signal_id
                WHERE n.signal_id IS NULL
-               ORDER BY c.classified_at DESC LIMIT ?""",
-            (limit,),
+               ORDER BY c.classified_at DESC LIMIT :limit""",
+            {"limit": limit},
         )
     rows = cur.fetchall()
     con.close()
@@ -397,20 +393,17 @@ def mark_signal_notified(signal_id: str, channel: str) -> None:
     Mark a signal as notified (idempotent - skips if already exists).
     """
     con = connect()
-    try:
-        con.execute(
-            """
-            INSERT INTO state_notifications (signal_id, notified_at, channel)
-            VALUES (?, ?, ?)
-            """,
-            (signal_id, _utc_now_iso(), channel),
-        )
-        con.commit()
-    except sqlite3.IntegrityError:
-        # Already notified, ignore
-        pass
-    finally:
-        con.close()
+    execute(
+        con,
+        """
+        INSERT INTO state_notifications (signal_id, notified_at, channel)
+        VALUES (:signal_id, :notified_at, :channel)
+        ON CONFLICT(signal_id) DO NOTHING
+        """,
+        {"signal_id": signal_id, "notified_at": _utc_now_iso(), "channel": channel},
+    )
+    con.commit()
+    con.close()
 
 
 # --- Run tracking ---
@@ -422,13 +415,19 @@ def start_state_run(run_type: str, state: str = None) -> int:
     run_type: 'fetch', 'classify', 'notify', etc.
     """
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    run_id = insert_returning_id(
+        con,
         """INSERT INTO state_runs(run_type, state, status, signals_found, high_severity_count, started_at)
-           VALUES(?,?,?,?,?,?)""",
-        (run_type, state, "RUNNING", 0, 0, _utc_now_iso()),
+           VALUES(:run_type, :state, :status, :signals_found, :high_severity_count, :started_at)""",
+        {
+            "run_type": run_type,
+            "state": state,
+            "status": "RUNNING",
+            "signals_found": 0,
+            "high_severity_count": 0,
+            "started_at": _utc_now_iso(),
+        },
     )
-    run_id = cur.lastrowid
     con.commit()
     con.close()
     return run_id
@@ -442,11 +441,18 @@ def finish_state_run(
 ) -> None:
     """Finish a state run with final stats."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
-        """UPDATE state_runs SET status=?, signals_found=?, high_severity_count=?, finished_at=?
-           WHERE id=?""",
-        (status, signals_found, high_severity_count, _utc_now_iso(), run_id),
+    execute(
+        con,
+        """UPDATE state_runs
+           SET status=:status, signals_found=:signals_found, high_severity_count=:high_severity_count, finished_at=:finished_at
+           WHERE id=:run_id""",
+        {
+            "status": status,
+            "signals_found": signals_found,
+            "high_severity_count": high_severity_count,
+            "finished_at": _utc_now_iso(),
+            "run_id": run_id,
+        },
     )
     con.commit()
     con.close()
@@ -455,23 +461,22 @@ def finish_state_run(
 def get_recent_state_runs(limit: int = 20, state: str = None, run_type: str = None) -> list[dict]:
     """Get recent state runs, optionally filtered."""
     con = connect()
-    cur = con.cursor()
 
     query = """SELECT id, run_type, state, status, signals_found, high_severity_count, started_at, finished_at
                FROM state_runs WHERE 1=1"""
-    params = []
+    params: dict[str, object] = {}
 
     if state:
-        query += " AND state = ?"
-        params.append(state)
+        query += " AND state = :state"
+        params["state"] = state
     if run_type:
-        query += " AND run_type = ?"
-        params.append(run_type)
+        query += " AND run_type = :run_type"
+        params["run_type"] = run_type
 
-    query += " ORDER BY started_at DESC LIMIT ?"
-    params.append(limit)
+    query += " ORDER BY started_at DESC LIMIT :limit"
+    params["limit"] = limit
 
-    cur.execute(query, params)
+    cur = execute(con, query, params)
     rows = cur.fetchall()
     con.close()
     return [
@@ -496,10 +501,7 @@ get_recent_runs = get_recent_state_runs
 def get_signal_count_by_state() -> dict[str, int]:
     """Get count of signals grouped by state."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
-        """SELECT state, COUNT(*) FROM state_signals GROUP BY state"""
-    )
+    cur = execute(con, "SELECT state, COUNT(*) FROM state_signals GROUP BY state")
     rows = cur.fetchall()
     con.close()
     return {r[0]: r[1] for r in rows}
@@ -508,11 +510,11 @@ def get_signal_count_by_state() -> dict[str, int]:
 def get_signal_count_by_severity() -> dict[str, int]:
     """Get count of signals grouped by severity."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT c.severity, COUNT(*)
            FROM state_classifications c
-           GROUP BY c.severity"""
+           GROUP BY c.severity""",
     )
     rows = cur.fetchall()
     con.close()
@@ -522,8 +524,8 @@ def get_signal_count_by_severity() -> dict[str, int]:
 def get_latest_run() -> dict | None:
     """Get the most recent state run."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT id, run_type, state, status, signals_found, high_severity_count, started_at, finished_at
            FROM state_runs ORDER BY started_at DESC LIMIT 1"""
     )
@@ -553,39 +555,48 @@ def update_source_health(source_id: str, success: bool, error: str = None) -> No
     On failure: increment consecutive_failures, update last_failure and last_error.
     """
     con = connect()
-    cur = con.cursor()
     now = _utc_now_iso()
 
     # Check if record exists
-    cur.execute("SELECT source_id FROM state_source_health WHERE source_id = ?", (source_id,))
+    cur = execute(
+        con,
+        "SELECT source_id FROM state_source_health WHERE source_id = :source_id",
+        {"source_id": source_id},
+    )
     exists = cur.fetchone() is not None
 
     if success:
         if exists:
-            cur.execute(
-                """UPDATE state_source_health SET consecutive_failures=0, last_success=?
-                   WHERE source_id=?""",
-                (now, source_id),
+            execute(
+                con,
+                """UPDATE state_source_health
+                   SET consecutive_failures=0, last_success=:last_success
+                   WHERE source_id=:source_id""",
+                {"last_success": now, "source_id": source_id},
             )
         else:
-            cur.execute(
+            execute(
+                con,
                 """INSERT INTO state_source_health(source_id, consecutive_failures, last_success)
-                   VALUES(?,?,?)""",
-                (source_id, 0, now),
+                   VALUES(:source_id, :consecutive_failures, :last_success)""",
+                {"source_id": source_id, "consecutive_failures": 0, "last_success": now},
             )
     else:
         if exists:
-            cur.execute(
-                """UPDATE state_source_health SET consecutive_failures = consecutive_failures + 1,
-                   last_failure=?, last_error=?
-                   WHERE source_id=?""",
-                (now, error, source_id),
+            execute(
+                con,
+                """UPDATE state_source_health
+                   SET consecutive_failures = consecutive_failures + 1,
+                       last_failure=:last_failure, last_error=:last_error
+                   WHERE source_id=:source_id""",
+                {"last_failure": now, "last_error": error, "source_id": source_id},
             )
         else:
-            cur.execute(
+            execute(
+                con,
                 """INSERT INTO state_source_health(source_id, consecutive_failures, last_failure, last_error)
-                   VALUES(?,?,?,?)""",
-                (source_id, 1, now, error),
+                   VALUES(:source_id, :consecutive_failures, :last_failure, :last_error)""",
+                {"source_id": source_id, "consecutive_failures": 1, "last_failure": now, "last_error": error},
             )
 
     con.commit()
@@ -595,11 +606,11 @@ def update_source_health(source_id: str, success: bool, error: str = None) -> No
 def get_source_health(source_id: str) -> dict | None:
     """Get health status for a source."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT source_id, consecutive_failures, last_success, last_failure, last_error
-           FROM state_source_health WHERE source_id = ?""",
-        (source_id,),
+           FROM state_source_health WHERE source_id = :source_id""",
+        {"source_id": source_id},
     )
     row = cur.fetchone()
     con.close()

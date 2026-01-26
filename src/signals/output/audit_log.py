@@ -3,7 +3,7 @@
 import json
 from datetime import datetime, timezone
 
-from src.db import connect
+from src.db import connect, insert_returning_id
 from src.signals.engine.evaluator import EvaluationResult
 
 
@@ -27,26 +27,25 @@ def write_audit_log(
     }
 
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    row_id = insert_returning_id(
+        con,
         """
         INSERT INTO signal_audit_log
         (event_id, authority_id, indicator_id, trigger_id, severity, fired_at, suppressed, suppression_reason, explanation_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (:event_id, :authority_id, :indicator_id, :trigger_id, :severity, :fired_at, :suppressed, :suppression_reason, :explanation_json)
         """,
-        (
-            event_id,
-            authority_id,
-            indicator_id,
-            trigger_id,
-            severity,
-            datetime.now(timezone.utc).isoformat(),
-            1 if suppressed else 0,
-            suppression_reason,
-            json.dumps(explanation),
-        ),
+        {
+            "event_id": event_id,
+            "authority_id": authority_id,
+            "indicator_id": indicator_id,
+            "trigger_id": trigger_id,
+            "severity": severity,
+            "fired_at": datetime.now(timezone.utc).isoformat(),
+            "suppressed": 1 if suppressed else 0,
+            "suppression_reason": suppression_reason,
+            "explanation_json": json.dumps(explanation),
+        },
     )
-    row_id = cur.lastrowid
     con.commit()
     con.close()
     return row_id

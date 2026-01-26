@@ -22,8 +22,8 @@ MIN_EMBEDDINGS_FOR_BASELINE = 5
 def get_members_with_embeddings() -> list[dict]:
     """Get all members who have at least one embedding."""
     con = db.connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = db.execute(
+        con,
         """SELECT m.member_id, m.name, m.party, m.committee, COUNT(e.utterance_id) as embedding_count
            FROM ad_members m
            JOIN ad_utterances u ON m.member_id = u.member_id
@@ -59,29 +59,30 @@ def get_utterances_for_detection(member_id: str = None, limit: int = 500) -> lis
     procedural statements like greetings and brief responses.
     """
     con = db.connect()
-    cur = con.cursor()
 
     if member_id:
-        cur.execute(
+        cur = db.execute(
+            con,
             """SELECT u.utterance_id, u.member_id, u.hearing_id, u.content, e.vec
                FROM ad_utterances u
                JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
                LEFT JOIN ad_deviation_events d ON u.utterance_id = d.utterance_id
-               WHERE u.member_id = ? AND d.id IS NULL AND LENGTH(u.content) >= ?
+               WHERE u.member_id = :member_id AND d.id IS NULL AND LENGTH(u.content) >= :min_length
                ORDER BY u.spoken_at DESC
-               LIMIT ?""",
-            (member_id, MIN_UTTERANCE_LENGTH, limit),
+               LIMIT :limit""",
+            {"member_id": member_id, "min_length": MIN_UTTERANCE_LENGTH, "limit": limit},
         )
     else:
-        cur.execute(
+        cur = db.execute(
+            con,
             """SELECT u.utterance_id, u.member_id, u.hearing_id, u.content, e.vec
                FROM ad_utterances u
                JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
                LEFT JOIN ad_deviation_events d ON u.utterance_id = d.utterance_id
-               WHERE d.id IS NULL AND LENGTH(u.content) >= ?
+               WHERE d.id IS NULL AND LENGTH(u.content) >= :min_length
                ORDER BY u.spoken_at DESC
-               LIMIT ?""",
-            (MIN_UTTERANCE_LENGTH, limit),
+               LIMIT :limit""",
+            {"min_length": MIN_UTTERANCE_LENGTH, "limit": limit},
         )
 
     rows = cur.fetchall()
@@ -102,18 +103,20 @@ def get_utterances_for_detection(member_id: str = None, limit: int = 500) -> lis
 def get_baseline_stats() -> dict:
     """Get statistics about baselines."""
     con = db.connect()
-    cur = con.cursor()
 
-    cur.execute("SELECT COUNT(DISTINCT member_id) FROM ad_baselines")
+    cur = db.execute(con, "SELECT COUNT(DISTINCT member_id) FROM ad_baselines")
     members_with_baselines = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM ad_baselines")
+    cur = db.execute(con, "SELECT COUNT(*) FROM ad_baselines")
     total_baselines = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM ad_deviation_events")
+    cur = db.execute(con, "SELECT COUNT(*) FROM ad_deviation_events")
     total_deviations = cur.fetchone()[0]
 
-    cur.execute(f"SELECT COUNT(*) FROM ad_deviation_events WHERE zscore >= {DEVIATION_THRESHOLD_Z}")
+    cur = db.execute(
+        con,
+        f"SELECT COUNT(*) FROM ad_deviation_events WHERE zscore >= {DEVIATION_THRESHOLD_Z}",
+    )
     significant_deviations = cur.fetchone()[0]
 
     con.close()
@@ -269,15 +272,13 @@ def print_summary():
     """Print overall system summary."""
     # Embedding stats
     con = db.connect()
-    cur = con.cursor()
-
-    cur.execute("SELECT COUNT(*) FROM ad_members")
+    cur = db.execute(con, "SELECT COUNT(*) FROM ad_members")
     total_members = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM ad_utterances")
+    cur = db.execute(con, "SELECT COUNT(*) FROM ad_utterances")
     total_utterances = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM ad_embeddings")
+    cur = db.execute(con, "SELECT COUNT(*) FROM ad_embeddings")
     total_embeddings = cur.fetchone()[0]
 
     con.close()

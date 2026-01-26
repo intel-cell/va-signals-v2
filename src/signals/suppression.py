@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from src.db import connect
+from src.db import connect, execute
 
 
 @dataclass
@@ -34,10 +34,10 @@ class SuppressionManager:
         now = datetime.now(timezone.utc)
 
         con = connect()
-        cur = con.cursor()
-        cur.execute(
-            "SELECT version, cooldown_until FROM signal_suppression WHERE dedupe_key = ?",
-            (dedupe_key,),
+        cur = execute(
+            con,
+            "SELECT version, cooldown_until FROM signal_suppression WHERE dedupe_key = :dedupe_key",
+            {"dedupe_key": dedupe_key},
         )
         row = cur.fetchone()
         con.close()
@@ -71,23 +71,24 @@ class SuppressionManager:
         cooldown_until = now + timedelta(minutes=cooldown_minutes)
 
         con = connect()
-        con.execute(
+        execute(
+            con,
             """
             INSERT INTO signal_suppression (dedupe_key, trigger_id, authority_id, version, last_fired_at, cooldown_until)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (:dedupe_key, :trigger_id, :authority_id, :version, :last_fired_at, :cooldown_until)
             ON CONFLICT(dedupe_key) DO UPDATE SET
                 version = excluded.version,
                 last_fired_at = excluded.last_fired_at,
                 cooldown_until = excluded.cooldown_until
             """,
-            (
-                dedupe_key,
-                trigger_id,
-                authority_id,
-                version,
-                now.isoformat(),
-                cooldown_until.isoformat(),
-            ),
+            {
+                "dedupe_key": dedupe_key,
+                "trigger_id": trigger_id,
+                "authority_id": authority_id,
+                "version": version,
+                "last_fired_at": now.isoformat(),
+                "cooldown_until": cooldown_until.isoformat(),
+            },
         )
         con.commit()
         con.close()

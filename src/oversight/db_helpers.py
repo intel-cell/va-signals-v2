@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from typing import Optional
 
-from src.db import connect
+from src.db import connect, execute, insert_returning_id
 
 
 def _utc_now_iso() -> str:
@@ -14,7 +14,8 @@ def _utc_now_iso() -> str:
 def insert_om_event(event: dict) -> None:
     """Insert a canonical event."""
     con = connect()
-    con.execute(
+    execute(
+        con,
         """
         INSERT INTO om_events (
             event_id, event_type, theme, primary_source_type, primary_url,
@@ -23,30 +24,37 @@ def insert_om_event(event: dict) -> None:
             title, summary, raw_content,
             is_escalation, escalation_signals, is_deviation, deviation_reason,
             canonical_refs, fetched_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (
+            :event_id, :event_type, :theme, :primary_source_type, :primary_url,
+            :pub_timestamp, :pub_precision, :pub_source,
+            :event_timestamp, :event_precision, :event_source,
+            :title, :summary, :raw_content,
+            :is_escalation, :escalation_signals, :is_deviation, :deviation_reason,
+            :canonical_refs, :fetched_at
+        )
         """,
-        (
-            event["event_id"],
-            event["event_type"],
-            event.get("theme"),
-            event["primary_source_type"],
-            event["primary_url"],
-            event.get("pub_timestamp"),
-            event.get("pub_precision", "unknown"),
-            event.get("pub_source", "missing"),
-            event.get("event_timestamp"),
-            event.get("event_precision"),
-            event.get("event_source"),
-            event["title"],
-            event.get("summary"),
-            event.get("raw_content"),
-            1 if event.get("is_escalation") else 0,
-            json.dumps(event.get("escalation_signals")) if event.get("escalation_signals") else None,
-            1 if event.get("is_deviation") else 0,
-            event.get("deviation_reason"),
-            json.dumps(event.get("canonical_refs")) if event.get("canonical_refs") else None,
-            event["fetched_at"],
-        ),
+        {
+            "event_id": event["event_id"],
+            "event_type": event["event_type"],
+            "theme": event.get("theme"),
+            "primary_source_type": event["primary_source_type"],
+            "primary_url": event["primary_url"],
+            "pub_timestamp": event.get("pub_timestamp"),
+            "pub_precision": event.get("pub_precision", "unknown"),
+            "pub_source": event.get("pub_source", "missing"),
+            "event_timestamp": event.get("event_timestamp"),
+            "event_precision": event.get("event_precision"),
+            "event_source": event.get("event_source"),
+            "title": event["title"],
+            "summary": event.get("summary"),
+            "raw_content": event.get("raw_content"),
+            "is_escalation": 1 if event.get("is_escalation") else 0,
+            "escalation_signals": json.dumps(event.get("escalation_signals")) if event.get("escalation_signals") else None,
+            "is_deviation": 1 if event.get("is_deviation") else 0,
+            "deviation_reason": event.get("deviation_reason"),
+            "canonical_refs": json.dumps(event.get("canonical_refs")) if event.get("canonical_refs") else None,
+            "fetched_at": event["fetched_at"],
+        },
     )
     con.commit()
     con.close()
@@ -55,8 +63,8 @@ def insert_om_event(event: dict) -> None:
 def get_om_event(event_id: str) -> Optional[dict]:
     """Get a canonical event by ID."""
     con = connect()
-    con.row_factory = None
-    cur = con.execute(
+    cur = execute(
+        con,
         """
         SELECT event_id, event_type, theme, primary_source_type, primary_url,
                pub_timestamp, pub_precision, pub_source,
@@ -65,9 +73,9 @@ def get_om_event(event_id: str) -> Optional[dict]:
                is_escalation, escalation_signals, is_deviation, deviation_reason,
                canonical_refs, surfaced, surfaced_at, surfaced_via,
                fetched_at, created_at, updated_at
-        FROM om_events WHERE event_id = ?
+        FROM om_events WHERE event_id = :event_id
         """,
-        (event_id,),
+        {"event_id": event_id},
     )
     row = cur.fetchone()
     con.close()
@@ -107,13 +115,19 @@ def get_om_event(event_id: str) -> Optional[dict]:
 def update_om_event_surfaced(event_id: str, surfaced_via: str) -> None:
     """Mark an event as surfaced."""
     con = connect()
-    con.execute(
+    execute(
+        con,
         """
         UPDATE om_events
-        SET surfaced = 1, surfaced_at = ?, surfaced_via = ?, updated_at = ?
-        WHERE event_id = ?
+        SET surfaced = 1, surfaced_at = :surfaced_at, surfaced_via = :surfaced_via, updated_at = :updated_at
+        WHERE event_id = :event_id
         """,
-        (_utc_now_iso(), surfaced_via, _utc_now_iso(), event_id),
+        {
+            "surfaced_at": _utc_now_iso(),
+            "surfaced_via": surfaced_via,
+            "updated_at": _utc_now_iso(),
+            "event_id": event_id,
+        },
     )
     con.commit()
     con.close()
@@ -122,24 +136,27 @@ def update_om_event_surfaced(event_id: str, surfaced_via: str) -> None:
 def insert_om_rejected(rejected: dict) -> int:
     """Insert a rejected event. Returns the row ID."""
     con = connect()
-    cur = con.execute(
+    row_id = insert_returning_id(
+        con,
         """
         INSERT INTO om_rejected (
             source_type, url, title, pub_timestamp,
             rejection_reason, routine_explanation, fetched_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (
+            :source_type, :url, :title, :pub_timestamp,
+            :rejection_reason, :routine_explanation, :fetched_at
+        )
         """,
-        (
-            rejected["source_type"],
-            rejected["url"],
-            rejected.get("title"),
-            rejected.get("pub_timestamp"),
-            rejected["rejection_reason"],
-            rejected.get("routine_explanation"),
-            rejected["fetched_at"],
-        ),
+        {
+            "source_type": rejected["source_type"],
+            "url": rejected["url"],
+            "title": rejected.get("title"),
+            "pub_timestamp": rejected.get("pub_timestamp"),
+            "rejection_reason": rejected["rejection_reason"],
+            "routine_explanation": rejected.get("routine_explanation"),
+            "fetched_at": rejected["fetched_at"],
+        },
     )
-    row_id = cur.lastrowid
     con.commit()
     con.close()
     return row_id
@@ -152,7 +169,6 @@ def get_om_events_for_digest(
 ) -> list[dict]:
     """Get events for weekly digest (deviations and escalations)."""
     con = connect()
-    con.row_factory = None
 
     query = """
         SELECT event_id, event_type, theme, primary_source_type, primary_url,
@@ -162,17 +178,17 @@ def get_om_events_for_digest(
                is_deviation, deviation_reason, canonical_refs,
                surfaced, surfaced_at
         FROM om_events
-        WHERE pub_timestamp >= ? AND pub_timestamp <= ?
+        WHERE pub_timestamp >= :start_date AND pub_timestamp <= :end_date
           AND (is_escalation = 1 OR is_deviation = 1)
     """
-    params = [start_date, end_date]
+    params = {"start_date": start_date, "end_date": end_date}
 
     if surfaced_only:
         query += " AND surfaced = 1"
 
     query += " ORDER BY pub_timestamp DESC"
 
-    cur = con.execute(query, params)
+    cur = execute(con, query, params)
     rows = cur.fetchall()
     con.close()
 
@@ -206,20 +222,20 @@ def get_om_events_for_digest(
 def insert_om_escalation_signal(signal: dict) -> int:
     """Insert an escalation signal. Returns the row ID."""
     con = connect()
-    cur = con.execute(
+    row_id = insert_returning_id(
+        con,
         """
         INSERT INTO om_escalation_signals (
             signal_pattern, signal_type, severity, description
-        ) VALUES (?, ?, ?, ?)
+        ) VALUES (:signal_pattern, :signal_type, :severity, :description)
         """,
-        (
-            signal["signal_pattern"],
-            signal["signal_type"],
-            signal["severity"],
-            signal.get("description"),
-        ),
+        {
+            "signal_pattern": signal["signal_pattern"],
+            "signal_type": signal["signal_type"],
+            "severity": signal["severity"],
+            "description": signal.get("description"),
+        },
     )
-    row_id = cur.lastrowid
     con.commit()
     con.close()
     return row_id
@@ -228,8 +244,8 @@ def insert_om_escalation_signal(signal: dict) -> int:
 def get_active_escalation_signals() -> list[dict]:
     """Get all active escalation signals."""
     con = connect()
-    con.row_factory = None
-    cur = con.execute(
+    cur = execute(
+        con,
         """
         SELECT id, signal_pattern, signal_type, severity, description
         FROM om_escalation_signals
@@ -283,24 +299,24 @@ def seed_default_escalation_signals() -> int:
 def get_oversight_stats() -> dict:
     """Return aggregate statistics for oversight events."""
     con = connect()
-    cur = con.cursor()
 
-    cur.execute("SELECT COUNT(*) FROM om_events")
+    cur = execute(con, "SELECT COUNT(*) FROM om_events")
     total_events = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM om_events WHERE is_escalation = 1")
+    cur = execute(con, "SELECT COUNT(*) FROM om_events WHERE is_escalation = 1")
     escalations = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM om_events WHERE is_deviation = 1")
+    cur = execute(con, "SELECT COUNT(*) FROM om_events WHERE is_deviation = 1")
     deviations = cur.fetchone()[0]
 
-    cur.execute("SELECT COUNT(*) FROM om_events WHERE surfaced = 1")
+    cur = execute(con, "SELECT COUNT(*) FROM om_events WHERE surfaced = 1")
     surfaced = cur.fetchone()[0]
 
-    cur.execute("SELECT MAX(fetched_at) FROM om_events")
+    cur = execute(con, "SELECT MAX(fetched_at) FROM om_events")
     last_event_at = cur.fetchone()[0]
 
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT primary_source_type, COUNT(*)
         FROM om_events
@@ -330,7 +346,6 @@ def get_oversight_events(
 ) -> list[dict]:
     """Return recent oversight events with optional filters."""
     con = connect()
-    cur = con.cursor()
 
     query = """
         SELECT event_id, title, primary_source_type, primary_url,
@@ -339,11 +354,11 @@ def get_oversight_events(
         FROM om_events
         WHERE 1=1
     """
-    params: list = []
+    params: dict[str, object] = {}
 
     if source_type:
-        query += " AND primary_source_type = ?"
-        params.append(source_type)
+        query += " AND primary_source_type = :source_type"
+        params["source_type"] = source_type
     if escalations_only:
         query += " AND is_escalation = 1"
     if deviations_only:
@@ -351,10 +366,10 @@ def get_oversight_events(
     if surfaced_only:
         query += " AND surfaced = 1"
 
-    query += " ORDER BY COALESCE(pub_timestamp, fetched_at) DESC LIMIT ?"
-    params.append(limit)
+    query += " ORDER BY COALESCE(pub_timestamp, fetched_at) DESC LIMIT :limit"
+    params["limit"] = limit
 
-    cur.execute(query, params)
+    cur = execute(con, query, params)
     rows = cur.fetchall()
     con.close()
 

@@ -20,7 +20,7 @@ import argparse
 import logging
 from pathlib import Path
 
-from .db import init_db, connect, insert_source_run
+from .db import init_db, connect, insert_source_run, execute
 from .provenance import utc_now_iso
 from .signals.router import SignalsRouter, RouteResult
 from .signals.envelope import Envelope
@@ -48,9 +48,9 @@ def _fetch_unrouted_hearings(limit: int = 100) -> list[dict]:
     """Fetch hearings that haven't been routed yet."""
     con = connect()
     try:
-        cur = con.cursor()
         # Get hearings not in audit log
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT h.event_id, h.congress, h.chamber, h.committee_code, h.committee_name,
                       h.hearing_date, h.hearing_time, h.title, h.meeting_type, h.status,
                       h.location, h.url, h.first_seen_at, h.updated_at
@@ -59,8 +59,8 @@ def _fetch_unrouted_hearings(limit: int = 100) -> list[dict]:
                    SELECT 1 FROM signal_audit_log a WHERE a.authority_id = h.event_id
                )
                ORDER BY h.first_seen_at DESC
-               LIMIT ?""",
-            (limit,),
+               LIMIT :limit""",
+            {"limit": limit},
         )
         rows = cur.fetchall()
         return [
@@ -90,8 +90,8 @@ def _fetch_unrouted_bills(limit: int = 100) -> list[dict]:
     """Fetch bills that haven't been routed yet."""
     con = connect()
     try:
-        cur = con.cursor()
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT b.bill_id, b.congress, b.bill_type, b.bill_number, b.title,
                       b.sponsor_name, b.sponsor_party, b.introduced_date,
                       b.latest_action_date, b.latest_action_text, b.policy_area,
@@ -101,8 +101,8 @@ def _fetch_unrouted_bills(limit: int = 100) -> list[dict]:
                    SELECT 1 FROM signal_audit_log a WHERE a.authority_id = b.bill_id
                )
                ORDER BY b.first_seen_at DESC
-               LIMIT ?""",
-            (limit,),
+               LIMIT :limit""",
+            {"limit": limit},
         )
         rows = cur.fetchall()
         return [
@@ -133,8 +133,8 @@ def _fetch_unrouted_om_events(limit: int = 100) -> list[dict]:
     """Fetch oversight monitor events that haven't been routed yet."""
     con = connect()
     try:
-        cur = con.cursor()
-        cur.execute(
+        cur = execute(
+            con,
             """SELECT e.event_id, e.event_type, e.theme, e.primary_source_type,
                       e.primary_url, e.pub_timestamp, e.pub_precision, e.title,
                       e.summary, e.raw_content, e.is_escalation, e.escalation_signals,
@@ -144,8 +144,8 @@ def _fetch_unrouted_om_events(limit: int = 100) -> list[dict]:
                    SELECT 1 FROM signal_audit_log a WHERE a.authority_id = e.event_id
                )
                ORDER BY e.fetched_at DESC
-               LIMIT ?""",
-            (limit,),
+               LIMIT :limit""",
+            {"limit": limit},
         )
         rows = cur.fetchall()
         return [
@@ -350,9 +350,8 @@ def cmd_status(args):
 
     # Recent fires from audit log
     con = connect()
-    cur = con.cursor()
-
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT trigger_id, severity, authority_id, fired_at, suppressed
            FROM signal_audit_log
            ORDER BY fired_at DESC
@@ -366,7 +365,8 @@ def cmd_status(args):
         print(f"  [{severity.upper()}] {trigger_id} - {authority_id[:30]} @ {fired_at[:19]}{supp_mark}")
 
     # Counts by severity
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT severity, COUNT(*) FROM signal_audit_log
            WHERE suppressed = 0
            GROUP BY severity"""
@@ -380,12 +380,15 @@ def cmd_status(args):
             print(f"  {sev}: {count}")
 
     # Active suppressions
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT trigger_id, authority_id, cooldown_until
            FROM signal_suppression
-           WHERE cooldown_until > datetime('now')
+           WHERE cooldown_until > :now
            ORDER BY cooldown_until DESC
            LIMIT 10"""
+        ,
+        {"now": utc_now_iso()},
     )
     active_suppressions = cur.fetchall()
 

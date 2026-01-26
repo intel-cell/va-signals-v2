@@ -20,7 +20,7 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "src"
 
 from .provenance import utc_now_iso
-from .db import connect
+from .db import connect, execute
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -102,8 +102,11 @@ def fetch_document_content(doc_id: str, timeout: int = 30) -> Optional[Dict[str,
     try:
         # Get source_url from database
         con = connect()
-        cur = con.cursor()
-        cur.execute("SELECT source_url, published_date FROM fr_seen WHERE doc_id = ?", (doc_id,))
+        cur = execute(
+            con,
+            "SELECT source_url, published_date FROM fr_seen WHERE doc_id = :doc_id",
+            {"doc_id": doc_id},
+        )
         row = cur.fetchone()
         con.close()
 
@@ -208,18 +211,25 @@ def _init_summaries_table() -> None:
 def _save_summary(summary_record: Dict[str, Any]) -> None:
     """Save summary to database."""
     con = connect()
-    con.execute(
-        """INSERT OR REPLACE INTO fr_summaries
+    execute(
+        con,
+        """INSERT INTO fr_summaries
            (doc_id, summary, bullet_points, veteran_impact, tags, summarized_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        (
-            summary_record["doc_id"],
-            summary_record["summary"],
-            json.dumps(summary_record["bullet_points"]),
-            summary_record["veteran_impact"],
-            json.dumps(summary_record["tags"]),
-            summary_record["summarized_at"],
-        ),
+           VALUES (:doc_id, :summary, :bullet_points, :veteran_impact, :tags, :summarized_at)
+           ON CONFLICT(doc_id) DO UPDATE SET
+             summary = excluded.summary,
+             bullet_points = excluded.bullet_points,
+             veteran_impact = excluded.veteran_impact,
+             tags = excluded.tags,
+             summarized_at = excluded.summarized_at""",
+        {
+            "doc_id": summary_record["doc_id"],
+            "summary": summary_record["summary"],
+            "bullet_points": json.dumps(summary_record["bullet_points"]),
+            "veteran_impact": summary_record["veteran_impact"],
+            "tags": json.dumps(summary_record["tags"]),
+            "summarized_at": summary_record["summarized_at"],
+        },
     )
     con.commit()
     con.close()
@@ -237,10 +247,10 @@ def get_summary(doc_id: str) -> Optional[Dict[str, Any]]:
     """
     _init_summaries_table()
     con = connect()
-    cur = con.cursor()
-    cur.execute(
-        "SELECT doc_id, summary, bullet_points, veteran_impact, tags, summarized_at FROM fr_summaries WHERE doc_id = ?",
-        (doc_id,),
+    cur = execute(
+        con,
+        "SELECT doc_id, summary, bullet_points, veteran_impact, tags, summarized_at FROM fr_summaries WHERE doc_id = :doc_id",
+        {"doc_id": doc_id},
     )
     row = cur.fetchone()
     con.close()
@@ -270,14 +280,14 @@ def get_unsummarized_doc_ids(limit: int = 100) -> List[str]:
     """
     _init_summaries_table()
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """SELECT f.doc_id FROM fr_seen f
            LEFT JOIN fr_summaries s ON f.doc_id = s.doc_id
            WHERE s.doc_id IS NULL
            ORDER BY f.first_seen_at DESC
-           LIMIT ?""",
-        (limit,),
+           LIMIT :limit""",
+        {"limit": limit},
     )
     doc_ids = [row[0] for row in cur.fetchall()]
     con.close()

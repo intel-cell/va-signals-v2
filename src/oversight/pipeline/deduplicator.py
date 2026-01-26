@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-from src.db import connect
+from src.db import connect, execute, insert_returning_id
 
 
 @dataclass
@@ -91,20 +91,20 @@ def find_canonical_event(entities: dict, source_type: str) -> Optional[dict]:
         return None
 
     con = connect()
-    con.row_factory = None
 
     # Build query to find events with matching canonical_refs
     for entity_type, entity_value in entities.items():
         # Search for events with this entity in canonical_refs JSON
-        cur = con.execute(
+        cur = execute(
+            con,
             """
             SELECT event_id, event_type, theme, primary_source_type, primary_url,
                    title, canonical_refs
             FROM om_events
-            WHERE canonical_refs LIKE ?
+            WHERE canonical_refs LIKE :canonical_match
             LIMIT 1
             """,
-            (f'%"{entity_value}"%',),
+            {"canonical_match": f'%"{entity_value}"%'},
         )
         row = cur.fetchone()
 
@@ -151,15 +151,25 @@ def link_related_coverage(
     fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     con = connect()
-    cur = con.execute(
+    row_id = insert_returning_id(
+        con,
         """
-        INSERT OR IGNORE INTO om_related_coverage (
+        INSERT INTO om_related_coverage (
             event_id, source_type, url, title, pub_timestamp, pub_precision, fetched_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (
+            :event_id, :source_type, :url, :title, :pub_timestamp, :pub_precision, :fetched_at
+        ) ON CONFLICT(event_id, url) DO NOTHING
         """,
-        (event_id, source_type, url, title, pub_timestamp, pub_precision, fetched_at),
+        {
+            "event_id": event_id,
+            "source_type": source_type,
+            "url": url,
+            "title": title,
+            "pub_timestamp": pub_timestamp,
+            "pub_precision": pub_precision,
+            "fetched_at": fetched_at,
+        },
     )
-    row_id = cur.lastrowid
     con.commit()
     con.close()
 

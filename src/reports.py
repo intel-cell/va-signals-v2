@@ -21,7 +21,7 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .db import connect
+from .db import connect, execute
 from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,15 +98,18 @@ def _get_period_bounds(
 def _fetch_runs_in_period(period_start: datetime, period_end: datetime) -> list[dict]:
     """Fetch source_runs within the given period."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT id, source_id, started_at, ended_at, status, records_fetched, errors_json
         FROM source_runs
-        WHERE started_at >= ? AND started_at <= ?
+        WHERE started_at >= :period_start AND started_at <= :period_end
         ORDER BY started_at DESC
         """,
-        (period_start.isoformat(), period_end.isoformat()),
+        {
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+        },
     )
     rows = cur.fetchall()
     con.close()
@@ -130,15 +133,18 @@ def _fetch_runs_in_period(period_start: datetime, period_end: datetime) -> list[
 def _fetch_new_fr_docs_in_period(period_start: datetime, period_end: datetime) -> list[dict]:
     """Fetch fr_seen documents first seen within the given period."""
     con = connect()
-    cur = con.cursor()
-    cur.execute(
+    cur = execute(
+        con,
         """
         SELECT doc_id, published_date, first_seen_at, source_url
         FROM fr_seen
-        WHERE first_seen_at >= ? AND first_seen_at <= ?
+        WHERE first_seen_at >= :period_start AND first_seen_at <= :period_end
         ORDER BY first_seen_at DESC
         """,
-        (period_start.isoformat(), period_end.isoformat()),
+        {
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+        },
     )
     rows = cur.fetchall()
     con.close()
