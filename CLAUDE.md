@@ -115,9 +115,11 @@ All pipelines record runs in `source_runs` with status:
 
 ## API Keys
 
-Stored in macOS Keychain, not environment variables:
-- `claude-api` - Anthropic API key (for summarization, drift explanations)
-- `congress-api` - Congress.gov API key (for bills, transcripts)
+Env vars first (Cloud Run/CI); Keychain fallback for local macOS. Env vars take precedence.
+- Env: `ANTHROPIC_API_KEY`, `CONGRESS_API_KEY`, `NEWSAPI_KEY`
+- Keychain (macOS): `claude-api`, `congress-api`, `newsapi-key`
+
+Slack credentials are env-only for local and cloud runs.
 
 Retrieval pattern (see `src/fetch_transcripts.py`):
 ```python
