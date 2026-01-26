@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 
 from src.oversight.pipeline.deviation import (
     DeviationResult,
+    _get_client,
     check_deviation,
     classify_deviation_type,
 )
@@ -42,6 +43,36 @@ def test_deviation_result_creation():
     )
     assert result.is_deviation is True
     assert result.deviation_type == "new_topic"
+
+
+def test_get_client_uses_keychain_fallback(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    captured = {}
+
+    def fake_get_env_or_keychain(env_var, keychain_service, **_kwargs):
+        captured["env_var"] = env_var
+        captured["keychain_service"] = keychain_service
+        return "keychain-value"
+
+    monkeypatch.setattr(
+        "src.oversight.pipeline.deviation.get_env_or_keychain",
+        fake_get_env_or_keychain,
+        raising=False,
+    )
+
+    def fake_anthropic(api_key):
+        captured["api_key"] = api_key
+        return "client"
+
+    monkeypatch.setattr(
+        "src.oversight.pipeline.deviation.anthropic.Anthropic",
+        fake_anthropic,
+    )
+
+    assert _get_client() == "client"
+    assert captured["env_var"] == "ANTHROPIC_API_KEY"
+    assert captured["keychain_service"] == "claude-api"
+    assert captured["api_key"] == "keychain-value"
 
 
 def test_deviation_result_no_deviation():

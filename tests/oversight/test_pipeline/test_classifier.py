@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 
 from src.oversight.pipeline.classifier import (
     ClassificationResult,
+    _get_client,
     classify_event,
     is_va_relevant,
     is_dated_action,
@@ -31,6 +32,36 @@ def test_classification_result_creation():
     assert result.is_va_relevant is True
     assert result.is_dated_action is True
     assert result.should_process is True
+
+
+def test_get_client_uses_keychain_fallback(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    captured = {}
+
+    def fake_get_env_or_keychain(env_var, keychain_service, **_kwargs):
+        captured["env_var"] = env_var
+        captured["keychain_service"] = keychain_service
+        return "keychain-value"
+
+    monkeypatch.setattr(
+        "src.oversight.pipeline.classifier.get_env_or_keychain",
+        fake_get_env_or_keychain,
+        raising=False,
+    )
+
+    def fake_anthropic(api_key):
+        captured["api_key"] = api_key
+        return "client"
+
+    monkeypatch.setattr(
+        "src.oversight.pipeline.classifier.anthropic.Anthropic",
+        fake_anthropic,
+    )
+
+    assert _get_client() == "client"
+    assert captured["env_var"] == "ANTHROPIC_API_KEY"
+    assert captured["keychain_service"] == "claude-api"
+    assert captured["api_key"] == "keychain-value"
 
 
 def test_classification_result_rejection():

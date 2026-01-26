@@ -43,6 +43,8 @@ Cloud/CI environment variables (Cloud Run, GitHub Actions):
 - `NEWSAPI_KEY` (NewsAPI.org)
 - `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` (alerts)
 
+Slack credentials are env-only for both local and cloud runs.
+
 Env vars take precedence over Keychain; Keychain is used only for local macOS runs.
 
 ## Scheduling & Logs

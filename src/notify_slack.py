@@ -1,15 +1,11 @@
-import os
 import requests
 from typing import Any, Dict, Optional
 
-def post_slack(payload: Dict[str, Any], timeout: int = 5) -> None:
-    token = os.environ.get("SLACK_BOT_TOKEN")
-    channel = os.environ.get("SLACK_CHANNEL")
+from src.secrets import require_env
 
-    if not token:
-        raise RuntimeError("SLACK_BOT_TOKEN missing")
-    if not channel:
-        raise RuntimeError("SLACK_CHANNEL missing")
+def post_slack(payload: Dict[str, Any], timeout: int = 5) -> None:
+    token = require_env("SLACK_BOT_TOKEN")
+    channel = require_env("SLACK_CHANNEL")
 
     r = requests.post(
         "https://slack.com/api/chat.postMessage",

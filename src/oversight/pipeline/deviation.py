@@ -1,12 +1,12 @@
 """Sonnet deviation classifier for oversight events."""
 
 import json
-import os
 from dataclasses import dataclass
 from typing import Optional
 
 import anthropic
 
+from src.secrets import get_env_or_keychain
 from .baseline import BaselineSummary
 
 
@@ -25,9 +25,7 @@ class DeviationResult:
 
 def _get_client() -> anthropic.Anthropic:
     """Get Anthropic client with API key from environment."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY environment variable not set")
+    api_key = get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api")
     return anthropic.Anthropic(api_key=api_key)
 
 

@@ -38,3 +38,26 @@ def get_env_or_keychain(
         f"No {env_var} found. Set env var or add to Keychain: "
         f"security add-generic-password -s '{keychain_service}' -a \"$USER\" -w '<KEY>'"
     )
+
+
+def get_secret_env(
+    env_var: str,
+    keychain_service: str,
+    user_env: str = "USER",
+    allow_missing: bool = False,
+) -> Optional[str]:
+    """Alias for get_env_or_keychain to match spec wording."""
+    return get_env_or_keychain(
+        env_var,
+        keychain_service,
+        user_env=user_env,
+        allow_missing=allow_missing,
+    )
+
+
+def require_env(env_var: str) -> str:
+    """Return required env var or raise a clear error."""
+    value = os.environ.get(env_var)
+    if value:
+        return value
+    raise RuntimeError(f"{env_var} environment variable not set")
