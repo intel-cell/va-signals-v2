@@ -10,6 +10,8 @@
 .cursor
 .claude
 .mcp.json
+.env
+.env.*
 
 __pycache__/
 *.pyc

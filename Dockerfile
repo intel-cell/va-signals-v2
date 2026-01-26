@@ -15,4 +15,4 @@ COPY config ./config
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "uvicorn src.dashboard_api:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["sh", "-c", "exec uvicorn src.dashboard_api:app --host 0.0.0.0 --port ${PORT:-8080}"]

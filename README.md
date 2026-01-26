@@ -153,6 +153,7 @@ docker run --rm -p 8000:8080 \
   -e DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/va_signals \
   va-signals
 ```
+Note: the database must be provisioned and the schema applied (e.g., `psql "$DATABASE_URL" -f schema.postgres.sql`).
 
 ### Run FR delta
 ```bash
