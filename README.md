@@ -141,6 +141,19 @@ Override the port if 8000 is busy:
 PORT=8001 make dashboard
 ```
 
+### Docker (local)
+Build the image:
+```bash
+docker build -t va-signals .
+```
+
+Run the dashboard (container listens on 8080):
+```bash
+docker run --rm -p 8000:8080 \
+  -e DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/va_signals \
+  va-signals
+```
+
 ### Run FR delta
 ```bash
 make fr-delta
