@@ -16,10 +16,13 @@ import os
 import re
 import subprocess
 import sys
+import ssl
 from datetime import datetime, timezone
 from typing import Optional
 import urllib.request
 import urllib.error
+
+import certifi
 
 from . import db
 
@@ -68,7 +71,8 @@ def fetch_json(url: str, api_key: str) -> dict:
         "Accept": "application/json",
         "User-Agent": "VA-Signals/1.0",
     })
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(req, timeout=30, context=context) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
 
@@ -78,7 +82,8 @@ def fetch_text(url: str) -> str:
     if url.startswith("https://congress.gov"):
         url = url.replace("https://congress.gov", "https://www.congress.gov")
     req = urllib.request.Request(url, headers={"User-Agent": "VA-Signals/1.0"})
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(req, timeout=60, context=context) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
 
