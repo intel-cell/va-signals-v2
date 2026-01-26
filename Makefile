@@ -1,5 +1,7 @@
 .PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest
 
+PORT ?= 8000
+
 init:
 	python3 -m venv .venv
 	./.venv/bin/pip install -r requirements.txt
@@ -20,7 +22,7 @@ ecfr-delta:
 	./.venv/bin/python -m src.run_ecfr_delta
 
 dashboard:
-	./.venv/bin/uvicorn src.dashboard_api:app --reload --port 8000
+	./.venv/bin/uvicorn src.dashboard_api:app --reload --port $(PORT)
 
 report-daily:
 	./.venv/bin/python -m src.reports daily

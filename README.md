@@ -131,6 +131,16 @@ make test
 make db-init
 ```
 
+### Dashboard
+```bash
+make dashboard
+```
+
+Override the port if 8000 is busy:
+```bash
+PORT=8001 make dashboard
+```
+
 ### Run FR delta
 ```bash
 make fr-delta
