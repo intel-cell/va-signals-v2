@@ -142,12 +142,13 @@ PORT=8001 make dashboard
 ```
 
 ### Docker (local)
-Build the image (defaults to dashboard-only deps in `requirements.dashboard.txt`):
+Build the image (defaults to slim, dashboard-only deps in `requirements.dashboard.txt`):
 ```bash
 docker build -t va-signals .
 ```
+Tip: consider tagging as `va-signals-dashboard` to make scope explicit.
 
-Optional (full requirements):
+Optional (full requirements; may need extra OS deps and a Playwright install):
 ```bash
 docker build --build-arg REQUIREMENTS=requirements.txt -t va-signals .
 ```
