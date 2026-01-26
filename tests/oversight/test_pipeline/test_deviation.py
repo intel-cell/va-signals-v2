@@ -151,3 +151,22 @@ def test_classify_deviation_type():
         event_topics={"wait_times": 0.6, "staffing": 0.4},
         baseline_topics={"wait_times": 0.5, "staffing": 0.5},
     ) is None
+
+
+def test_check_deviation_missing_key_fails_closed(monkeypatch, sample_baseline):
+    def raise_missing_key(*_args, **_kwargs):
+        raise RuntimeError("No ANTHROPIC_API_KEY found")
+
+    monkeypatch.setattr(
+        "src.oversight.pipeline.deviation.get_env_or_keychain",
+        raise_missing_key,
+    )
+
+    result = check_deviation(
+        title="Q4 2025 VA Wait Times Report",
+        content="This quarterly report examines wait times...",
+        baseline=sample_baseline,
+    )
+
+    assert result.is_deviation is False
+    assert "classification error" in result.explanation.lower()

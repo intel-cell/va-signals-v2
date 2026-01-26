@@ -108,7 +108,7 @@ Is this event a deviation from the baseline pattern?
             explanation=result.get("explanation", ""),
         )
 
-    except (json.JSONDecodeError, KeyError, anthropic.APIError) as e:
+    except (json.JSONDecodeError, KeyError, anthropic.APIError, RuntimeError) as e:
         # Fail closed - don't flag as deviation if we can't classify
         return DeviationResult(
             is_deviation=False,

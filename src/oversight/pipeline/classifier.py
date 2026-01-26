@@ -96,9 +96,12 @@ def is_va_relevant(title: str, content: str) -> dict:
     try:
         response_text = _call_haiku(prompt, VA_RELEVANCE_SYSTEM)
         return json.loads(response_text)
-    except (json.JSONDecodeError, KeyError):
-        # Fail open - assume relevant if we can't parse
-        return {"is_va_relevant": True, "explanation": "Parse error - assuming relevant"}
+    except (json.JSONDecodeError, KeyError, RuntimeError) as exc:
+        # Fail open - assume relevant if we can't classify
+        return {
+            "is_va_relevant": True,
+            "explanation": f"Classification error: {exc} - assuming relevant",
+        }
 
 
 def is_dated_action(title: str, content: str) -> dict:
@@ -117,9 +120,12 @@ def is_dated_action(title: str, content: str) -> dict:
     try:
         response_text = _call_haiku(prompt, DATED_ACTION_SYSTEM)
         return json.loads(response_text)
-    except (json.JSONDecodeError, KeyError):
-        # Fail open - assume dated action if we can't parse
-        return {"is_dated_action": True, "explanation": "Parse error - assuming dated"}
+    except (json.JSONDecodeError, KeyError, RuntimeError) as exc:
+        # Fail open - assume dated action if we can't classify
+        return {
+            "is_dated_action": True,
+            "explanation": f"Classification error: {exc} - assuming dated",
+        }
 
 
 def classify_event(title: str, content: str) -> ClassificationResult:

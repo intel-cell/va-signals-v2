@@ -148,3 +148,39 @@ def test_classify_event_full(mock_get_client, mock_anthropic_response):
     assert result.is_va_relevant is True
     assert result.is_dated_action is True
     assert result.should_process is True
+
+
+def test_is_va_relevant_missing_key_fails_open(monkeypatch):
+    def raise_missing_key(*_args, **_kwargs):
+        raise RuntimeError("No ANTHROPIC_API_KEY found")
+
+    monkeypatch.setattr(
+        "src.oversight.pipeline.classifier.get_env_or_keychain",
+        raise_missing_key,
+    )
+
+    result = is_va_relevant(
+        title="GAO Report on VA Healthcare",
+        content="This report examines wait times at VA medical centers...",
+    )
+
+    assert result["is_va_relevant"] is True
+    assert "assuming relevant" in result["explanation"].lower()
+
+
+def test_is_dated_action_missing_key_fails_open(monkeypatch):
+    def raise_missing_key(*_args, **_kwargs):
+        raise RuntimeError("No ANTHROPIC_API_KEY found")
+
+    monkeypatch.setattr(
+        "src.oversight.pipeline.classifier.get_env_or_keychain",
+        raise_missing_key,
+    )
+
+    result = is_dated_action(
+        title="GAO Launches New Investigation into VA Contracts",
+        content="GAO announced today it is launching an investigation...",
+    )
+
+    assert result["is_dated_action"] is True
+    assert "assuming dated" in result["explanation"].lower()

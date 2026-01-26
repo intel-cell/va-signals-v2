@@ -1,11 +1,19 @@
+import logging
 import requests
 from typing import Any, Dict, Optional
 
 from src.secrets import require_env
 
+logger = logging.getLogger(__name__)
+
+
 def post_slack(payload: Dict[str, Any], timeout: int = 5) -> None:
-    token = require_env("SLACK_BOT_TOKEN")
-    channel = require_env("SLACK_CHANNEL")
+    try:
+        token = require_env("SLACK_BOT_TOKEN")
+        channel = require_env("SLACK_CHANNEL")
+    except RuntimeError as exc:
+        logger.error("Slack env error: %s", exc)
+        raise
 
     r = requests.post(
         "https://slack.com/api/chat.postMessage",
@@ -22,6 +30,7 @@ def post_slack(payload: Dict[str, Any], timeout: int = 5) -> None:
 
     data = r.json() if r.content else {}
     if (not r.ok) or (not data.get("ok")):
+        logger.error("Slack API error: status=%s response=%s", r.status_code, data)
         raise RuntimeError(f"Slack API error: {data}")
 
 def format_fr_delta_alert(run_record: Dict[str, Any], new_docs: list[dict]) -> Optional[Dict[str, Any]]:
