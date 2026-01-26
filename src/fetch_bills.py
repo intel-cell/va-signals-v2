@@ -11,9 +11,7 @@ Usage:
 
 import argparse
 import json
-import os
 import re
-import subprocess
 import sys
 import ssl
 import urllib.request
@@ -24,6 +22,7 @@ from typing import Optional
 import certifi
 
 from . import db
+from .secrets import get_env_or_keychain
 
 # VA-related committee codes
 VA_COMMITTEES = {
@@ -36,21 +35,7 @@ BASE_API_URL = "https://api.congress.gov/v3"
 
 def get_api_key() -> str:
     """Get Congress.gov API key from environment or Keychain."""
-    key = os.environ.get("CONGRESS_API_KEY")
-    if key:
-        return key
-
-    # Try macOS Keychain
-    try:
-        result = subprocess.run(
-            ["security", "find-generic-password", "-s", "congress-api", "-a", os.environ.get("USER", ""), "-w"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError:
-        raise RuntimeError("No CONGRESS_API_KEY found. Set env var or add to Keychain: security add-generic-password -s 'congress-api' -a '$USER' -w '<KEY>'")
+    return get_env_or_keychain("CONGRESS_API_KEY", "congress-api")
 
 
 def _fetch_json(url: str, api_key: str) -> dict:

@@ -1,12 +1,11 @@
 """NewsAPI.org news source for state-level veteran news."""
 
 import logging
-import subprocess
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 import httpx
 
+from src.secrets import get_env_or_keychain
 from src.state.common import RawSignal
 from src.state.sources.base import StateSource
 
@@ -34,15 +33,8 @@ SEARCH_QUERIES = {
 
 
 def _get_newsapi_key() -> str:
-    """Get NewsAPI key from Keychain."""
-    result = subprocess.run(
-        ["security", "find-generic-password", "-s", "newsapi-key", "-w"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise ValueError("Could not retrieve newsapi-key from Keychain")
-    return result.stdout.strip()
+    """Get NewsAPI key from environment or Keychain."""
+    return get_env_or_keychain("NEWSAPI_KEY", "newsapi-key")
 
 
 class NewsAPISource(StateSource):

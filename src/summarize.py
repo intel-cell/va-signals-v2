@@ -6,7 +6,6 @@ of Federal Register rules and notices.
 """
 
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -20,6 +19,7 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "src"
 
 from .provenance import utc_now_iso
+from .secrets import get_env_or_keychain
 from .db import connect, execute
 
 # -----------------------------------------------------------------------------
@@ -79,12 +79,12 @@ Only include tags directly relevant to the document."""
 
 def is_configured() -> bool:
     """Check if Anthropic API key is configured."""
-    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+    return bool(get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api", allow_missing=True))
 
 
 def _get_anthropic_key() -> Optional[str]:
-    """Get Anthropic API key from environment."""
-    return os.environ.get("ANTHROPIC_API_KEY")
+    """Get Anthropic API key from environment or Keychain."""
+    return get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api", allow_missing=True)
 
 
 def fetch_document_content(doc_id: str, timeout: int = 30) -> Optional[Dict[str, Any]]:

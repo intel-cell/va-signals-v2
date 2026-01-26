@@ -30,10 +30,20 @@
 Keychain prerequisites (macOS):
 - `claude-api` (Anthropic key for summarization)
 - `congress-api` (Congress.gov key for bills/transcripts)
+- `newsapi-key` (NewsAPI.org for state coverage)
 
 To add keys:
 - `security add-generic-password -s "claude-api" -a "$USER" -w "<API_KEY>"`
 - `security add-generic-password -s "congress-api" -a "$USER" -w "<API_KEY>"`
+- `security add-generic-password -s "newsapi-key" -a "$USER" -w "<API_KEY>"`
+
+Cloud/CI environment variables (Cloud Run, GitHub Actions):
+- `ANTHROPIC_API_KEY` (Claude API)
+- `CONGRESS_API_KEY` (Congress.gov)
+- `NEWSAPI_KEY` (NewsAPI.org)
+- `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` (alerts)
+
+Env vars take precedence over Keychain; Keychain is used only for local macOS runs.
 
 ## Scheduling & Logs
 ### Schedule (cron)
@@ -153,6 +163,7 @@ Raw events → quality gate → deduplication → escalation/deviation checks �
 - Check: `security find-generic-password -s "claude-api" -a "$USER" -w`
   and `security find-generic-password -s "congress-api" -a "$USER" -w`
 - Fix: add the missing Keychain entry.
+  For cloud runs, verify `ANTHROPIC_API_KEY`, `CONGRESS_API_KEY`, and `NEWSAPI_KEY` are set.
 
 ### DB schema missing / tables not found
 - Symptom: API errors mentioning missing tables.

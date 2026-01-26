@@ -3,9 +3,10 @@
 import json
 import logging
 import re
-import subprocess
 from dataclasses import dataclass, field
 from typing import Optional
+
+from src.secrets import get_env_or_keychain
 
 HAIKU_MODEL = "claude-3-haiku-20240307"
 
@@ -188,15 +189,8 @@ Respond as JSON only:
 
 
 def _get_api_key() -> str:
-    """Get Anthropic API key from Keychain."""
-    result = subprocess.run(
-        ["security", "find-generic-password", "-s", "claude-api", "-w"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        raise ValueError("Could not retrieve claude-api key from Keychain")
-    return result.stdout.strip()
+    """Get Anthropic API key from environment or Keychain."""
+    return get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api")
 
 
 def _call_haiku(prompt: str) -> dict:

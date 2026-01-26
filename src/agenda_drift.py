@@ -6,8 +6,6 @@ Compares new utterances against a member's historical baseline centroid.
 """
 
 import math
-import os
-import subprocess
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -23,6 +21,7 @@ from .db import (
     get_ad_utterance_by_id,
     get_ad_typical_utterances,
 )
+from .secrets import get_env_or_keychain
 
 # Thresholds (tunable)
 DEVIATION_THRESHOLD_DIST = 0.20  # Minimum cosine distance to flag
@@ -230,20 +229,7 @@ Example output: "This statement focuses on budget cuts, while they typically dis
 
 def _get_anthropic_key() -> Optional[str]:
     """Get Anthropic API key from environment or macOS Keychain."""
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if key:
-        return key
-    # Try macOS Keychain
-    try:
-        result = subprocess.run(
-            ["security", "find-generic-password", "-s", "claude-api", "-a", os.environ.get("USER", ""), "-w"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return result.stdout.strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
+    return get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api", allow_missing=True)
 
 
 def _call_claude_for_explanation(
