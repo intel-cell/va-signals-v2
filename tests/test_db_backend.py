@@ -26,6 +26,60 @@ def test_schema_path_uses_postgres_when_database_url_set(monkeypatch, url):
     assert db.get_schema_path().exists()
 
 
+@pytest.mark.parametrize(
+    ("raw_url", "expected"),
+    [
+        (
+            "postgresql+psycopg2://user:pass@localhost:5432/va_signals",
+            "postgresql://user:pass@localhost:5432/va_signals",
+        ),
+        (
+            "postgresql+psycopg://user:pass@localhost:5432/va_signals?sslmode=require",
+            "postgresql://user:pass@localhost:5432/va_signals?sslmode=require",
+        ),
+        (
+            "postgresql://user:pass@localhost:5432/va_signals",
+            "postgresql://user:pass@localhost:5432/va_signals",
+        ),
+        ("", ""),
+    ],
+)
+def test_normalize_db_url_strips_driver_suffix(raw_url, expected):
+    assert db._normalize_db_url(raw_url) == expected
+
+
+def test_count_inserted_rows_postgres_uses_returning(monkeypatch):
+    monkeypatch.setattr(db, "_is_postgres", lambda: True)
+
+    executed_sql: list[str] = []
+    results = [(1,), None, (1,)]
+
+    class DummyCursor:
+        def __init__(self, row):
+            self._row = row
+
+        def fetchone(self):
+            return self._row
+
+    def fake_execute(_con, sql, _params):
+        executed_sql.append(sql)
+        return DummyCursor(results.pop(0))
+
+    def fake_executemany(*_args, **_kwargs):
+        raise AssertionError("executemany should not be used for Postgres counts")
+
+    monkeypatch.setattr(db, "execute", fake_execute)
+    monkeypatch.setattr(db, "executemany", fake_executemany)
+
+    params = [{"doc_id": "a"}, {"doc_id": "b"}, {"doc_id": "c"}]
+    sql = "INSERT INTO fr_seen(doc_id) VALUES(:doc_id) ON CONFLICT(doc_id) DO NOTHING"
+
+    inserted = db._count_inserted_rows(object(), sql, params)
+
+    assert inserted == 2
+    assert all("RETURNING 1" in statement for statement in executed_sql)
+
+
 def test_prepare_query_translates_named_params_for_postgres(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@localhost:5432/va_signals")
 

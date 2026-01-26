@@ -4,7 +4,7 @@ import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data" / "signals.db"
@@ -12,6 +12,19 @@ SCHEMA_PATH = ROOT / "schema.sql"
 SCHEMA_POSTGRES_PATH = ROOT / "schema.postgres.sql"
 
 _NAMED_PARAM_RE = re.compile(r"(?<!:):([a-zA-Z_][a-zA-Z0-9_]*)")
+
+
+def _normalize_db_url(db_url: str) -> str:
+  if not db_url:
+    return db_url
+  parsed = urlparse(db_url)
+  scheme = parsed.scheme
+  if "+" not in scheme:
+    return db_url
+  base_scheme = scheme.split("+", 1)[0]
+  if not base_scheme or base_scheme == scheme:
+    return db_url
+  return urlunparse(parsed._replace(scheme=base_scheme))
 
 
 def _is_postgres() -> bool:
@@ -57,6 +70,28 @@ def executemany(
   return cur
 
 
+def _count_inserted_rows(
+  con,
+  sql: str,
+  params_seq: Iterable[Mapping[str, Any]] | Iterable[Sequence[Any]],
+) -> int:
+  params_list = list(params_seq)
+  if not params_list:
+    return 0
+  if _is_postgres():
+    returning_sql = sql
+    if "returning" not in sql.lower():
+      returning_sql = f"{sql} RETURNING 1"
+    inserted = 0
+    for params in params_list:
+      cur = execute(con, returning_sql, params)
+      if cur.fetchone():
+        inserted += 1
+    return inserted
+  cur = executemany(con, sql, params_list)
+  return cur.rowcount
+
+
 def table_exists(con, table_name: str) -> bool:
   if _is_postgres():
     cur = execute(con, "SELECT to_regclass(:table_name)", {"table_name": table_name})
@@ -97,6 +132,7 @@ def connect():
     db_url = os.environ.get("DATABASE_URL", "").strip()
     if not db_url:
       raise RuntimeError("DATABASE_URL must be set for Postgres backend.")
+    db_url = _normalize_db_url(db_url)
     try:
       import psycopg
     except ImportError as exc:
@@ -200,14 +236,13 @@ def bulk_insert_fr_seen(docs: list[dict]) -> int:
     if not docs:
         return 0
     con = connect()
-    cur = executemany(
+    inserted = _count_inserted_rows(
         con,
         """INSERT INTO fr_seen(doc_id, published_date, first_seen_at, source_url)
            VALUES(:doc_id, :published_date, :first_seen_at, :source_url)
            ON CONFLICT(doc_id) DO NOTHING""",
         docs,
     )
-    inserted = cur.rowcount
     con.commit()
     con.close()
     return inserted
@@ -324,7 +359,7 @@ def bulk_insert_ad_utterances(utterances: list[dict]) -> int:
         }
         for u in utterances
     ]
-    cur = executemany(
+    inserted = _count_inserted_rows(
         con,
         """INSERT INTO ad_utterances(
              utterance_id, member_id, hearing_id, chunk_ix, content, spoken_at, ingested_at
@@ -333,7 +368,6 @@ def bulk_insert_ad_utterances(utterances: list[dict]) -> int:
            ) ON CONFLICT(utterance_id) DO NOTHING""",
         payload,
     )
-    inserted = cur.rowcount
     con.commit()
     con.close()
     return inserted
