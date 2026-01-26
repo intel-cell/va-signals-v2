@@ -1,9 +1,21 @@
-import json, sqlite3
+import json, os, sqlite3
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = ROOT / "data" / "signals.db"
 SCHEMA_PATH = ROOT / "schema.sql"
+SCHEMA_POSTGRES_PATH = ROOT / "schema.postgres.sql"
+
+def get_db_backend() -> str:
+  db_url = os.environ.get("DATABASE_URL", "").strip().lower()
+  if db_url.startswith(("postgres://", "postgresql://")):
+    return "postgres"
+  return "sqlite"
+
+def get_schema_path() -> Path:
+  if get_db_backend() == "postgres":
+    return SCHEMA_POSTGRES_PATH
+  return SCHEMA_PATH
 
 def connect():
   DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -11,7 +23,7 @@ def connect():
 
 def init_db():
   con = connect()
-  con.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+  con.executescript(get_schema_path().read_text(encoding="utf-8"))
   con.commit()
   con.close()
 
