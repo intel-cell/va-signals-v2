@@ -142,9 +142,14 @@ PORT=8001 make dashboard
 ```
 
 ### Docker (local)
-Build the image:
+Build the image (defaults to dashboard-only deps in `requirements.dashboard.txt`):
 ```bash
 docker build -t va-signals .
+```
+
+Optional (full requirements):
+```bash
+docker build --build-arg REQUIREMENTS=requirements.txt -t va-signals .
 ```
 
 Run the dashboard (container listens on 8080):
