@@ -199,6 +199,11 @@ Raw events → quality gate → deduplication → escalation/deviation checks �
 - Stop: Ctrl+C
 - Start: `make dashboard`
 
+### Migrate SQLite to Postgres (one-time)
+- Dry run (counts only): `DB_PATH=/path/to/signals.db python scripts/migrate_sqlite_to_postgres.py --dry-run`
+- Full migration: `DB_PATH=/path/to/signals.db DATABASE_URL=postgresql://... python scripts/migrate_sqlite_to_postgres.py`
+- Use `--sqlite-path` to override `DB_PATH`; dry-run does not require `DATABASE_URL`.
+
 ### Reset SQLite DB (destructive)
 - Remove DB: `rm -f data/signals.db`
 - Recreate schema: `make db-init`
