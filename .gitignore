@@ -22,3 +22,6 @@ credentials.json
 
 # Git worktrees
 .worktrees/
+
+# Machine-specific cron config
+.crontab

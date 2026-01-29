@@ -11,6 +11,7 @@ lxml>=5.2.2
 # Dashboard
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
+python-json-logger==2.0.7
 
 # LLM Summaries
 openai>=1.0.0

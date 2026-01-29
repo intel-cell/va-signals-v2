@@ -6,15 +6,25 @@ document tracking, and system health.
 """
 
 import json
+import os
+import secrets
+import asyncio
+import time
+import logging
+import sys
+import base64
+import binascii
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import FastAPI, Query, HTTPException
+from fastapi import FastAPI, Query, HTTPException, Request, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel
+from pythonjsonlogger import jsonlogger
 
 from .db import connect, execute, table_exists
 from .reports import generate_report
@@ -30,6 +40,88 @@ from .oversight.db_helpers import get_oversight_stats, get_oversight_events
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "src" / "dashboard" / "static"
 
+# --- Configuration & Logging ---
+
+# Basic Auth Config
+AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
+AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "secret")
+
+# Configure JSON Logging
+logger = logging.getLogger()
+logHandler = logging.StreamHandler(sys.stdout)
+formatter = jsonlogger.JsonFormatter(
+    "%(asctime)s %(levelname)s %(name)s %(message)s",
+    rename_fields={"asctime": "timestamp", "levelname": "severity"}
+)
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+
+# --- Middleware ---
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+        response = await call_next(request)
+        process_time = (time.time() - start_time) * 1000
+        
+        log_data = {
+            "event": "access_log",
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "processing_time_ms": round(process_time, 2),
+            "user_agent": request.headers.get("user-agent"),
+            "client_ip": request.client.host if request.client else None,
+        }
+        
+        # Add user if authenticated
+        if hasattr(request.state, "user"):
+            log_data["user"] = request.state.user
+            
+        logger.info("request_processed", extra=log_data)
+        return response
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Allow health checks if we had them, but protecting all for now.
+        
+        if "Authorization" not in request.headers:
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": "Basic"},
+                content="Unauthorized"
+            )
+            
+        auth = request.headers["Authorization"]
+        try:
+            scheme, credentials = auth.split()
+            if scheme.lower() != 'basic':
+                raise ValueError
+            decoded = base64.b64decode(credentials).decode("ascii")
+            username, _, password = decoded.partition(":")
+            
+            # Constant time comparison
+            is_correct_username = secrets.compare_digest(username, AUTH_USERNAME)
+            is_correct_password = secrets.compare_digest(password, AUTH_PASSWORD)
+            
+            if not (is_correct_username and is_correct_password):
+                 return Response(
+                    status_code=401,
+                    headers={"WWW-Authenticate": "Basic"},
+                    content="Invalid credentials"
+                )
+                
+            request.state.user = username
+            
+        except (ValueError, UnicodeDecodeError, binascii.Error):
+            return Response(
+                status_code=401,
+                headers={"WWW-Authenticate": "Basic"},
+                content="Invalid authentication header"
+            )
+            
+        return await call_next(request)
 
 # --- Pydantic Models ---
 
@@ -297,7 +389,15 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS for local development
+# Middleware (Applied in reverse order: Last added is first executed)
+
+# 3. Logging (Outermost - measures total time)
+app.add_middleware(LoggingMiddleware)
+
+# 2. Basic Auth (Protects everything)
+app.add_middleware(BasicAuthMiddleware)
+
+# 1. CORS (Innermost - handles preflight)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1324,6 +1424,54 @@ def get_oversight_events_endpoint(
 # Mount static files last (catch-all for SPA)
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+
+
+# --- Background Tasks ---
+
+async def log_metrics_snapshot():
+    """Periodically log system metrics for value tracking."""
+    while True:
+        try:
+            # Wait for 1 hour (3600 seconds)
+            # We wait first to avoid double-logging on startup (if we want)
+            # But usually we want one on startup. Let's wait at the end.
+            
+            # Collect metrics
+            runs_stats = get_runs_stats()
+            state_stats = get_state_stats_endpoint()
+            oversight_stats = get_oversight_stats_endpoint()
+            
+            metrics_data = {
+                "event": "metrics_snapshot",
+                "timestamp": _utc_now_iso(),
+                "federal": {
+                    "total_runs": runs_stats.total_runs,
+                    "success_rate": runs_stats.success_rate,
+                    "runs_today": runs_stats.runs_today,
+                    "new_docs_today": runs_stats.new_docs_today,
+                },
+                "state": {
+                    "total_signals": state_stats.total_signals,
+                    "high_severity": state_stats.by_severity.get("high", 0),
+                    "states_covered": len(state_stats.by_state),
+                },
+                "oversight": {
+                    "total_events": oversight_stats.total_events,
+                    "escalations": oversight_stats.escalations,
+                    "deviations": oversight_stats.deviations,
+                }
+            }
+            
+            logger.info("metrics_snapshot", extra=metrics_data)
+            
+        except Exception as e:
+            logger.error(f"Error in metrics snapshot: {str(e)}")
+            
+        await asyncio.sleep(3600)
+
+@app.on_event("startup")
+async def startup_event():
+    asyncio.create_task(log_metrics_snapshot())
 
 
 # --- Main entry point ---
