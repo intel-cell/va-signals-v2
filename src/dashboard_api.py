@@ -38,6 +38,7 @@ from .state.db_helpers import (
 from .oversight.db_helpers import get_oversight_stats, get_oversight_events
 from .battlefield.api import router as battlefield_router
 from .auth.api import router as auth_router
+from .evidence.dashboard_routes import router as evidence_router
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "src" / "dashboard" / "static"
@@ -413,6 +414,9 @@ app.include_router(battlefield_router)
 
 # Include authentication router
 app.include_router(auth_router)
+
+# Include evidence pack router (HOTEL integration)
+app.include_router(evidence_router)
 
 
 def _parse_errors_json(errors_json: str) -> list[str]:
