@@ -36,6 +36,8 @@ from .state.db_helpers import (
     get_latest_run,
 )
 from .oversight.db_helpers import get_oversight_stats, get_oversight_events
+from .battlefield.api import router as battlefield_router
+from .auth.api import router as auth_router
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "src" / "dashboard" / "static"
@@ -394,8 +396,8 @@ app = FastAPI(
 # 3. Logging (Outermost - measures total time)
 app.add_middleware(LoggingMiddleware)
 
-# 2. Basic Auth (Protects everything)
-app.add_middleware(BasicAuthMiddleware)
+# 2. Basic Auth - DISABLED (Cloud Run IAM handles authentication)
+# app.add_middleware(BasicAuthMiddleware)
 
 # 1. CORS (Innermost - handles preflight)
 app.add_middleware(
@@ -405,6 +407,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include battlefield dashboard router
+app.include_router(battlefield_router)
+
+# Include authentication router
+app.include_router(auth_router)
 
 
 def _parse_errors_json(errors_json: str) -> list[str]:

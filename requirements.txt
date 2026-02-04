@@ -19,6 +19,10 @@ openai>=1.0.0
 # Embeddings for agenda drift
 sentence-transformers>=2.2.0
 
+# Authentication
+firebase-admin>=6.4.0
+google-auth>=2.25.0
+
 # Oversight Monitor
 anthropic>=0.39.0
 feedparser>=6.0.0
