@@ -2713,6 +2713,489 @@ async function extendSession() {
 window.handleLogout = handleLogout;
 
 // =============================================================================
+// COMMAND CENTER
+// =============================================================================
+
+const commandState = {
+    alerts: [],
+    activity: [],
+    health: {
+        federal: 'checking',
+        oversight: 'checking',
+        state: 'checking',
+        battlefield: 'checking'
+    },
+    notifications: [],
+    unreadCount: 0,
+};
+
+function initCommandCenter() {
+    initNotificationBell();
+    initQuickActions();
+    loadCommandCenterData();
+}
+
+function initNotificationBell() {
+    const bellBtn = document.getElementById('notification-btn');
+    const bellContainer = document.getElementById('notification-bell');
+    const markAllRead = document.getElementById('mark-all-read');
+
+    if (bellBtn && bellContainer) {
+        bellBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            bellContainer.classList.toggle('open');
+        });
+
+        document.addEventListener('click', () => {
+            bellContainer.classList.remove('open');
+        });
+
+        document.getElementById('notification-dropdown')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+
+    if (markAllRead) {
+        markAllRead.addEventListener('click', markAllNotificationsRead);
+    }
+}
+
+function initQuickActions() {
+    document.getElementById('action-generate-brief')?.addEventListener('click', async () => {
+        showToast('Generating CEO brief...', 'info');
+        try {
+            const response = await fetch(`${CONFIG.apiBase}/briefs/generate`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            if (response.ok) {
+                showToast('CEO brief generated successfully', 'success');
+                loadCommandCenterData();
+            } else {
+                throw new Error('Failed to generate brief');
+            }
+        } catch (error) {
+            showToast('Brief generation not available', 'warning');
+        }
+    });
+
+    document.getElementById('action-sync-battlefield')?.addEventListener('click', async () => {
+        showToast('Syncing battlefield data...', 'info');
+        try {
+            await syncBattlefield();
+            showToast('Battlefield synced', 'success');
+        } catch (error) {
+            showToast('Sync failed: ' + error.message, 'error');
+        }
+    });
+
+    document.getElementById('action-view-brief')?.addEventListener('click', () => {
+        // Switch to briefs tab
+        const briefsTab = document.querySelector('[data-tab="briefs"]');
+        if (briefsTab) {
+            briefsTab.click();
+        }
+    });
+
+    document.getElementById('action-export-report')?.addEventListener('click', () => {
+        downloadReport('daily');
+    });
+
+    document.getElementById('refresh-activity-btn')?.addEventListener('click', () => {
+        loadActivityFeed();
+    });
+}
+
+async function loadCommandCenterData() {
+    await Promise.all([
+        loadMissionStatus(),
+        loadCriticalAlerts(),
+        loadActivityFeed(),
+        loadSystemHealth(),
+        loadNotifications(),
+    ]);
+
+    // Update timestamp
+    const timestampEl = document.getElementById('command-last-update');
+    if (timestampEl) {
+        timestampEl.textContent = new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    }
+}
+
+async function loadMissionStatus() {
+    try {
+        // Fetch health stats from existing endpoints
+        const response = await fetch(`${CONFIG.apiBase}/health`);
+        if (response.ok) {
+            const data = await response.json();
+
+            // Update systems operational
+            const systems = document.getElementById('systems-operational');
+            const indicator = document.getElementById('systems-indicator');
+            if (systems) {
+                const operational = Object.values(data.sources || {}).filter(s => s.status === 'operational').length;
+                const total = Object.values(data.sources || {}).length || 4;
+                systems.textContent = `${operational}/${total}`;
+
+                if (indicator) {
+                    indicator.classList.remove('operational', 'warning', 'error');
+                    if (operational === total) {
+                        indicator.classList.add('operational');
+                    } else if (operational > 0) {
+                        indicator.classList.add('warning');
+                    } else {
+                        indicator.classList.add('error');
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to load mission status:', error);
+    }
+
+    // Load alert count
+    try {
+        const alertsEl = document.getElementById('critical-alerts-count');
+        const alertsIndicator = document.getElementById('alerts-indicator');
+        if (alertsEl) {
+            const count = commandState.alerts.length;
+            alertsEl.textContent = count;
+            if (alertsIndicator) {
+                alertsIndicator.classList.remove('operational', 'warning', 'error');
+                if (count === 0) {
+                    alertsIndicator.classList.add('operational');
+                } else if (count < 3) {
+                    alertsIndicator.classList.add('warning');
+                } else {
+                    alertsIndicator.classList.add('error');
+                }
+            }
+        }
+    } catch (e) {}
+
+    // Load pending actions (from battlefield or other sources)
+    try {
+        const pendingEl = document.getElementById('pending-actions-count');
+        if (pendingEl) {
+            const response = await fetch(`${CONFIG.apiBase}/battlefield/stats`);
+            if (response.ok) {
+                const data = await response.json();
+                pendingEl.textContent = data.unacknowledged_alerts || 0;
+            } else {
+                pendingEl.textContent = '0';
+            }
+        }
+    } catch (e) {
+        const pendingEl = document.getElementById('pending-actions-count');
+        if (pendingEl) pendingEl.textContent = '0';
+    }
+
+    // Load latest brief date
+    try {
+        const briefEl = document.getElementById('latest-brief-date');
+        if (briefEl) {
+            const response = await fetch(`${CONFIG.apiBase}/briefs/latest`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.generated_at) {
+                    briefEl.textContent = formatRelativeTime(data.generated_at);
+                } else {
+                    briefEl.textContent = 'No briefs';
+                }
+            } else {
+                briefEl.textContent = 'N/A';
+            }
+        }
+    } catch (e) {
+        const briefEl = document.getElementById('latest-brief-date');
+        if (briefEl) briefEl.textContent = 'N/A';
+    }
+}
+
+async function loadCriticalAlerts() {
+    const listEl = document.getElementById('critical-alerts-list');
+    const badgeEl = document.getElementById('alerts-badge');
+
+    if (!listEl) return;
+
+    try {
+        // Try to get alerts from battlefield
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/alerts?limit=5`);
+        if (response.ok) {
+            const data = await response.json();
+            commandState.alerts = data.alerts || [];
+        } else {
+            commandState.alerts = [];
+        }
+    } catch (error) {
+        commandState.alerts = [];
+    }
+
+    if (badgeEl) {
+        badgeEl.textContent = commandState.alerts.length;
+        badgeEl.style.display = commandState.alerts.length > 0 ? 'inline-flex' : 'none';
+    }
+
+    if (commandState.alerts.length === 0) {
+        listEl.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                    <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                <p>No critical alerts</p>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = commandState.alerts.map(alert => `
+        <div class="alert-item ${alert.severity === 'high' ? '' : 'warning'}">
+            <div class="alert-severity">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" y1="9" x2="12" y2="13"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+            </div>
+            <div class="alert-info">
+                <div class="alert-title">${escapeHtml(alert.title || alert.message || 'Alert')}</div>
+                <div class="alert-source">${escapeHtml(alert.source || 'System')} · ${formatRelativeTime(alert.created_at)}</div>
+            </div>
+            <div class="alert-actions">
+                <button class="btn-acknowledge" onclick="acknowledgeAlert('${alert.id}')">Acknowledge</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function loadActivityFeed() {
+    const feedEl = document.getElementById('activity-feed');
+    if (!feedEl) return;
+
+    try {
+        // Try to get recent runs as activity
+        const response = await fetch(`${CONFIG.apiBase}/runs?limit=10`);
+        if (response.ok) {
+            const data = await response.json();
+            const runs = data.runs || [];
+
+            if (runs.length === 0) {
+                feedEl.innerHTML = `
+                    <div class="activity-item">
+                        <div class="activity-icon system">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <line x1="12" y1="8" x2="12" y2="12"/>
+                                <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                        </div>
+                        <div class="activity-content">
+                            <p class="activity-text">No recent activity</p>
+                            <span class="activity-time">--</span>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            feedEl.innerHTML = runs.map(run => {
+                const iconClass = run.status === 'SUCCESS' ? 'success' :
+                                  run.status === 'ERROR' ? 'error' :
+                                  run.status === 'NO_DATA' ? 'info' : 'system';
+
+                const iconSvg = run.status === 'SUCCESS' ?
+                    '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>' :
+                    run.status === 'ERROR' ?
+                    '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>' :
+                    '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>';
+
+                return `
+                    <div class="activity-item">
+                        <div class="activity-icon ${iconClass}">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                ${iconSvg}
+                            </svg>
+                        </div>
+                        <div class="activity-content">
+                            <p class="activity-text">
+                                <span class="activity-target">${escapeHtml(run.source)}</span>
+                                ${run.status === 'SUCCESS' ? 'completed run' :
+                                  run.status === 'ERROR' ? 'encountered error' :
+                                  'completed (no new data)'}
+                                ${run.new_records ? `with ${run.new_records} new records` : ''}
+                            </p>
+                            <span class="activity-time">${formatRelativeTime(run.started_at)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    } catch (error) {
+        feedEl.innerHTML = `
+            <div class="activity-item">
+                <div class="activity-icon system">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                </div>
+                <div class="activity-content">
+                    <p class="activity-text">Activity feed unavailable</p>
+                    <span class="activity-time">--</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
+async function loadSystemHealth() {
+    const healthItems = {
+        'health-federal': 'federal',
+        'health-oversight': 'oversight',
+        'health-state': 'state',
+        'health-battlefield': 'battlefield'
+    };
+
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/health`);
+        if (response.ok) {
+            const data = await response.json();
+
+            for (const [elId, source] of Object.entries(healthItems)) {
+                const el = document.getElementById(elId);
+                if (el) {
+                    const sourceData = data.sources?.[source];
+                    if (sourceData) {
+                        const status = sourceData.status || 'unknown';
+                        el.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+                        el.className = 'health-status ' + (status === 'operational' ? 'operational' :
+                                                           status === 'degraded' ? 'degraded' : 'error');
+                        commandState.health[source] = status;
+                    } else {
+                        el.textContent = 'Unknown';
+                        el.className = 'health-status';
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        for (const elId of Object.keys(healthItems)) {
+            const el = document.getElementById(elId);
+            if (el) {
+                el.textContent = 'Unavailable';
+                el.className = 'health-status';
+            }
+        }
+    }
+}
+
+async function loadNotifications() {
+    const listEl = document.getElementById('notification-list');
+    const badgeEl = document.getElementById('notification-badge');
+
+    if (!listEl) return;
+
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/notifications?limit=10`);
+        if (response.ok) {
+            const data = await response.json();
+            commandState.notifications = data.notifications || [];
+            commandState.unreadCount = data.unread_count || 0;
+        } else {
+            commandState.notifications = [];
+            commandState.unreadCount = 0;
+        }
+    } catch (error) {
+        commandState.notifications = [];
+        commandState.unreadCount = 0;
+    }
+
+    // Update badge
+    if (badgeEl) {
+        badgeEl.textContent = commandState.unreadCount;
+        badgeEl.style.display = commandState.unreadCount > 0 ? 'flex' : 'none';
+    }
+
+    // Render notifications
+    if (commandState.notifications.length === 0) {
+        listEl.innerHTML = `
+            <div class="notification-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                <p>No new notifications</p>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = commandState.notifications.map(notif => {
+        const iconClass = notif.type || 'info';
+        const iconSvg = notif.type === 'alert' ?
+            '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' :
+            notif.type === 'success' ?
+            '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>' :
+            '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>';
+
+        return `
+            <div class="notification-item ${notif.read ? '' : 'unread'}" data-id="${notif.id}">
+                <div class="notification-icon ${iconClass}">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        ${iconSvg}
+                    </svg>
+                </div>
+                <div class="notification-content">
+                    <div class="notification-title">${escapeHtml(notif.title)}</div>
+                    <div class="notification-text">${escapeHtml(notif.message)}</div>
+                    <div class="notification-time">${formatRelativeTime(notif.created_at)}</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function markAllNotificationsRead() {
+    try {
+        await fetch(`${CONFIG.apiBase}/notifications/read-all`, {
+            method: 'POST',
+            credentials: 'include',
+        });
+        commandState.unreadCount = 0;
+        const badgeEl = document.getElementById('notification-badge');
+        if (badgeEl) {
+            badgeEl.style.display = 'none';
+        }
+        document.querySelectorAll('.notification-item.unread').forEach(el => {
+            el.classList.remove('unread');
+        });
+    } catch (error) {
+        console.warn('Failed to mark notifications as read:', error);
+    }
+}
+
+async function acknowledgeAlert(alertId) {
+    try {
+        await fetch(`${CONFIG.apiBase}/battlefield/alerts/${alertId}/acknowledge`, {
+            method: 'POST',
+            credentials: 'include',
+        });
+        showToast('Alert acknowledged', 'success');
+        loadCriticalAlerts();
+        loadMissionStatus();
+    } catch (error) {
+        showToast('Failed to acknowledge alert', 'error');
+    }
+}
+
+// Export for global access
+window.acknowledgeAlert = acknowledgeAlert;
+
+// =============================================================================
 // INITIALIZATION
 // =============================================================================
 
@@ -2724,6 +3207,9 @@ async function init() {
 
     // Initialize session management (will redirect if not authenticated)
     initSessionManagement();
+
+    // Initialize Command Center
+    initCommandCenter();
 
     await refreshAll();
     startAutoRefresh();

@@ -3092,3 +3092,717 @@ tr.empty-row td {
         min-width: 100%;
     }
 }
+
+/* =============================================================================
+   NOTIFICATION BELL STYLES
+   ============================================================================= */
+
+.notification-bell {
+    position: relative;
+}
+
+.notification-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    position: relative;
+}
+
+.notification-btn:hover {
+    border-color: var(--text-muted);
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.notification-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.notification-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: var(--error);
+    color: white;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notification-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 360px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--card-shadow);
+    display: none;
+    z-index: 1000;
+    overflow: hidden;
+}
+
+.notification-bell.open .notification-dropdown {
+    display: block;
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notification-header h4 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.mark-all-read {
+    background: none;
+    border: none;
+    color: var(--accent-primary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.mark-all-read:hover {
+    color: #60a5fa;
+    text-decoration: underline;
+}
+
+.notification-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.notification-item:hover {
+    background: var(--bg-tertiary);
+}
+
+.notification-item.unread {
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.notification-item.unread::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent-primary);
+}
+
+.notification-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.notification-icon.alert {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error);
+}
+
+.notification-icon.success {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.notification-icon.info {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-primary);
+}
+
+.notification-icon.warning {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning);
+}
+
+.notification-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.notification-text {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.notification-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.notification-empty {
+    padding: 2rem;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.notification-empty svg {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0.75rem;
+    opacity: 0.5;
+}
+
+.notification-empty p {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.notification-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+}
+
+.notification-footer a {
+    color: var(--accent-primary);
+    font-size: 0.8125rem;
+    text-decoration: none;
+}
+
+.notification-footer a:hover {
+    text-decoration: underline;
+}
+
+/* =============================================================================
+   COMMAND CENTER STYLES
+   ============================================================================= */
+
+#command-panel {
+    padding: 0;
+}
+
+.command-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+    border-radius: 12px 12px 0 0;
+}
+
+.command-title h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.command-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin: 0.25rem 0 0 0;
+}
+
+.command-timestamp {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+}
+
+/* Command Status Cards */
+.command-status-cards {
+    margin-bottom: 1.5rem;
+}
+
+.status-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.status-card .card-indicator {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin: 1rem;
+}
+
+.status-card .card-indicator.operational {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+}
+
+.status-card .card-indicator.warning {
+    background: var(--warning);
+    box-shadow: 0 0 8px var(--warning);
+}
+
+.status-card .card-indicator.error {
+    background: var(--error);
+    box-shadow: 0 0 8px var(--error);
+}
+
+.alert-card .card-icon {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.alert-card .card-icon svg {
+    color: var(--error);
+}
+
+.alert-card .card-value {
+    color: var(--error);
+}
+
+.systems-icon {
+    background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.systems-icon svg {
+    color: var(--success) !important;
+}
+
+.pending-icon {
+    background: rgba(245, 158, 11, 0.1) !important;
+}
+
+.pending-icon svg {
+    color: var(--warning) !important;
+}
+
+.briefs-icon {
+    background: rgba(139, 92, 246, 0.1) !important;
+}
+
+.briefs-icon svg {
+    color: var(--accent-secondary) !important;
+}
+
+.card-value-small {
+    font-size: 1rem !important;
+}
+
+/* Command Grid */
+.command-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+}
+
+.command-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.command-section {
+    padding: 1.25rem;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.section-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.section-header h3 svg {
+    width: 18px;
+    height: 18px;
+    color: var(--text-muted);
+}
+
+.badge-count {
+    background: var(--error);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.125rem 0.5rem;
+    border-radius: 10px;
+}
+
+/* Critical Alerts Section */
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.alert-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem;
+    background: var(--bg-tertiary);
+    border-radius: 8px;
+    border-left: 3px solid var(--error);
+}
+
+.alert-item.warning {
+    border-left-color: var(--warning);
+}
+
+.alert-item .alert-severity {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.alert-item .alert-severity svg {
+    width: 16px;
+    height: 16px;
+    color: var(--error);
+}
+
+.alert-item.warning .alert-severity {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.alert-item.warning .alert-severity svg {
+    color: var(--warning);
+}
+
+.alert-item .alert-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.alert-item .alert-title {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.alert-item .alert-source {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.alert-item .alert-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.alert-item .btn-acknowledge {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.alert-item .btn-acknowledge:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-muted);
+}
+
+.empty-state svg {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 0.75rem;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* Quick Actions Section */
+.quick-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+}
+
+.quick-action-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 1.25rem 1rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.quick-action-btn:hover {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.quick-action-btn svg {
+    width: 24px;
+    height: 24px;
+    color: var(--accent-primary);
+    transition: var(--transition);
+}
+
+.quick-action-btn:hover svg {
+    color: white;
+}
+
+.quick-action-btn span {
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+/* Activity Feed Section */
+.activity-feed {
+    display: flex;
+    flex-direction: column;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.activity-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.875rem 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: var(--bg-tertiary);
+}
+
+.activity-icon svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+}
+
+.activity-icon.success {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.activity-icon.success svg {
+    color: var(--success);
+}
+
+.activity-icon.error {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.activity-icon.error svg {
+    color: var(--error);
+}
+
+.activity-icon.warning {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.activity-icon.warning svg {
+    color: var(--warning);
+}
+
+.activity-icon.info {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.activity-icon.info svg {
+    color: var(--accent-primary);
+}
+
+.activity-icon.system {
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.activity-icon.system svg {
+    color: var(--accent-secondary);
+}
+
+.activity-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-text {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    margin: 0 0 0.25rem 0;
+    line-height: 1.4;
+}
+
+.activity-text .activity-user {
+    font-weight: 500;
+    color: var(--accent-primary);
+}
+
+.activity-text .activity-target {
+    font-weight: 500;
+}
+
+.activity-time {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+/* Health Summary Section */
+.health-summary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.health-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+}
+
+.health-name {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+}
+
+.health-status {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.625rem;
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    color: var(--text-muted);
+}
+
+.health-status.operational {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.health-status.degraded {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning);
+}
+
+.health-status.error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error);
+}
+
+/* Command Center Responsive */
+@media (max-width: 1200px) {
+    .command-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .command-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .quick-actions-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .notification-dropdown {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+    }
+}

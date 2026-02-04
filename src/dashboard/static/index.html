@@ -63,6 +63,34 @@
                     Live
                 </span>
                 <span class="last-refresh">Last refresh: <span id="last-refresh-time">--</span></span>
+                <!-- Notification Bell -->
+                <div class="notification-bell" id="notification-bell">
+                    <button class="notification-btn" id="notification-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                        </svg>
+                        <span class="notification-badge" id="notification-badge" style="display: none;">0</span>
+                    </button>
+                    <div class="notification-dropdown" id="notification-dropdown">
+                        <div class="notification-header">
+                            <h4>Notifications</h4>
+                            <button class="mark-all-read" id="mark-all-read">Mark all read</button>
+                        </div>
+                        <div class="notification-list" id="notification-list">
+                            <div class="notification-empty">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                                </svg>
+                                <p>No new notifications</p>
+                            </div>
+                        </div>
+                        <div class="notification-footer">
+                            <a href="#" id="view-all-notifications">View all notifications</a>
+                        </div>
+                    </div>
+                </div>
                 <!-- User Menu -->
                 <div class="user-menu-dropdown" id="user-menu-container">
                     <button class="user-menu-btn" id="user-menu-btn">
@@ -115,7 +143,15 @@
 
         <!-- Main Navigation Tabs -->
         <nav class="main-tabs">
-            <button class="main-tab active" data-tab="federal">
+            <button class="main-tab active" data-tab="command">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                    <path d="M2 17l10 5 10-5"/>
+                    <path d="M2 12l10 5 10-5"/>
+                </svg>
+                Command
+            </button>
+            <button class="main-tab" data-tab="federal">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/>
                 </svg>
@@ -157,8 +193,223 @@
             </button>
         </nav>
 
+        <!-- Command Center Tab Content -->
+        <div class="tab-panel active" id="command-panel">
+            <!-- Mission Status Overview -->
+            <section class="command-header">
+                <div class="command-title">
+                    <h2>Command Center</h2>
+                    <p class="command-subtitle">Operational Intelligence Overview</p>
+                </div>
+                <div class="command-timestamp">
+                    Last updated: <span id="command-last-update">--</span>
+                </div>
+            </section>
+
+            <!-- Mission Status Cards -->
+            <section class="health-cards command-status-cards">
+                <div class="card health-card status-card">
+                    <div class="card-icon systems-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-label">Systems Operational</span>
+                        <span class="card-value" id="systems-operational">--/--</span>
+                    </div>
+                    <div class="card-indicator operational" id="systems-indicator"></div>
+                </div>
+
+                <div class="card health-card status-card alert-card">
+                    <div class="card-icon alerts-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                            <line x1="12" y1="9" x2="12" y2="13"/>
+                            <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-label">Critical Alerts</span>
+                        <span class="card-value" id="critical-alerts-count">--</span>
+                    </div>
+                    <div class="card-indicator" id="alerts-indicator"></div>
+                </div>
+
+                <div class="card health-card status-card">
+                    <div class="card-icon pending-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-label">Pending Actions</span>
+                        <span class="card-value" id="pending-actions-count">--</span>
+                    </div>
+                </div>
+
+                <div class="card health-card status-card">
+                    <div class="card-icon briefs-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                    </div>
+                    <div class="card-content">
+                        <span class="card-label">Latest Brief</span>
+                        <span class="card-value card-value-small" id="latest-brief-date">--</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Main Command Grid -->
+            <div class="command-grid">
+                <!-- Left Column: Critical Alerts & Quick Actions -->
+                <div class="command-column">
+                    <!-- Critical Alerts Section -->
+                    <section class="card command-section critical-alerts-section">
+                        <div class="section-header">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                                    <line x1="12" y1="9" x2="12" y2="13"/>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                                </svg>
+                                Critical Alerts
+                            </h3>
+                            <span class="badge badge-count" id="alerts-badge">0</span>
+                        </div>
+                        <div class="alerts-list" id="critical-alerts-list">
+                            <div class="empty-state">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                    <polyline points="22 4 12 14.01 9 11.01"/>
+                                </svg>
+                                <p>No critical alerts</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Quick Actions Section -->
+                    <section class="card command-section quick-actions-section">
+                        <div class="section-header">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                                </svg>
+                                Quick Actions
+                            </h3>
+                        </div>
+                        <div class="quick-actions-grid">
+                            <button class="quick-action-btn" id="action-generate-brief">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <polyline points="14 2 14 8 20 8"/>
+                                    <line x1="12" y1="18" x2="12" y2="12"/>
+                                    <line x1="9" y1="15" x2="15" y2="15"/>
+                                </svg>
+                                <span>Generate Brief</span>
+                            </button>
+                            <button class="quick-action-btn" id="action-sync-battlefield">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <polyline points="1 20 1 14 7 14"/>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                </svg>
+                                <span>Sync Battlefield</span>
+                            </button>
+                            <button class="quick-action-btn" id="action-view-brief">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <span>View Latest Brief</span>
+                            </button>
+                            <button class="quick-action-btn" id="action-export-report">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                <span>Export Report</span>
+                            </button>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Right Column: Recent Activity -->
+                <div class="command-column">
+                    <!-- Recent Activity Section -->
+                    <section class="card command-section activity-section">
+                        <div class="section-header">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                                </svg>
+                                Recent Activity
+                            </h3>
+                            <button class="btn btn-sm btn-secondary" id="refresh-activity-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="23 4 23 10 17 10"/>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="activity-feed" id="activity-feed">
+                            <div class="activity-item">
+                                <div class="activity-icon system">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <circle cx="12" cy="12" r="10"/>
+                                        <polyline points="12 6 12 12 16 14"/>
+                                    </svg>
+                                </div>
+                                <div class="activity-content">
+                                    <p class="activity-text">Loading activity feed...</p>
+                                    <span class="activity-time">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- System Health Summary -->
+                    <section class="card command-section health-summary-section">
+                        <div class="section-header">
+                            <h3>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                                </svg>
+                                System Health
+                            </h3>
+                        </div>
+                        <div class="health-summary-list" id="health-summary-list">
+                            <div class="health-item">
+                                <span class="health-name">Federal Monitor</span>
+                                <span class="health-status operational" id="health-federal">Checking...</span>
+                            </div>
+                            <div class="health-item">
+                                <span class="health-name">Oversight Monitor</span>
+                                <span class="health-status" id="health-oversight">Checking...</span>
+                            </div>
+                            <div class="health-item">
+                                <span class="health-name">State Intelligence</span>
+                                <span class="health-status" id="health-state">Checking...</span>
+                            </div>
+                            <div class="health-item">
+                                <span class="health-name">Battlefield Tracker</span>
+                                <span class="health-status" id="health-battlefield">Checking...</span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
         <!-- Federal Tab Content -->
-        <div class="tab-panel active" id="federal-panel">
+        <div class="tab-panel" id="federal-panel">
 
         <!-- Health Cards -->
         <section class="health-cards">
