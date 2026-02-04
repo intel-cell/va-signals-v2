@@ -40,6 +40,11 @@ const state = {
     stateSignals: [],
     stateRuns: [],
     stateFilter: 'all',
+    // Battlefield dashboard
+    battlefieldStats: null,
+    battlefieldVehicles: [],
+    battlefieldCriticalGates: [],
+    battlefieldAlerts: [],
     activeMainTab: 'federal',
     charts: {
         runsChart: null,
@@ -69,7 +74,11 @@ const state = {
         oversightEvents: true,
         stateStats: true,
         stateSignals: true,
-        stateRuns: true
+        stateRuns: true,
+        battlefieldStats: true,
+        battlefieldVehicles: true,
+        battlefieldCriticalGates: true,
+        battlefieldAlerts: true
     }
 };
 
@@ -1987,6 +1996,10 @@ function initMainTabs() {
             if (tabId === 'oversight' && (state.loading.oversightStats || state.loading.oversightEvents)) {
                 await refreshOversightData();
             }
+            // Load battlefield data when switching to battlefield tab
+            if (tabId === 'battlefield' && state.loading.battlefieldStats) {
+                await refreshBattlefield();
+            }
         });
     });
 
@@ -2061,6 +2074,10 @@ async function refreshAll() {
     // Load oversight data if on oversight tab
     if (state.activeMainTab === 'oversight') {
         federalPromises.push(refreshOversightData());
+    }
+    // Load battlefield data if on battlefield tab
+    if (state.activeMainTab === 'battlefield') {
+        federalPromises.push(refreshBattlefield());
     }
 
     await Promise.all(federalPromises);
@@ -2147,6 +2164,248 @@ function restoreCollapsedStates() {
     });
 }
 
+// ============================================================================
+// BATTLEFIELD DASHBOARD FUNCTIONS
+// ============================================================================
+
+async function fetchBattlefieldStats() {
+    try {
+        state.loading.battlefieldStats = true;
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/stats`);
+        if (!response.ok) throw new Error('Failed to fetch battlefield stats');
+        state.battlefieldStats = await response.json();
+        renderBattlefieldStats();
+    } catch (error) {
+        console.error('Error fetching battlefield stats:', error);
+    } finally {
+        state.loading.battlefieldStats = false;
+    }
+}
+
+async function fetchBattlefieldVehicles() {
+    try {
+        state.loading.battlefieldVehicles = true;
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/vehicles?limit=20`);
+        if (!response.ok) throw new Error('Failed to fetch vehicles');
+        const data = await response.json();
+        state.battlefieldVehicles = data.vehicles || [];
+        renderBattlefieldVehicles();
+    } catch (error) {
+        console.error('Error fetching battlefield vehicles:', error);
+    } finally {
+        state.loading.battlefieldVehicles = false;
+    }
+}
+
+async function fetchBattlefieldCriticalGates() {
+    try {
+        state.loading.battlefieldCriticalGates = true;
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/critical-gates?days=14`);
+        if (!response.ok) throw new Error('Failed to fetch critical gates');
+        const data = await response.json();
+        state.battlefieldCriticalGates = data.events || [];
+        renderBattlefieldCriticalGates();
+    } catch (error) {
+        console.error('Error fetching critical gates:', error);
+    } finally {
+        state.loading.battlefieldCriticalGates = false;
+    }
+}
+
+async function fetchBattlefieldAlerts() {
+    try {
+        state.loading.battlefieldAlerts = true;
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/alerts?hours=48`);
+        if (!response.ok) throw new Error('Failed to fetch alerts');
+        const data = await response.json();
+        state.battlefieldAlerts = data.alerts || [];
+        renderBattlefieldAlerts();
+    } catch (error) {
+        console.error('Error fetching battlefield alerts:', error);
+    } finally {
+        state.loading.battlefieldAlerts = false;
+    }
+}
+
+function renderBattlefieldStats() {
+    const stats = state.battlefieldStats;
+    if (!stats) return;
+
+    const totalVehiclesEl = document.getElementById('bf-total-vehicles');
+    const gates14dEl = document.getElementById('bf-gates-14d');
+    const alerts48hEl = document.getElementById('bf-alerts-48h');
+    const unackAlertsEl = document.getElementById('bf-unack-alerts');
+
+    if (totalVehiclesEl) totalVehiclesEl.textContent = stats.total_vehicles || 0;
+    if (gates14dEl) gates14dEl.textContent = stats.upcoming_gates_14d || 0;
+    if (alerts48hEl) alerts48hEl.textContent = stats.alerts_48h || 0;
+    if (unackAlertsEl) unackAlertsEl.textContent = stats.unacknowledged_alerts || 0;
+}
+
+function renderBattlefieldCriticalGates() {
+    const tbody = document.getElementById('bf-critical-tbody');
+    const countEl = document.getElementById('bf-critical-count');
+    if (!tbody) return;
+
+    const gates = state.battlefieldCriticalGates;
+    if (countEl) countEl.textContent = `${gates.length} gates`;
+
+    if (gates.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No critical gates in next 14 days</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = gates.map(gate => {
+        const daysClass = gate.days_until <= 3 ? 'critical' : (gate.days_until <= 7 ? 'warning' : '');
+        const importanceClass = gate.importance === 'critical' ? 'badge-critical' :
+                                gate.importance === 'important' ? 'badge-important' : 'badge-watch';
+        return `
+            <tr>
+                <td>${formatDate(gate.date)}</td>
+                <td title="${escapeHtml(gate.title || '')}">${escapeHtml(truncate(gate.identifier || gate.vehicle_id, 30))}</td>
+                <td>${escapeHtml(gate.event_type || '')}</td>
+                <td class="${daysClass}">${gate.days_until}d</td>
+                <td><span class="badge ${importanceClass}">${gate.importance}</span></td>
+                <td>${escapeHtml(truncate(gate.prep_required || 'Review', 30))}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderBattlefieldVehicles() {
+    const tbody = document.getElementById('bf-vehicles-tbody');
+    const countEl = document.getElementById('bf-vehicles-count');
+    if (!tbody) return;
+
+    const vehicles = state.battlefieldVehicles;
+    if (countEl) countEl.textContent = `${vehicles.length} vehicles`;
+
+    if (vehicles.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No active vehicles. Click "Sync Sources" to load data.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = vehicles.map(v => {
+        const postureClass = v.our_posture === 'support' ? 'badge-success' :
+                            v.our_posture === 'oppose' ? 'badge-error' :
+                            v.our_posture === 'neutral_engaged' ? 'badge-warning' : 'badge-info';
+        const typeClass = v.vehicle_type === 'bill' ? 'badge-primary' :
+                         v.vehicle_type === 'rule' ? 'badge-secondary' :
+                         v.vehicle_type === 'oversight' ? 'badge-warning' : 'badge-info';
+        return `
+            <tr>
+                <td title="${escapeHtml(v.title || '')}">${escapeHtml(truncate(v.identifier || v.vehicle_id, 30))}</td>
+                <td><span class="badge ${typeClass}">${v.vehicle_type}</span></td>
+                <td>${escapeHtml(v.current_stage || '')}</td>
+                <td>${v.status_date ? formatDate(v.status_date) : '--'}</td>
+                <td><span class="badge ${postureClass}">${v.our_posture || 'monitor'}</span></td>
+                <td>${escapeHtml(v.owner_internal || '--')}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderBattlefieldAlerts() {
+    const tbody = document.getElementById('bf-alerts-tbody');
+    const countEl = document.getElementById('bf-alerts-count');
+    if (!tbody) return;
+
+    const alerts = state.battlefieldAlerts;
+    if (countEl) countEl.textContent = `${alerts.length} alerts`;
+
+    if (alerts.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="6">No alerts in last 48 hours</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = alerts.map(a => {
+        const typeClass = a.alert_type === 'gate_moved' ? 'badge-warning' :
+                         a.alert_type === 'new_gate' ? 'badge-success' :
+                         a.alert_type === 'status_changed' ? 'badge-info' :
+                         a.alert_type === 'gate_passed' ? 'badge-secondary' : 'badge-primary';
+        const impactText = a.days_impact ? `${a.days_impact > 0 ? '+' : ''}${a.days_impact}d` : '--';
+        const ackBtn = a.acknowledged ?
+            '<span class="badge badge-secondary">ACK</span>' :
+            `<button class="btn btn-sm" onclick="acknowledgeBattlefieldAlert('${a.alert_id}')">ACK</button>`;
+        return `
+            <tr class="${a.acknowledged ? 'acknowledged' : ''}">
+                <td>${formatTimestamp(a.timestamp)}</td>
+                <td title="${escapeHtml(a.vehicle_title || '')}">${escapeHtml(truncate(a.identifier || a.vehicle_id, 25))}</td>
+                <td><span class="badge ${typeClass}">${a.alert_type.replace('_', ' ')}</span></td>
+                <td title="${escapeHtml(a.new_value || '')}">${escapeHtml(truncate(a.new_value || '', 40))}</td>
+                <td>${impactText}</td>
+                <td>${ackBtn}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function syncBattlefield() {
+    showToast('Syncing battlefield sources...', 'info');
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/sync`, { method: 'POST' });
+        if (!response.ok) throw new Error('Sync failed');
+        const result = await response.json();
+        showToast(`Sync complete: ${JSON.stringify(result.results)}`, 'success');
+        await refreshBattlefield();
+    } catch (error) {
+        showToast(`Sync failed: ${error.message}`, 'error');
+    }
+}
+
+async function runDetection() {
+    showToast('Running gate detection...', 'info');
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/detect`, { method: 'POST' });
+        if (!response.ok) throw new Error('Detection failed');
+        const result = await response.json();
+        showToast(`Detection complete: ${JSON.stringify(result.results)}`, 'success');
+        await refreshBattlefield();
+    } catch (error) {
+        showToast(`Detection failed: ${error.message}`, 'error');
+    }
+}
+
+async function acknowledgeBattlefieldAlert(alertId) {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/alerts/${alertId}/acknowledge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ acknowledged_by: 'dashboard_user' })
+        });
+        if (!response.ok) throw new Error('Acknowledge failed');
+        showToast('Alert acknowledged', 'success');
+        await fetchBattlefieldAlerts();
+        await fetchBattlefieldStats();
+    } catch (error) {
+        showToast(`Failed to acknowledge: ${error.message}`, 'error');
+    }
+}
+
+async function refreshBattlefield() {
+    await Promise.all([
+        fetchBattlefieldStats(),
+        fetchBattlefieldVehicles(),
+        fetchBattlefieldCriticalGates(),
+        fetchBattlefieldAlerts()
+    ]);
+}
+
+function truncate(str, maxLen) {
+    if (!str) return '';
+    return str.length > maxLen ? str.substring(0, maxLen - 3) + '...' : str;
+}
+
+function formatTimestamp(ts) {
+    if (!ts) return '--';
+    try {
+        const date = new Date(ts);
+        return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+        return ts;
+    }
+}
+
 // Make functions available globally for onclick handlers
 window.showErrorDetails = showErrorDetails;
 window.showErrorFromButton = showErrorFromButton;
@@ -2157,12 +2416,315 @@ window.showSummaryModal = showSummaryModal;
 window.toggleSummaryDetails = toggleSummaryDetails;
 window.downloadReport = downloadReport;
 window.toggleSection = toggleSection;
+window.syncBattlefield = syncBattlefield;
+window.runDetection = runDetection;
+window.acknowledgeBattlefieldAlert = acknowledgeBattlefieldAlert;
+
+// =============================================================================
+// SESSION & AUTH MANAGEMENT
+// =============================================================================
+
+const AUTH_CONFIG = {
+    sessionCheckInterval: 60000, // Check session every minute
+    sessionWarningTime: 300000,  // Warn 5 minutes before expiry
+    loginUrl: '/login.html',
+};
+
+let sessionState = {
+    user: null,
+    expiresAt: null,
+    warningShown: false,
+    checkInterval: null,
+};
+
+function initSessionManagement() {
+    // Check for existing session
+    checkSession();
+
+    // Set up user menu
+    initUserMenu();
+
+    // Start session monitoring
+    sessionState.checkInterval = setInterval(checkSession, AUTH_CONFIG.sessionCheckInterval);
+
+    // Create session timeout modal
+    createSessionModal();
+}
+
+async function checkSession() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/auth/me`, {
+            credentials: 'include',
+        });
+
+        if (!response.ok) {
+            // Not authenticated, redirect to login
+            redirectToLogin();
+            return;
+        }
+
+        const data = await response.json();
+        sessionState.user = data.user;
+        sessionState.expiresAt = data.expiresAt ? new Date(data.expiresAt).getTime() : null;
+
+        updateUserDisplay();
+
+        // Check if session is about to expire
+        if (sessionState.expiresAt) {
+            const timeRemaining = sessionState.expiresAt - Date.now();
+            if (timeRemaining > 0 && timeRemaining <= AUTH_CONFIG.sessionWarningTime && !sessionState.warningShown) {
+                showSessionWarning(Math.ceil(timeRemaining / 1000));
+            }
+        }
+    } catch (error) {
+        // Network error - don't redirect, might be temporary
+        console.warn('Session check failed:', error);
+    }
+}
+
+function updateUserDisplay() {
+    const user = sessionState.user;
+    if (!user) return;
+
+    const userNameEl = document.getElementById('user-name');
+    const userEmailEl = document.getElementById('user-email');
+    const userRoleEl = document.getElementById('user-role');
+    const userAvatarEl = document.getElementById('user-avatar');
+    const auditLogBtn = document.getElementById('audit-log-btn');
+
+    if (userNameEl) {
+        userNameEl.textContent = user.displayName || user.email?.split('@')[0] || 'User';
+    }
+
+    if (userEmailEl) {
+        userEmailEl.textContent = user.email || '';
+    }
+
+    if (userRoleEl) {
+        const role = user.role || 'VIEWER';
+        userRoleEl.textContent = role;
+        userRoleEl.className = 'user-role ' + role.toLowerCase();
+    }
+
+    if (userAvatarEl && user.photoUrl) {
+        userAvatarEl.innerHTML = `<img src="${escapeHtml(user.photoUrl)}" alt="Avatar">`;
+    }
+
+    // Show audit log button for COMMANDER role
+    if (auditLogBtn && user.role === 'COMMANDER') {
+        auditLogBtn.style.display = 'flex';
+    }
+}
+
+function initUserMenu() {
+    const userMenuBtn = document.getElementById('user-menu-btn');
+    const userMenuDropdown = document.getElementById('user-menu-container');
+    const logoutBtn = document.getElementById('logout-btn');
+    const profileBtn = document.getElementById('profile-btn');
+
+    if (userMenuBtn && userMenuDropdown) {
+        userMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            userMenuDropdown.classList.toggle('open');
+            const menu = document.getElementById('user-dropdown-menu');
+            if (menu) {
+                menu.style.display = userMenuDropdown.classList.contains('open') ? 'block' : 'none';
+            }
+        });
+
+        // Close on outside click
+        document.addEventListener('click', () => {
+            userMenuDropdown.classList.remove('open');
+            const menu = document.getElementById('user-dropdown-menu');
+            if (menu) menu.style.display = 'none';
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+
+    if (profileBtn) {
+        profileBtn.addEventListener('click', () => {
+            showToast('Profile settings coming soon', 'info');
+        });
+    }
+}
+
+async function handleLogout() {
+    try {
+        // Call backend logout
+        await fetch(`${CONFIG.apiBase}/auth/logout`, {
+            method: 'POST',
+            credentials: 'include',
+        });
+    } catch (error) {
+        console.warn('Logout request failed:', error);
+    }
+
+    // Clear local state
+    sessionState.user = null;
+    sessionState.expiresAt = null;
+    sessionStorage.removeItem('user');
+
+    // Clear any Firebase session if present
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+        try {
+            await firebase.auth().signOut();
+        } catch (e) {
+            // Ignore Firebase errors
+        }
+    }
+
+    // Redirect to login
+    redirectToLogin();
+}
+
+function redirectToLogin(expired = false) {
+    // Clear session check interval
+    if (sessionState.checkInterval) {
+        clearInterval(sessionState.checkInterval);
+    }
+
+    // Build redirect URL
+    const currentUrl = window.location.pathname + window.location.search;
+    let loginUrl = AUTH_CONFIG.loginUrl;
+
+    // Add redirect parameter if not already on login page
+    if (currentUrl !== AUTH_CONFIG.loginUrl && currentUrl !== '/') {
+        loginUrl += `?redirect=${encodeURIComponent(currentUrl)}`;
+    }
+
+    if (expired) {
+        loginUrl += (loginUrl.includes('?') ? '&' : '?') + 'expired=true';
+    }
+
+    window.location.href = loginUrl;
+}
+
+function createSessionModal() {
+    // Check if modal already exists
+    if (document.getElementById('session-modal-overlay')) return;
+
+    const modalHtml = `
+        <div class="session-modal-overlay" id="session-modal-overlay">
+            <div class="session-modal">
+                <div class="session-modal-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                </div>
+                <h3>Session Expiring</h3>
+                <p>Your session will expire soon. Would you like to stay signed in?</p>
+                <div class="session-modal-countdown" id="session-countdown">5:00</div>
+                <div class="session-modal-actions">
+                    <button class="btn btn-secondary" id="session-logout-btn">Sign Out</button>
+                    <button class="btn btn-primary" id="session-extend-btn">Stay Signed In</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Bind events
+    document.getElementById('session-logout-btn')?.addEventListener('click', () => {
+        hideSessionWarning();
+        handleLogout();
+    });
+
+    document.getElementById('session-extend-btn')?.addEventListener('click', extendSession);
+}
+
+let sessionCountdownInterval = null;
+
+function showSessionWarning(secondsRemaining) {
+    sessionState.warningShown = true;
+
+    const overlay = document.getElementById('session-modal-overlay');
+    const countdown = document.getElementById('session-countdown');
+
+    if (overlay) {
+        overlay.classList.add('visible');
+    }
+
+    // Start countdown
+    let remaining = secondsRemaining;
+    updateCountdownDisplay(remaining);
+
+    sessionCountdownInterval = setInterval(() => {
+        remaining--;
+        updateCountdownDisplay(remaining);
+
+        if (remaining <= 0) {
+            clearInterval(sessionCountdownInterval);
+            hideSessionWarning();
+            redirectToLogin(true);
+        }
+    }, 1000);
+}
+
+function updateCountdownDisplay(seconds) {
+    const countdown = document.getElementById('session-countdown');
+    if (countdown) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        countdown.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+}
+
+function hideSessionWarning() {
+    const overlay = document.getElementById('session-modal-overlay');
+    if (overlay) {
+        overlay.classList.remove('visible');
+    }
+
+    if (sessionCountdownInterval) {
+        clearInterval(sessionCountdownInterval);
+        sessionCountdownInterval = null;
+    }
+}
+
+async function extendSession() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/auth/refresh`, {
+            method: 'POST',
+            credentials: 'include',
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            sessionState.expiresAt = data.expiresAt ? new Date(data.expiresAt).getTime() : null;
+            sessionState.warningShown = false;
+            hideSessionWarning();
+            showToast('Session extended', 'success');
+        } else {
+            throw new Error('Failed to extend session');
+        }
+    } catch (error) {
+        showToast('Failed to extend session. Please sign in again.', 'error');
+        hideSessionWarning();
+        redirectToLogin(true);
+    }
+}
+
+// Export for global access
+window.handleLogout = handleLogout;
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
 
 // Initialize
 async function init() {
     initTabs();
     initEventListeners();
     restoreCollapsedStates();
+
+    // Initialize session management (will redirect if not authenticated)
+    initSessionManagement();
+
     await refreshAll();
     startAutoRefresh();
 }
