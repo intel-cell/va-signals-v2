@@ -2732,7 +2732,15 @@ const commandState = {
 function initCommandCenter() {
     initNotificationBell();
     initQuickActions();
+    initMobileMenu();
+    initBriefViewer();
     loadCommandCenterData();
+    loadExecutiveSummary();
+
+    // Initialize audit log after session is loaded (for role check)
+    setTimeout(() => {
+        initAuditLog();
+    }, 500);
 }
 
 function initNotificationBell() {
@@ -3194,6 +3202,616 @@ async function acknowledgeAlert(alertId) {
 
 // Export for global access
 window.acknowledgeAlert = acknowledgeAlert;
+
+// =============================================================================
+// EXECUTIVE SUMMARY
+// =============================================================================
+
+async function loadExecutiveSummary() {
+    await Promise.all([
+        loadExecMetrics(),
+        loadExecHeatMap(),
+        loadExecCalendar(),
+        loadExecCriticalItems()
+    ]);
+}
+
+async function loadExecMetrics() {
+    try {
+        // Federal Register count
+        const frResponse = await fetch(`${CONFIG.apiBase}/fr/documents?limit=1`);
+        if (frResponse.ok) {
+            const data = await frResponse.json();
+            const el = document.getElementById('metric-fr-count');
+            const trendEl = document.getElementById('metric-fr-trend');
+            if (el) el.textContent = data.total || '0';
+            if (trendEl) {
+                const trend = data.trend || 0;
+                trendEl.textContent = Math.abs(trend);
+                trendEl.className = 'metric-trend ' + (trend > 0 ? 'up' : trend < 0 ? 'down' : 'neutral');
+            }
+        }
+    } catch (e) {}
+
+    try {
+        // Bills count
+        const billsResponse = await fetch(`${CONFIG.apiBase}/bills?status=active`);
+        if (billsResponse.ok) {
+            const data = await billsResponse.json();
+            const el = document.getElementById('metric-bills-count');
+            if (el) el.textContent = data.total || data.bills?.length || '0';
+        }
+    } catch (e) {}
+
+    try {
+        // Hearings count
+        const hearingsResponse = await fetch(`${CONFIG.apiBase}/hearings?upcoming=true`);
+        if (hearingsResponse.ok) {
+            const data = await hearingsResponse.json();
+            const el = document.getElementById('metric-hearings-count');
+            if (el) el.textContent = data.total || data.hearings?.length || '0';
+        }
+    } catch (e) {}
+
+    try {
+        // State signals count
+        const stateResponse = await fetch(`${CONFIG.apiBase}/state/signals?days=7`);
+        if (stateResponse.ok) {
+            const data = await stateResponse.json();
+            const el = document.getElementById('metric-state-count');
+            if (el) el.textContent = data.total || data.signals?.length || '0';
+        }
+    } catch (e) {}
+
+    try {
+        // Battlefield vehicles
+        const vehiclesResponse = await fetch(`${CONFIG.apiBase}/battlefield/vehicles`);
+        if (vehiclesResponse.ok) {
+            const data = await vehiclesResponse.json();
+            const el = document.getElementById('metric-vehicles-count');
+            if (el) el.textContent = data.total || data.vehicles?.length || '0';
+        }
+    } catch (e) {}
+}
+
+async function loadExecHeatMap() {
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/heat-scores`);
+        if (response.ok) {
+            const data = await response.json();
+
+            const levels = { critical: 0, high: 0, medium: 0, low: 0 };
+            (data.scores || []).forEach(item => {
+                const score = item.heat_score || 0;
+                if (score >= 80) levels.critical++;
+                else if (score >= 60) levels.high++;
+                else if (score >= 40) levels.medium++;
+                else levels.low++;
+            });
+
+            const total = Math.max(levels.critical + levels.high + levels.medium + levels.low, 1);
+
+            for (const [level, count] of Object.entries(levels)) {
+                const barEl = document.getElementById(`heat-${level}`);
+                const valEl = document.getElementById(`heat-${level}-val`);
+                if (barEl) barEl.style.width = `${(count / total) * 100}%`;
+                if (valEl) valEl.textContent = count;
+            }
+        }
+    } catch (e) {
+        console.warn('Failed to load heat map:', e);
+    }
+}
+
+async function loadExecCalendar() {
+    const listEl = document.getElementById('exec-calendar-list');
+    if (!listEl) return;
+
+    try {
+        // Get upcoming hearings and gates
+        const [hearingsRes, gatesRes] = await Promise.all([
+            fetch(`${CONFIG.apiBase}/hearings?upcoming=true&limit=5`).catch(() => null),
+            fetch(`${CONFIG.apiBase}/battlefield/critical-gates?days=7`).catch(() => null)
+        ]);
+
+        const events = [];
+
+        if (hearingsRes?.ok) {
+            const data = await hearingsRes.json();
+            (data.hearings || []).forEach(h => {
+                events.push({
+                    date: h.date || h.hearing_date,
+                    event: h.title || h.committee,
+                    type: 'hearing'
+                });
+            });
+        }
+
+        if (gatesRes?.ok) {
+            const data = await gatesRes.json();
+            (data.gates || []).forEach(g => {
+                events.push({
+                    date: g.gate_date || g.date,
+                    event: g.title || g.description,
+                    type: 'gate',
+                    urgent: g.priority === 'high'
+                });
+            });
+        }
+
+        // Sort by date
+        events.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        if (events.length === 0) {
+            listEl.innerHTML = '<div class="calendar-item"><span class="calendar-date">--</span><span class="calendar-event">No upcoming events</span></div>';
+            return;
+        }
+
+        listEl.innerHTML = events.slice(0, 5).map(evt => {
+            const date = new Date(evt.date);
+            const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const className = evt.urgent ? 'urgent' : evt.type === 'gate' ? 'warning' : '';
+            return `
+                <div class="calendar-item ${className}">
+                    <span class="calendar-date">${dateStr}</span>
+                    <span class="calendar-event">${escapeHtml(evt.event)}</span>
+                </div>
+            `;
+        }).join('');
+    } catch (e) {
+        listEl.innerHTML = '<div class="calendar-item"><span class="calendar-date">--</span><span class="calendar-event">Unable to load</span></div>';
+    }
+}
+
+async function loadExecCriticalItems() {
+    const listEl = document.getElementById('exec-critical-list');
+    if (!listEl) return;
+
+    try {
+        // Try to get critical items from battlefield
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/critical-items?limit=5`);
+        if (response.ok) {
+            const data = await response.json();
+            const items = data.items || [];
+
+            if (items.length === 0) {
+                listEl.innerHTML = '<li class="critical-item">No critical items at this time</li>';
+                return;
+            }
+
+            listEl.innerHTML = items.map(item => `
+                <li class="critical-item">${escapeHtml(item.title || item.description)}</li>
+            `).join('');
+        } else {
+            listEl.innerHTML = '<li class="critical-item">Critical items unavailable</li>';
+        }
+    } catch (e) {
+        listEl.innerHTML = '<li class="critical-item">Unable to load critical items</li>';
+    }
+}
+
+function printExecutiveSummary() {
+    window.print();
+}
+
+// =============================================================================
+// CEO BRIEF VIEWER
+// =============================================================================
+
+let briefsCache = [];
+
+async function initBriefViewer() {
+    const selector = document.getElementById('brief-selector');
+    if (!selector) return;
+
+    // Load available briefs
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/briefs?limit=20`);
+        if (response.ok) {
+            const data = await response.json();
+            briefsCache = data.briefs || [];
+
+            selector.innerHTML = '<option value="">Select Brief...</option>' +
+                briefsCache.map(brief => {
+                    const date = new Date(brief.generated_at || brief.created_at);
+                    const dateStr = date.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    return `<option value="${brief.id}">${dateStr}</option>`;
+                }).join('');
+        }
+    } catch (e) {
+        console.warn('Failed to load briefs list:', e);
+    }
+
+    selector.addEventListener('change', (e) => {
+        if (e.target.value) {
+            loadBrief(e.target.value);
+        } else {
+            showEmptyBrief();
+        }
+    });
+}
+
+async function loadBrief(briefId) {
+    const container = document.getElementById('brief-container');
+    if (!container) return;
+
+    container.innerHTML = '<div class="brief-empty"><p>Loading brief...</p></div>';
+
+    try {
+        const response = await fetch(`${CONFIG.apiBase}/briefs/${briefId}`);
+        if (response.ok) {
+            const brief = await response.json();
+            renderBrief(brief);
+        } else {
+            throw new Error('Failed to load brief');
+        }
+    } catch (e) {
+        container.innerHTML = '<div class="brief-empty"><p>Failed to load brief</p></div>';
+    }
+}
+
+function renderBrief(brief) {
+    const container = document.getElementById('brief-container');
+    if (!container) return;
+
+    // Parse markdown to HTML (simple implementation)
+    let content = brief.content || brief.markdown || '';
+
+    // Convert markdown to HTML (basic)
+    content = parseMarkdown(content);
+
+    // Add evidence pack links styling
+    content = content.replace(/\[Evidence Pack: ([^\]]+)\]\(([^)]+)\)/g,
+        '<a href="$2" class="evidence-link" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>$1</a>');
+
+    container.innerHTML = `<div class="brief-content">${content}</div>`;
+}
+
+function parseMarkdown(text) {
+    // Basic markdown to HTML conversion
+    let html = text;
+
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // Bold and italic
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Code blocks
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>');
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Blockquotes
+    html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+
+    // Lists
+    html = html.replace(/^\* (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+    // Links
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+    // Paragraphs
+    html = html.replace(/\n\n/g, '</p><p>');
+    html = '<p>' + html + '</p>';
+
+    // Clean up
+    html = html.replace(/<p><(h[1-6]|ul|ol|pre|blockquote)/g, '<$1');
+    html = html.replace(/<\/(h[1-6]|ul|ol|pre|blockquote)><\/p>/g, '</$1>');
+    html = html.replace(/<p><\/p>/g, '');
+
+    return html;
+}
+
+function showEmptyBrief() {
+    const container = document.getElementById('brief-container');
+    if (container) {
+        container.innerHTML = `
+            <div class="brief-empty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <p>Select a brief from the dropdown above</p>
+            </div>
+        `;
+    }
+}
+
+function printBrief() {
+    window.print();
+}
+
+function exportBriefPdf() {
+    // For now, just use print to PDF
+    showToast('Use your browser\'s "Save as PDF" option in the print dialog', 'info');
+    window.print();
+}
+
+// =============================================================================
+// AUDIT LOG VIEWER
+// =============================================================================
+
+const auditState = {
+    logs: [],
+    page: 1,
+    pageSize: 20,
+    totalPages: 1,
+    filters: {
+        dateFrom: null,
+        dateTo: null,
+        user: '',
+        action: ''
+    }
+};
+
+function initAuditLog() {
+    // Show audit log section for COMMANDER
+    if (sessionState.user?.role === 'COMMANDER') {
+        const section = document.getElementById('audit-log-section');
+        if (section) section.style.display = 'block';
+    }
+
+    // Bind filter events
+    document.getElementById('apply-audit-filters')?.addEventListener('click', applyAuditFilters);
+    document.getElementById('audit-prev-page')?.addEventListener('click', () => navigateAuditPage(-1));
+    document.getElementById('audit-next-page')?.addEventListener('click', () => navigateAuditPage(1));
+
+    // Set default date range (last 7 days)
+    const today = new Date();
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const dateFromEl = document.getElementById('audit-date-from');
+    const dateToEl = document.getElementById('audit-date-to');
+    if (dateFromEl) dateFromEl.value = weekAgo.toISOString().split('T')[0];
+    if (dateToEl) dateToEl.value = today.toISOString().split('T')[0];
+
+    loadAuditLog();
+}
+
+function applyAuditFilters() {
+    auditState.filters.dateFrom = document.getElementById('audit-date-from')?.value || null;
+    auditState.filters.dateTo = document.getElementById('audit-date-to')?.value || null;
+    auditState.filters.user = document.getElementById('audit-user-filter')?.value || '';
+    auditState.filters.action = document.getElementById('audit-action-filter')?.value || '';
+    auditState.page = 1;
+    loadAuditLog();
+}
+
+function navigateAuditPage(direction) {
+    const newPage = auditState.page + direction;
+    if (newPage >= 1 && newPage <= auditState.totalPages) {
+        auditState.page = newPage;
+        loadAuditLog();
+    }
+}
+
+async function loadAuditLog() {
+    const tbody = document.getElementById('audit-log-tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">Loading audit log...</td></tr>';
+
+    try {
+        const params = new URLSearchParams({
+            page: auditState.page,
+            page_size: auditState.pageSize
+        });
+
+        if (auditState.filters.dateFrom) params.append('date_from', auditState.filters.dateFrom);
+        if (auditState.filters.dateTo) params.append('date_to', auditState.filters.dateTo);
+        if (auditState.filters.user) params.append('user', auditState.filters.user);
+        if (auditState.filters.action) params.append('action', auditState.filters.action);
+
+        const response = await fetch(`${CONFIG.apiBase}/audit/logs?${params}`, {
+            credentials: 'include'
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            auditState.logs = data.logs || [];
+            auditState.totalPages = data.total_pages || 1;
+
+            renderAuditLog();
+            updateAuditPagination();
+
+            // Populate user filter if not done
+            if (data.users) {
+                const userSelect = document.getElementById('audit-user-filter');
+                if (userSelect && userSelect.options.length <= 1) {
+                    data.users.forEach(user => {
+                        const opt = document.createElement('option');
+                        opt.value = user;
+                        opt.textContent = user;
+                        userSelect.appendChild(opt);
+                    });
+                }
+            }
+        } else {
+            throw new Error('Failed to load audit log');
+        }
+    } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">Audit log unavailable</td></tr>';
+    }
+}
+
+function renderAuditLog() {
+    const tbody = document.getElementById('audit-log-tbody');
+    if (!tbody) return;
+
+    if (auditState.logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading-cell">No audit entries found</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = auditState.logs.map(log => {
+        const timestamp = new Date(log.timestamp).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+
+        return `
+            <tr>
+                <td>${timestamp}</td>
+                <td>${escapeHtml(log.user || log.user_email || '--')}</td>
+                <td><span class="badge badge-${log.action}">${escapeHtml(log.action)}</span></td>
+                <td>${escapeHtml(log.resource || log.endpoint || '--')}</td>
+                <td>${escapeHtml(truncate(log.details || log.message || '', 50))}</td>
+                <td>${escapeHtml(log.ip_address || '--')}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function updateAuditPagination() {
+    const infoEl = document.getElementById('audit-pagination-info');
+    const prevBtn = document.getElementById('audit-prev-page');
+    const nextBtn = document.getElementById('audit-next-page');
+
+    if (infoEl) {
+        infoEl.textContent = `Page ${auditState.page} of ${auditState.totalPages}`;
+    }
+
+    if (prevBtn) prevBtn.disabled = auditState.page <= 1;
+    if (nextBtn) nextBtn.disabled = auditState.page >= auditState.totalPages;
+}
+
+function exportAuditCsv() {
+    if (auditState.logs.length === 0) {
+        showToast('No audit data to export', 'warning');
+        return;
+    }
+
+    const headers = ['Timestamp', 'User', 'Action', 'Resource', 'Details', 'IP Address'];
+    const rows = auditState.logs.map(log => [
+        new Date(log.timestamp).toISOString(),
+        log.user || log.user_email || '',
+        log.action || '',
+        log.resource || log.endpoint || '',
+        log.details || log.message || '',
+        log.ip_address || ''
+    ]);
+
+    const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit_log_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+
+    showToast('Audit log exported', 'success');
+}
+
+// =============================================================================
+// MOBILE MENU
+// =============================================================================
+
+function initMobileMenu() {
+    // Create mobile menu button if not exists
+    const header = document.querySelector('.header-left');
+    if (header && !document.querySelector('.mobile-menu-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'mobile-menu-btn';
+        btn.innerHTML = '<span></span><span></span><span></span>';
+        btn.addEventListener('click', toggleMobileMenu);
+        header.insertBefore(btn, header.firstChild);
+    }
+
+    // Create overlay if not exists
+    if (!document.querySelector('.mobile-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'mobile-overlay';
+        overlay.addEventListener('click', closeMobileMenu);
+        document.body.appendChild(overlay);
+    }
+
+    // Add swipe support for tabs
+    initSwipeNavigation();
+}
+
+function toggleMobileMenu() {
+    const btn = document.querySelector('.mobile-menu-btn');
+    const tabs = document.querySelector('.main-tabs');
+    const overlay = document.querySelector('.mobile-overlay');
+
+    btn?.classList.toggle('open');
+    tabs?.classList.toggle('mobile-open');
+    overlay?.classList.toggle('visible');
+}
+
+function closeMobileMenu() {
+    const btn = document.querySelector('.mobile-menu-btn');
+    const tabs = document.querySelector('.main-tabs');
+    const overlay = document.querySelector('.mobile-overlay');
+
+    btn?.classList.remove('open');
+    tabs?.classList.remove('mobile-open');
+    overlay?.classList.remove('visible');
+}
+
+function initSwipeNavigation() {
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    const panels = document.querySelectorAll('.tab-panel');
+    const tabButtons = document.querySelectorAll('.main-tab');
+    const tabOrder = Array.from(tabButtons).map(btn => btn.dataset.tab);
+
+    document.addEventListener('touchstart', e => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+
+    document.addEventListener('touchend', e => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, { passive: true });
+
+    function handleSwipe() {
+        const diff = touchStartX - touchEndX;
+        const threshold = 100;
+
+        if (Math.abs(diff) < threshold) return;
+
+        const currentTab = document.querySelector('.main-tab.active')?.dataset.tab;
+        const currentIndex = tabOrder.indexOf(currentTab);
+
+        if (diff > 0 && currentIndex < tabOrder.length - 1) {
+            // Swipe left - next tab
+            const nextTab = tabOrder[currentIndex + 1];
+            document.querySelector(`[data-tab="${nextTab}"]`)?.click();
+        } else if (diff < 0 && currentIndex > 0) {
+            // Swipe right - previous tab
+            const prevTab = tabOrder[currentIndex - 1];
+            document.querySelector(`[data-tab="${prevTab}"]`)?.click();
+        }
+    }
+}
+
+// Export Phase 3 functions for global access
+window.printExecutiveSummary = printExecutiveSummary;
+window.printBrief = printBrief;
+window.exportBriefPdf = exportBriefPdf;
+window.exportAuditCsv = exportAuditCsv;
 
 // =============================================================================
 // INITIALIZATION
