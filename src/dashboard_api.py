@@ -40,6 +40,7 @@ from .battlefield.api import router as battlefield_router
 from .auth.api import router as auth_router
 from .auth.audit import AuditMiddleware
 from .evidence.dashboard_routes import router as evidence_router
+from .ceo_brief.api import router as ceo_brief_router
 from .auth.rbac import RoleChecker
 from .auth.models import UserRole
 
@@ -423,6 +424,9 @@ app.include_router(auth_router)
 
 # Include evidence pack router (HOTEL integration)
 app.include_router(evidence_router)
+
+# Include CEO Brief router (HOTEL integration)
+app.include_router(ceo_brief_router)
 
 
 def _parse_errors_json(errors_json: str) -> list[str]:
