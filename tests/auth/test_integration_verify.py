@@ -182,10 +182,20 @@ class TestDashboardAPIIntegration:
         assert '/api/auth/login' in routes or any('/api/auth' in r for r in routes)
 
     def test_existing_endpoints_still_work(self, app_client, mock_firebase_claims):
-        """Verify existing dashboard endpoints still function."""
-        with patch('src.auth.firebase_config.verify_firebase_token') as mock_verify:
-            mock_verify.return_value = mock_firebase_claims
+        """Verify existing dashboard endpoints still function with RBAC."""
+        from src.auth.models import AuthContext, UserRole
 
+        # Create mock auth context for RBAC validation
+        mock_auth = AuthContext(
+            user_id=mock_firebase_claims["user_id"],
+            email=mock_firebase_claims["email"],
+            role=UserRole.VIEWER,  # Minimum role needed for /api/runs/stats
+            display_name=mock_firebase_claims.get("display_name"),
+            auth_method="firebase",
+        )
+
+        # Patch get_current_user at the middleware module level
+        with patch('src.auth.middleware.get_current_user', return_value=mock_auth):
             # Test existing endpoint with auth
             response = app_client.get(
                 "/api/runs/stats",

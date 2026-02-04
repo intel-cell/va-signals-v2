@@ -39,6 +39,8 @@ from .oversight.db_helpers import get_oversight_stats, get_oversight_events
 from .battlefield.api import router as battlefield_router
 from .auth.api import router as auth_router
 from .evidence.dashboard_routes import router as evidence_router
+from .auth.rbac import RoleChecker
+from .auth.models import UserRole
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "src" / "dashboard" / "static"
@@ -439,8 +441,9 @@ def get_runs(
     source_id: Optional[str] = Query(None, description="Filter by source ID"),
     status: Optional[str] = Query(None, description="Filter by status (SUCCESS, NO_DATA, ERROR)"),
     limit: int = Query(50, ge=1, le=500, description="Number of runs to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
-    """Get recent source runs with optional filters."""
+    """Get recent source runs with optional filters. Requires ANALYST role."""
     con = connect()
 
     query = "SELECT id, source_id, started_at, ended_at, status, records_fetched, errors_json FROM source_runs WHERE 1=1"
@@ -477,8 +480,8 @@ def get_runs(
 
 
 @app.get("/api/runs/stats", response_model=StatsResponse)
-def get_runs_stats():
-    """Get aggregated statistics for source runs."""
+def get_runs_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
+    """Get aggregated statistics for source runs. Requires VIEWER role."""
     con = connect()
 
     # Total counts by status
@@ -553,8 +556,9 @@ def get_runs_stats():
 @app.get("/api/documents/fr", response_model=FRDocumentsResponse)
 def get_fr_documents(
     limit: int = Query(100, ge=1, le=1000, description="Number of documents to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
-    """Get recent Federal Register documents."""
+    """Get recent Federal Register documents. Requires ANALYST role."""
     con = connect()
     cur = execute(
         con,
@@ -588,8 +592,8 @@ def get_fr_documents(
 
 
 @app.get("/api/documents/ecfr", response_model=ECFRDocumentsResponse)
-def get_ecfr_documents():
-    """Get eCFR tracking status."""
+def get_ecfr_documents(_: None = Depends(RoleChecker(UserRole.ANALYST))):
+    """Get eCFR tracking status. Requires ANALYST role."""
     con = connect()
     cur = execute(
         con,
@@ -617,8 +621,8 @@ def get_ecfr_documents():
 
 
 @app.get("/api/health", response_model=HealthResponse)
-def get_health():
-    """Get health status for each source: last successful run and time since."""
+def get_health(_: None = Depends(RoleChecker(UserRole.VIEWER))):
+    """Get health status for each source. Requires VIEWER role."""
     con = connect()
 
     # Get distinct source IDs
@@ -685,8 +689,9 @@ def get_health():
 @app.get("/api/errors", response_model=ErrorsResponse)
 def get_errors(
     limit: int = Query(20, ge=1, le=100, description="Number of error runs to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
-    """Get recent runs with errors."""
+    """Get recent runs with errors. Requires ANALYST role."""
     con = connect()
     cur = execute(
         con,
@@ -720,8 +725,9 @@ def get_errors(
 @app.get("/api/summaries", response_model=SummariesResponse)
 def get_summaries(
     limit: int = Query(50, ge=1, le=200, description="Number of summaries to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
-    """Get recent document summaries with source URLs."""
+    """Get recent document summaries with source URLs. Requires ANALYST role."""
     con = connect()
     # Check if fr_summaries table exists
     if not table_exists(con, "fr_summaries"):
@@ -772,8 +778,8 @@ def get_summaries(
 
 
 @app.get("/api/summaries/{doc_id}", response_model=FRSummary)
-def get_summary(doc_id: str):
-    """Get a specific document summary by doc_id."""
+def get_summary(doc_id: str, _: None = Depends(RoleChecker(UserRole.ANALYST))):
+    """Get a specific document summary by doc_id. Requires ANALYST role."""
     con = connect()
     # Check if fr_summaries table exists
     if not table_exists(con, "fr_summaries"):
@@ -819,8 +825,8 @@ def get_summary(doc_id: str):
 
 
 @app.get("/api/summaries/check/{doc_id}")
-def check_summary_exists(doc_id: str):
-    """Check if a summary exists for a given doc_id."""
+def check_summary_exists(doc_id: str, _: None = Depends(RoleChecker(UserRole.ANALYST))):
+    """Check if a summary exists for a given doc_id. Requires ANALYST role."""
     con = connect()
     # Check if fr_summaries table exists
     if not table_exists(con, "fr_summaries"):
@@ -839,8 +845,8 @@ def check_summary_exists(doc_id: str):
 
 
 @app.get("/api/summaries/doc-ids")
-def get_summarized_doc_ids():
-    """Get list of all doc_ids that have summaries."""
+def get_summarized_doc_ids(_: None = Depends(RoleChecker(UserRole.ANALYST))):
+    """Get list of all doc_ids that have summaries. Requires ANALYST role."""
     con = connect()
     # Check if fr_summaries table exists
     if not table_exists(con, "fr_summaries"):
@@ -858,8 +864,9 @@ def get_summarized_doc_ids():
 def generate_report_endpoint(
     type: str = Query("daily", description="Report type: daily or weekly"),
     format: str = Query("json", description="Output format: json"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
-    """Generate and return a report."""
+    """Generate and return a report. Requires ANALYST role."""
     if type not in ("daily", "weekly"):
         raise HTTPException(
             status_code=400, detail="Invalid report type. Use 'daily' or 'weekly'"
@@ -883,8 +890,9 @@ def generate_report_endpoint(
 def get_ad_events(
     limit: int = Query(50, ge=1, le=500, description="Number of events to return"),
     min_zscore: float = Query(2.0, description="Minimum z-score filter"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
-    """Get recent agenda drift deviation events."""
+    """Get recent agenda drift deviation events. Requires ANALYST role."""
     con = connect()
 
     # Check if table exists
@@ -931,7 +939,7 @@ def get_ad_events(
 
 
 @app.get("/api/agenda-drift/stats")
-def get_ad_stats():
+def get_ad_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     """Get agenda drift system statistics."""
     con = connect()
 
@@ -1005,6 +1013,7 @@ def get_ad_stats():
 def get_ad_member_history(
     member_id: str,
     limit: int = Query(20, ge=1, le=100, description="Number of events to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
     """Get deviation history for a specific member."""
     con = connect()
@@ -1072,6 +1081,7 @@ def get_ad_member_history(
 def get_bills(
     limit: int = Query(50, ge=1, le=500, description="Number of bills to return"),
     congress: Optional[int] = Query(None, description="Filter by congress number"),
+    _: None = Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """List tracked VA bills."""
     con = connect()
@@ -1132,7 +1142,7 @@ def get_bills(
 
 
 @app.get("/api/bills/stats", response_model=BillStatsResponse)
-def get_bill_stats():
+def get_bill_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     """Get bill summary statistics."""
     con = connect()
 
@@ -1178,6 +1188,7 @@ def get_bill_stats():
 def get_hearings(
     upcoming: bool = Query(True, description="Show only upcoming hearings"),
     limit: int = Query(20, ge=1, le=100, description="Number of hearings to return"),
+    _: None = Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """List hearings - default to upcoming only."""
     con = connect()
@@ -1244,7 +1255,7 @@ def get_hearings(
 
 
 @app.get("/api/hearings/stats", response_model=HearingStatsResponse)
-def get_hearing_stats():
+def get_hearing_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     """Get hearing summary statistics."""
     con = connect()
 
@@ -1319,6 +1330,7 @@ def get_state_signals_endpoint(
     state: Optional[str] = Query(None, description="Filter by state code (TX, CA, FL)"),
     severity: Optional[str] = Query(None, description="Filter by severity (high, medium, low)"),
     limit: int = Query(50, ge=1, le=500, description="Max signals to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
     """Get state intelligence signals with optional filters."""
     try:
@@ -1348,6 +1360,7 @@ def get_state_signals_endpoint(
 @app.get("/api/state/runs", response_model=StateRunsResponse)
 def get_state_runs_endpoint(
     limit: int = Query(20, ge=1, le=500, description="Max runs to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
     """Get recent state monitoring runs."""
     try:
@@ -1372,7 +1385,7 @@ def get_state_runs_endpoint(
 
 
 @app.get("/api/state/stats", response_model=StateStatsResponse)
-def get_state_stats_endpoint():
+def get_state_stats_endpoint(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     """Get state intelligence statistics."""
     try:
         by_state = get_signal_count_by_state()
@@ -1389,7 +1402,7 @@ def get_state_stats_endpoint():
 # --- Oversight Monitor Endpoints ---
 
 @app.get("/api/oversight/stats", response_model=OversightStatsResponse)
-def get_oversight_stats_endpoint():
+def get_oversight_stats_endpoint(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     """Get oversight monitor aggregate statistics."""
     con = connect()
     if not table_exists(con, "om_events"):
@@ -1414,6 +1427,7 @@ def get_oversight_events_endpoint(
     escalations_only: bool = Query(False, description="Only escalation events"),
     deviations_only: bool = Query(False, description="Only deviation events"),
     surfaced_only: bool = Query(False, description="Only surfaced events"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
     """Get recent oversight monitor events."""
     con = connect()

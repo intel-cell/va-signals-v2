@@ -13,8 +13,11 @@ Endpoints:
 """
 
 from typing import Optional
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, Depends
 from pydantic import BaseModel
+
+from ..auth.rbac import RoleChecker
+from ..auth.models import UserRole
 
 from .api import (
     get_evidence_pack,
@@ -70,6 +73,7 @@ async def list_packs(
     issue_id: Optional[str] = Query(None, description="Filter by issue ID"),
     status: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=200, description="Max packs to return"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
     """
     List available evidence packs.
@@ -84,7 +88,7 @@ async def list_packs(
 
 
 @router.get("/packs/{pack_id}")
-async def get_pack(pack_id: str):
+async def get_pack(pack_id: str, _: None = Depends(RoleChecker(UserRole.ANALYST))):
     """
     Get full evidence pack details.
 
@@ -132,7 +136,7 @@ async def get_pack(pack_id: str):
 
 
 @router.get("/packs/by-issue/{issue_id}")
-async def get_pack_by_issue(issue_id: str):
+async def get_pack_by_issue(issue_id: str, _: None = Depends(RoleChecker(UserRole.ANALYST))):
     """
     Get evidence pack for a specific issue.
 
@@ -180,7 +184,7 @@ async def get_pack_by_issue(issue_id: str):
 
 
 @router.get("/sources/{source_id}")
-async def get_source(source_id: str):
+async def get_source(source_id: str, _: None = Depends(RoleChecker(UserRole.ANALYST))):
     """
     Get source details by ID.
 
@@ -201,6 +205,7 @@ async def search_citations(
         description="Comma-separated source types (federal_register,bill,hearing)"
     ),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
+    _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
     """
     Search for citations by topic.
