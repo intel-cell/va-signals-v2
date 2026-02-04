@@ -380,3 +380,270 @@ CREATE TABLE IF NOT EXISTS signal_audit_log (
 
 CREATE INDEX IF NOT EXISTS idx_signal_audit_trigger ON signal_audit_log(trigger_id, fired_at);
 CREATE INDEX IF NOT EXISTS idx_signal_audit_event ON signal_audit_log(event_id);
+
+-- ============================================================================
+-- AUTHORITY LAYER TABLES
+-- ============================================================================
+
+-- Authority documents from executive branch and VA leadership
+CREATE TABLE IF NOT EXISTS authority_docs (
+    doc_id TEXT PRIMARY KEY,
+    authority_source TEXT NOT NULL,  -- whitehouse, omb, va, omb_oira, knowva
+    authority_type TEXT NOT NULL,    -- bill_signing, executive_order, memorandum, directive, etc.
+    title TEXT NOT NULL,
+    published_at TEXT,
+    source_url TEXT NOT NULL,
+    body_text TEXT,
+    content_hash TEXT,
+    version INTEGER DEFAULT 1,
+    metadata_json TEXT,
+    fetched_at TEXT NOT NULL,
+    first_seen_at TEXT NOT NULL,
+    updated_at TEXT,
+    routed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_authority_docs_source ON authority_docs(authority_source, published_at);
+CREATE INDEX IF NOT EXISTS idx_authority_docs_hash ON authority_docs(content_hash);
+CREATE INDEX IF NOT EXISTS idx_authority_docs_routed ON authority_docs(routed_at);
+
+-- ============================================================================
+-- EVIDENCE PACK TABLES (BRAVO COMMAND)
+-- ============================================================================
+
+-- Evidence packs: containers for claims and their supporting sources
+CREATE TABLE IF NOT EXISTS evidence_packs (
+    pack_id TEXT PRIMARY KEY,
+    issue_id TEXT,                        -- Link to issue register (optional)
+    title TEXT NOT NULL,
+    summary TEXT,
+    generated_at TEXT NOT NULL,
+    generated_by TEXT NOT NULL,           -- Agent/user that created the pack
+    status TEXT NOT NULL DEFAULT 'draft', -- draft, validated, published
+    validation_passed INTEGER DEFAULT 0,
+    validation_errors TEXT,               -- JSON array of validation failures
+    output_path TEXT,                     -- Path to generated markdown file
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_packs_issue ON evidence_packs(issue_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_packs_status ON evidence_packs(status);
+
+-- Evidence sources: authoritative citations
+CREATE TABLE IF NOT EXISTS evidence_sources (
+    source_id TEXT PRIMARY KEY,
+    source_type TEXT NOT NULL,            -- federal_register, bill, hearing, oig_report, gao_report, crs_report, va_guidance, authority_doc
+    title TEXT NOT NULL,
+    date_published TEXT,
+    date_effective TEXT,                  -- For regulations: effective date
+    date_accessed TEXT NOT NULL,          -- When we retrieved it
+    url TEXT NOT NULL,                    -- Primary source link
+    document_hash TEXT,                   -- SHA256 of content for change detection
+    version INTEGER DEFAULT 1,
+
+    -- Source-type-specific identifiers
+    fr_citation TEXT,                     -- e.g., "89 FR 12345"
+    fr_doc_number TEXT,                   -- e.g., "2024-01234"
+    bill_number TEXT,                     -- e.g., "HR5", "S1234"
+    bill_congress INTEGER,                -- e.g., 118
+    report_number TEXT,                   -- e.g., "GAO-24-123", "22-00123-45"
+
+    -- Metadata
+    issuing_agency TEXT,
+    document_type TEXT,                   -- rule, proposed_rule, notice, report, testimony
+    metadata_json TEXT,
+
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_sources_type ON evidence_sources(source_type);
+CREATE INDEX IF NOT EXISTS idx_evidence_sources_fr ON evidence_sources(fr_doc_number);
+CREATE INDEX IF NOT EXISTS idx_evidence_sources_bill ON evidence_sources(bill_number, bill_congress);
+CREATE INDEX IF NOT EXISTS idx_evidence_sources_report ON evidence_sources(report_number);
+
+-- Evidence excerpts: specific quotes from sources
+CREATE TABLE IF NOT EXISTS evidence_excerpts (
+    excerpt_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_id TEXT NOT NULL,
+    section_reference TEXT,               -- e.g., "Section 3(a)(1)", "Page 15, Para 2"
+    excerpt_text TEXT NOT NULL,           -- Exact quote
+    page_or_line TEXT,                    -- Page number or line reference
+    context_before TEXT,                  -- Surrounding text for verification
+    context_after TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (source_id) REFERENCES evidence_sources(source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_excerpts_source ON evidence_excerpts(source_id);
+
+-- Evidence claims: statements with supporting sources
+CREATE TABLE IF NOT EXISTS evidence_claims (
+    claim_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pack_id TEXT NOT NULL,
+    claim_text TEXT NOT NULL,
+    claim_type TEXT NOT NULL DEFAULT 'observed',  -- observed, inferred, modeled
+    confidence TEXT NOT NULL DEFAULT 'high',      -- high, medium, low
+    last_verified TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (pack_id) REFERENCES evidence_packs(pack_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_claims_pack ON evidence_claims(pack_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_claims_type ON evidence_claims(claim_type);
+
+-- Claim-source links: which sources support which claims
+CREATE TABLE IF NOT EXISTS evidence_claim_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    claim_id INTEGER NOT NULL,
+    source_id TEXT NOT NULL,
+    excerpt_id INTEGER,                   -- Optional: specific excerpt supporting claim
+    relevance_note TEXT,                  -- Why this source supports the claim
+    FOREIGN KEY (claim_id) REFERENCES evidence_claims(claim_id),
+    FOREIGN KEY (source_id) REFERENCES evidence_sources(source_id),
+    FOREIGN KEY (excerpt_id) REFERENCES evidence_excerpts(excerpt_id),
+    UNIQUE(claim_id, source_id, excerpt_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_claim_sources_claim ON evidence_claim_sources(claim_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_claim_sources_source ON evidence_claim_sources(source_id);
+
+-- ============================================================================
+-- IMPACT TRANSLATION TABLES (CHARLIE COMMAND - LOE 3)
+-- ============================================================================
+
+-- Impact Memos - CEO-grade policy impact assessments
+CREATE TABLE IF NOT EXISTS impact_memos (
+    memo_id TEXT PRIMARY KEY,
+    issue_id TEXT NOT NULL,
+    generated_date TEXT NOT NULL,
+
+    -- Policy Hook
+    policy_vehicle TEXT NOT NULL,          -- Bill number, rule docket, etc.
+    policy_vehicle_type TEXT NOT NULL,     -- bill, rule, hearing, report
+    policy_section_reference TEXT,
+    policy_current_status TEXT NOT NULL,
+    policy_source_url TEXT NOT NULL,
+    policy_effective_date TEXT,
+
+    -- What It Does
+    what_it_does TEXT NOT NULL,
+
+    -- Why It Matters - Operational
+    operational_impact TEXT NOT NULL,
+    affected_workflows TEXT NOT NULL,       -- JSON array
+    affected_veteran_count TEXT,
+
+    -- Why It Matters - Compliance
+    compliance_exposure TEXT NOT NULL,      -- critical|high|medium|low|negligible
+    enforcement_mechanism TEXT,
+    compliance_deadline TEXT,
+
+    -- Why It Matters - Cost
+    cost_impact TEXT,
+    cost_type TEXT,
+
+    -- Why It Matters - Reputational
+    reputational_risk TEXT NOT NULL,        -- critical|high|medium|low|negligible
+    narrative_vulnerability TEXT,
+
+    -- Posture & Action
+    our_posture TEXT NOT NULL,              -- support|oppose|monitor|neutral_engaged
+    recommended_action TEXT NOT NULL,
+    decision_trigger TEXT NOT NULL,
+
+    -- Metadata
+    confidence_level TEXT NOT NULL,         -- high|medium|low
+    sources_json TEXT NOT NULL DEFAULT '[]', -- JSON array of evidence pack links
+    translated_by TEXT NOT NULL DEFAULT 'charlie_command',
+    translation_method TEXT NOT NULL DEFAULT 'rule_based',
+
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_impact_memos_issue ON impact_memos(issue_id);
+CREATE INDEX IF NOT EXISTS idx_impact_memos_posture ON impact_memos(our_posture);
+CREATE INDEX IF NOT EXISTS idx_impact_memos_compliance ON impact_memos(compliance_exposure);
+CREATE INDEX IF NOT EXISTS idx_impact_memos_generated ON impact_memos(generated_date);
+
+-- Heat Maps - Risk matrices for issue prioritization
+CREATE TABLE IF NOT EXISTS heat_maps (
+    heat_map_id TEXT PRIMARY KEY,
+    generated_date TEXT NOT NULL,
+    issues_json TEXT NOT NULL,              -- JSON array of heat map issues
+    summary_json TEXT NOT NULL,             -- JSON object with counts
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_heat_maps_generated ON heat_maps(generated_date);
+
+-- Heat Map Issues - Individual issue scores (denormalized for queries)
+CREATE TABLE IF NOT EXISTS heat_map_issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    heat_map_id TEXT NOT NULL,
+    issue_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    likelihood INTEGER NOT NULL,            -- 1-5
+    impact INTEGER NOT NULL,                -- 1-5
+    urgency_days INTEGER NOT NULL,
+    score REAL NOT NULL,
+    quadrant TEXT NOT NULL,                 -- high_priority|watch|monitor|low
+    memo_id TEXT,                           -- Link to impact_memos
+    FOREIGN KEY (heat_map_id) REFERENCES heat_maps(heat_map_id),
+    FOREIGN KEY (memo_id) REFERENCES impact_memos(memo_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_heat_map_issues_map ON heat_map_issues(heat_map_id);
+CREATE INDEX IF NOT EXISTS idx_heat_map_issues_quadrant ON heat_map_issues(quadrant);
+CREATE INDEX IF NOT EXISTS idx_heat_map_issues_score ON heat_map_issues(score DESC);
+
+-- Objection Library - Staff pushback responses
+CREATE TABLE IF NOT EXISTS objections (
+    objection_id TEXT PRIMARY KEY,
+    issue_area TEXT NOT NULL,               -- benefits|accreditation|appropriations|oversight|etc
+    source_type TEXT NOT NULL,              -- staff|vso|industry|media|congressional|va_internal
+    objection_text TEXT NOT NULL,           -- What they'll say
+    response_text TEXT NOT NULL,            -- 1-2 sentence reply
+    supporting_evidence_json TEXT NOT NULL DEFAULT '[]', -- JSON array of evidence links
+    last_used_date TEXT,
+    effectiveness_rating INTEGER,           -- 1-5 scale
+    tags_json TEXT NOT NULL DEFAULT '[]',   -- JSON array of tags
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_objections_area ON objections(issue_area);
+CREATE INDEX IF NOT EXISTS idx_objections_source ON objections(source_type);
+CREATE INDEX IF NOT EXISTS idx_objections_rating ON objections(effectiveness_rating DESC);
+
+-- ============================================================================
+-- AUDIT & COMPLIANCE TABLES
+-- ============================================================================
+
+-- Audit log for API request tracking and compliance
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    log_id TEXT UNIQUE NOT NULL,            -- AUDIT_YYYYMMDD_xxxxxxxxxxxx
+    timestamp TEXT NOT NULL,
+    user_id TEXT,
+    user_email TEXT,
+    action TEXT NOT NULL,                   -- auth:login, api:read, user:create, etc.
+    resource TEXT,                          -- runs, bills, hearings, etc.
+    resource_id TEXT,
+    request_method TEXT,                    -- GET, POST, PUT, PATCH, DELETE
+    request_path TEXT,
+    request_body TEXT,                      -- Sanitized body (sensitive fields redacted)
+    response_status INTEGER,
+    ip_address TEXT,
+    user_agent TEXT,
+    duration_ms INTEGER,
+    success INTEGER NOT NULL DEFAULT 1      -- 1=success, 0=failure
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user_email, timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action, timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource, timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_log_success ON audit_log(success, timestamp);

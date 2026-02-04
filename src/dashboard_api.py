@@ -38,6 +38,7 @@ from .state.db_helpers import (
 from .oversight.db_helpers import get_oversight_stats, get_oversight_events
 from .battlefield.api import router as battlefield_router
 from .auth.api import router as auth_router
+from .auth.audit import AuditMiddleware
 from .evidence.dashboard_routes import router as evidence_router
 from .auth.rbac import RoleChecker
 from .auth.models import UserRole
@@ -396,8 +397,11 @@ app = FastAPI(
 
 # Middleware (Applied in reverse order: Last added is first executed)
 
-# 3. Logging (Outermost - measures total time)
+# 4. Logging (Outermost - measures total time)
 app.add_middleware(LoggingMiddleware)
+
+# 3. Audit Logging (Records all API requests for compliance)
+app.add_middleware(AuditMiddleware)
 
 # 2. Basic Auth - DISABLED (Cloud Run IAM handles authentication)
 # app.add_middleware(BasicAuthMiddleware)
