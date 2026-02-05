@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-VA Signals is a fail-closed monitoring system for Veterans Affairs-relevant signals. It tracks Federal Register publications, eCFR regulations, Congressional bills, committee hearings, oversight reports, and member rhetoric patterns. The system alerts via Slack only when decision-relevant changes occur.
+VA Signals is a fail-closed monitoring system for Veterans Affairs-relevant signals. It tracks Federal Register publications, eCFR regulations, Congressional bills, committee hearings, oversight reports, and member rhetoric patterns. The system alerts via email only when decision-relevant changes occur.
 
 ## Commands
 
@@ -46,7 +46,7 @@ make report-weekly     # Generate weekly email report
 ```
 External Sources → Fetch Modules → SQLite (data/signals.db) → Dashboard API
                                           ↓
-                              Slack/Email Alerts
+                                    Email Alerts
 ```
 
 ### Core Modules
@@ -56,7 +56,7 @@ External Sources → Fetch Modules → SQLite (data/signals.db) → Dashboard AP
 | `src/db.py` | All SQLite operations. Single connection pattern. |
 | `src/run_*.py` | CLI runners for each pipeline. Log to `source_runs` table. |
 | `src/fetch_*.py` | API/web fetch logic. No DB writes directly. |
-| `src/notify_slack.py` | Slack alerting via bot token (not webhooks). |
+| `src/notify_email.py` | Email alerting via SMTP (Gmail). |
 | `src/dashboard_api.py` | FastAPI backend serving `/api/*` endpoints. |
 
 ### Data Sources
@@ -119,7 +119,8 @@ Env vars first (Cloud Run/CI); Keychain fallback for local macOS. Env vars take 
 - Env: `ANTHROPIC_API_KEY`, `CONGRESS_API_KEY`, `NEWSAPI_KEY`
 - Keychain (macOS): `claude-api`, `congress-api`, `newsapi-key`
 
-Slack credentials are env-only for local and cloud runs.
+Email credentials are env-only (see `.env.cron`):
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO`
 
 Retrieval pattern (see `src/fetch_transcripts.py`):
 ```python
@@ -131,7 +132,7 @@ security find-generic-password -s "congress-api" -a "$USER" -w
 1. **Fail closed**: Missing/unverifiable data → `NO_DATA` or `ERROR`, never fabricated
 2. **Provenance-first**: No downstream signals without source tracking
 3. **No demo data in runtime paths**: `config/approved_sources.yaml` enforces allowed sources
-4. **Slack is selective**: Only `NEW_DOCS` or `ERROR` trigger alerts. Silence = success.
+4. **Email is selective**: Only `NEW_DOCS` or `ERROR` trigger email alerts. Silence = success.
 
 ## Testing
 

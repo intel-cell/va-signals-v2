@@ -25,7 +25,7 @@ from src.state.sources.ca_official import CAOfficialSource
 from src.state.sources.fl_official import FLOfficialSource
 from src.state.sources.newsapi import NewsAPISource
 from src.state.sources.rss import RSSSource
-from src.notify_slack import post_slack
+from src.notify_email import is_configured as email_configured, _send_email
 
 logger = logging.getLogger(__name__)
 
@@ -97,24 +97,37 @@ def _fetch_from_source(source, source_name: str) -> tuple[list[RawSignal], bool,
 
 def _send_high_severity_notification(signal_data: dict) -> bool:
     """
-    Send immediate Slack notification for high-severity signal.
+    Send immediate email notification for high-severity signal.
 
     Returns True if notification was sent successfully.
     """
+    if not email_configured():
+        logger.warning("Email not configured, skipping notification")
+        return False
+
     try:
-        payload = {
-            "text": (
-                f"State Intelligence ALERT - {signal_data['state']}\n"
-                f"*{signal_data['title']}*\n"
-                f"Severity: {signal_data['severity'].upper()}\n"
-                f"Source: {signal_data['source_id']}\n"
-                f"URL: {signal_data['url']}"
-            )
-        }
-        post_slack(payload)
-        return True
+        subject = f"VA Signals - State Alert: {signal_data['state']} - {signal_data['severity'].upper()}"
+
+        html = f"""
+        <h2 style="color: #c53030;">State Intelligence Alert</h2>
+        <p><strong>State:</strong> {signal_data['state']}</p>
+        <p><strong>Title:</strong> {signal_data['title']}</p>
+        <p><strong>Severity:</strong> {signal_data['severity'].upper()}</p>
+        <p><strong>Source:</strong> {signal_data['source_id']}</p>
+        <p><strong>URL:</strong> <a href="{signal_data['url']}">{signal_data['url']}</a></p>
+        """
+
+        text = f"""State Intelligence Alert
+
+State: {signal_data['state']}
+Title: {signal_data['title']}
+Severity: {signal_data['severity'].upper()}
+Source: {signal_data['source_id']}
+URL: {signal_data['url']}
+"""
+        return _send_email(subject, html, text)
     except Exception as e:
-        logger.error(f"Failed to send Slack notification: {e}")
+        logger.error(f"Failed to send email notification: {e}")
         return False
 
 
@@ -265,8 +278,8 @@ def run_state_monitor(
         high_severity_signals = get_unnotified_signals(severity="high")
         for sig_data in high_severity_signals:
             if _send_high_severity_notification(sig_data):
-                mark_signal_notified(sig_data["signal_id"], "slack")
-                logger.info(f"Sent Slack notification for {sig_data['signal_id']}")
+                mark_signal_notified(sig_data["signal_id"], "email")
+                logger.info(f"Sent email notification for {sig_data['signal_id']}")
 
         # Medium/low severity signals are left for weekly digest
         # (mark_signal_notified is NOT called for them here)

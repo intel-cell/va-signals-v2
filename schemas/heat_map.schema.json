@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VA Signals V2 - Heat Map",
+  "description": "Risk matrix showing all active issues. CHARLIE COMMAND - LOE 3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["heat_map_id", "generated_date", "issues"],
+  "properties": {
+    "heat_map_id": {
+      "type": "string",
+      "pattern": "^HMAP-[0-9]{8}-[A-Z0-9]{8}$",
+      "description": "Unique heat map identifier: HMAP-YYYYMMDD-XXXXXXXX"
+    },
+    "generated_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When heat map was generated (ISO 8601)"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["issue_id", "title", "likelihood", "impact", "urgency_days", "score", "quadrant"],
+        "properties": {
+          "issue_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Unique issue identifier"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 5,
+            "maxLength": 180,
+            "description": "Issue title"
+          },
+          "likelihood": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Likelihood score (1-5)"
+          },
+          "impact": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "description": "Impact score (1-5)"
+          },
+          "urgency_days": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Days to next decision point"
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Calculated priority score (likelihood × impact × urgency_factor)"
+          },
+          "quadrant": {
+            "type": "string",
+            "enum": ["high_priority", "watch", "monitor", "low"],
+            "description": "Heat map quadrant classification"
+          },
+          "memo_id": {
+            "type": ["string", "null"],
+            "description": "Link to impact memo if exists"
+          }
+        }
+      },
+      "description": "List of issues in the heat map"
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total_issues": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "high_priority_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "watch_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "monitor_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "low_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "description": "Summary counts by quadrant"
+    }
+  }
+}

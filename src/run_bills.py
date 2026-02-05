@@ -21,7 +21,7 @@ if __name__ == "__main__" and __package__ is None:
 
 from .db import init_db, insert_source_run, get_bill_stats, get_bills, get_new_bills_since, get_new_actions_since
 from .fetch_bills import sync_va_bills
-from .notify_slack import post_slack, format_new_bills_alert, format_bill_status_alert
+from .notify_email import send_error_alert
 from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -116,22 +116,9 @@ def run_bills_sync(full: bool = False, congress: int = 118) -> dict[str, Any]:
     }
     print(json.dumps(summary, indent=2))
 
-    # Send Slack alerts
-    if new_bills:
-        alert_payload = format_new_bills_alert(new_bills)
-        if alert_payload:
-            try:
-                post_slack(alert_payload)
-            except Exception:
-                pass
-
-    if new_actions:
-        alert_payload = format_bill_status_alert(new_actions)
-        if alert_payload:
-            try:
-                post_slack(alert_payload)
-            except Exception:
-                pass
+    # Send error email if needed
+    if status == "ERROR" and errors:
+        send_error_alert(SOURCE_ID, errors, run_record)
 
     return run_record
 

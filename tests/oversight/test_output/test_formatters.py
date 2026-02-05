@@ -1,13 +1,11 @@
 """Tests for output formatters."""
 
 import pytest
-from datetime import datetime
 
 from src.oversight.output.formatters import (
-    format_immediate_alert,
+    format_escalation_alert,
     format_weekly_digest,
     group_events_by_theme,
-    SlackMessage,
 )
 
 
@@ -43,34 +41,23 @@ def sample_deviation_event():
     }
 
 
-def test_slack_message_creation():
-    msg = SlackMessage(
-        channel="#va-signals",
-        text="Test alert",
-        blocks=[{"type": "section", "text": {"type": "mrkdwn", "text": "Test"}}],
-    )
-    assert msg.channel == "#va-signals"
-    assert len(msg.blocks) == 1
+def test_format_escalation_alert(sample_escalation_event):
+    subject, html, text = format_escalation_alert(sample_escalation_event)
+
+    assert subject is not None
+    assert "criminal referral" in subject.lower()
+    assert "GAO Criminal Referral" in html
+    assert "GAO Criminal Referral" in text
+    assert "gao.gov" in html
+    assert "gao.gov" in text
 
 
-def test_format_immediate_alert_escalation(sample_escalation_event):
-    msg = format_immediate_alert(sample_escalation_event)
-
-    assert msg is not None
-    assert "Criminal Referral" in msg.text or "criminal referral" in msg.text.lower()
-    assert msg.channel == "#va-signals"
-    # Should have blocks for rich formatting
-    assert len(msg.blocks) > 0
-
-
-def test_format_immediate_alert_with_severity(sample_escalation_event):
+def test_format_escalation_alert_with_severity(sample_escalation_event):
     sample_escalation_event["escalation_severity"] = "critical"
-    msg = format_immediate_alert(sample_escalation_event)
+    subject, html, text = format_escalation_alert(sample_escalation_event)
 
     # Critical severity should be indicated
-    assert "critical" in msg.text.lower() or any(
-        "critical" in str(b).lower() for b in msg.blocks
-    )
+    assert "CRITICAL" in subject
 
 
 def test_group_events_by_theme():
@@ -96,6 +83,7 @@ def test_format_weekly_digest():
             "event_id": "1",
             "theme": "healthcare",
             "title": "Health Report",
+            "primary_source_type": "gao",
             "primary_url": "https://example.com/1",
             "pub_timestamp": "2026-01-20T10:00:00Z",
             "is_escalation": 1,
@@ -105,6 +93,7 @@ def test_format_weekly_digest():
             "event_id": "2",
             "theme": "benefits",
             "title": "Benefits Report",
+            "primary_source_type": "oig",
             "primary_url": "https://example.com/2",
             "pub_timestamp": "2026-01-19T10:00:00Z",
             "is_escalation": 0,
@@ -119,7 +108,7 @@ def test_format_weekly_digest():
     )
 
     assert digest is not None
-    assert "2026-01-13" in digest or "Jan 13" in digest
+    assert "2026-01-13" in digest
     assert len(digest) > 100  # Should have substantial content
 
 

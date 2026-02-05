@@ -250,13 +250,13 @@ class TestRunStateMonitor:
         with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
              patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
              patch("src.state.runner.RSSSource", return_value=mocks["rss"]), \
-             patch("src.state.runner.post_slack") as mock_slack:
+             patch("src.state.runner._send_email") as mock_email:
 
             from src.state.runner import run_state_monitor
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
-            # Slack should NOT have been called
-            mock_slack.assert_not_called()
+            # Email should NOT have been called in dry_run mode
+            mock_email.assert_not_called()
 
             # But we should have found high severity signals
             assert summary["high_severity_count"] >= 1
@@ -279,13 +279,14 @@ class TestRunStateMonitor:
         with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
              patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
              patch("src.state.runner.RSSSource", return_value=mocks["rss"]), \
-             patch("src.state.runner.post_slack") as mock_slack:
+             patch("src.state.runner._send_email", return_value=True) as mock_email, \
+             patch("src.state.runner.email_configured", return_value=True):
 
             from src.state.runner import run_state_monitor
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=False)
 
-            # Slack should have been called for high severity
-            assert mock_slack.called
+            # Email should have been called for high severity
+            assert mock_email.called
             assert summary["high_severity_count"] >= 1
 
     def test_partial_source_failure_continues(self):

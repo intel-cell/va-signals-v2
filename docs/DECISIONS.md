@@ -1,60 +1,64 @@
-# Decision Log
+# Architecture Decision Records
 
-Architecture and implementation decisions with rationale. Newest first.
-
----
-
-## 2026-01-22: VA OIG domain migration fix
-
-**Context:** OIG agent RSS feed at `va.gov/oig/rss/pubs-all.xml` returning 404. VA OIG site non-functional.
-
-**Analysis:**
-- VA OIG migrated from `va.gov/oig` to standalone domain `vaoig.gov`
-- Redirect (302) from old to new domain
-- New RSS feed at `vaoig.gov/rss.xml` - 10 items, RSS 2.0 format
-
-**Decision:** Update OIG_RSS_URL from `https://www.va.gov/oig/rss/pubs-all.xml` to `https://www.vaoig.gov/rss.xml`
-
-**Result:** OIG agent now fetching 10 reports successfully.
-
-**Files:** `src/oversight/agents/oig.py:12`
+This document records significant architectural decisions for the VA Signals project.
 
 ---
 
-## 2026-01-22: CRS agent data source (everycrsreport.com)
+## ADR-001: Remove Slack Integration, Use Email-Only Notifications
 
-**Context:** CRS agent was a placeholder with no data source. crsreports.congress.gov has no RSS or API.
+**Date:** 2026-02-04
 
-**Analysis:**
-- Official CRS site (crsreports.congress.gov) requires search, no programmatic access
-- everycrsreport.com provides RSS feed at `/rss.xml` with 25 recent items
-- Feed lacks content/description, only metadata (title, link, pubDate)
-- Need to filter for VA-related reports
+**Status:** Accepted
 
-**Decision:** Use everycrsreport.com RSS with keyword filter (veteran, VA, GI Bill, TRICARE, VHA, VBA).
+**Context:**
+The VA Signals system originally used Slack as the primary notification channel for alerts (new documents, errors, escalations, state intelligence alerts). This required:
+- A Slack workspace with bot token configuration
+- `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` environment variables
+- Maintenance of Slack-specific formatting code
 
-**Result:** Agent configured. 0 VA reports in current feed (expected - CRS covers many topics).
+**Decision:**
+Remove all Slack integration and use email as the sole notification channel.
 
-**Files:** `src/oversight/agents/crs.py` (rewritten)
+**Rationale:**
+1. **Simplified infrastructure**: Email requires only SMTP credentials, no third-party workspace setup
+2. **Reduced dependencies**: Fewer external services to maintain and monitor
+3. **Better accessibility**: Email is universally accessible without requiring Slack workspace membership
+4. **Audit trail**: Email provides built-in archival and searchability
+5. **Cost reduction**: No Slack workspace fees or API rate limits to manage
+
+**Consequences:**
+
+### Removed Components
+- `src/notify_slack.py` - Slack notification module
+- `src/signals/output/slack.py` - Signals routing Slack formatter
+- `tests/test_notify_slack_format.py` - Slack formatting tests
+- `tests/signals/test_output/test_slack.py` - Signals Slack output tests
+
+### Modified Components
+- `src/run_fr_delta.py` - Uses `notify_email` instead of `notify_slack`
+- `src/run_bills.py` - Uses `notify_email` for error alerts
+- `src/run_hearings.py` - Uses `notify_email` for error alerts
+- `src/run_ecfr_delta.py` - Uses `notify_email` for error alerts
+- `src/run_signals.py` - Removed Slack alert sending, logs instead
+- `src/state/runner.py` - Uses `notify_email` for high-severity alerts
+- `src/oversight/output/formatters.py` - Removed Slack-specific formatters
+- `src/signals/output/__init__.py` - Removed Slack exports
+- `.github/workflows/daily_fr_delta.yml` - Uses email secrets instead of Slack
+
+### Configuration Changes
+- `.env.cron` - Removed Slack config, email config only
+- Required secrets changed from `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` to:
+  - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO`
+
+### Documentation Updates
+- `CLAUDE.md` - Updated module list and alerting description
+- `README.md` - Updated secrets section and module descriptions
+- `docs/ops/runbook.md` - Updated troubleshooting and configuration
+
+**Migration Notes:**
+For existing deployments:
+1. Remove `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` from GitHub Actions secrets
+2. Add email secrets: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO`
+3. For Gmail, create an App Password at https://myaccount.google.com/apppasswords
 
 ---
-
-## 2026-01-21: Agenda drift minimum utterance length (100 chars)
-
-**Context:** Agenda drift detection was flagging 15 deviations, but 87% were short procedural statements (greetings, "yield back", brief responses like "I would have to get that for the record").
-
-**Analysis:**
-- 13 of 15 flagged utterances were < 100 characters
-- Short statements naturally cluster differently than substantive policy statements
-- They're not agenda drift - they're just brief
-
-**Decision:** Filter out utterances < 100 characters from both baseline building and deviation detection.
-
-**Result:**
-- Deviations reduced from 15 to 9
-- Substantive detection rate improved from 13% to 56%
-- Some procedural noise remains (greetings just over 100 chars, "yield back" phrases)
-
-**Future consideration:** Could add keyword filtering for procedural phrases, but 100-char filter is sufficient for now.
-
-**Files:** `src/db.py`, `src/run_agenda_drift.py`

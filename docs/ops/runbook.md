@@ -41,9 +41,9 @@ Cloud/CI environment variables (Cloud Run, GitHub Actions):
 - `ANTHROPIC_API_KEY` (Claude API)
 - `CONGRESS_API_KEY` (Congress.gov)
 - `NEWSAPI_KEY` (NewsAPI.org)
-- `SLACK_BOT_TOKEN`, `SLACK_CHANNEL` (alerts)
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO` (email alerts)
 
-Slack credentials are env-only for both local and cloud runs.
+Email credentials are env-only for both local and cloud runs (see `.env.cron`).
 
 Env vars take precedence over Keychain; Keychain is used only for local macOS runs.
 
@@ -181,10 +181,11 @@ Raw events → quality gate → deduplication → escalation/deviation checks �
 - Check: has `run_oversight` executed?
 - Fix: run `./.venv/bin/python -m src.run_oversight --all`.
 
-### Slack alerts failing
-- Symptom: jobs run but no Slack alerts on ERROR/NEW_DOCS.
-- Check: `SLACK_BOT_TOKEN` and `SLACK_CHANNEL` (GitHub Actions or local env).
-  For local cron, export these in the crontab or run jobs in a wrapper script.
+### Email alerts failing
+- Symptom: jobs run but no email alerts on ERROR/NEW_DOCS.
+- Check: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`, `EMAIL_TO` are set.
+- For local cron, source `.env.cron` before running jobs.
+- Test with: `source .env.cron && python -c "from src.notify_email import is_configured; print(is_configured())"`
 
 ### Network/API failures
 - Symptom: timeouts/5xx from upstream sources.

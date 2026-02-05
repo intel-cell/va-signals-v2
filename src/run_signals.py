@@ -26,7 +26,6 @@ from .signals.router import SignalsRouter, RouteResult
 from .signals.envelope import Envelope
 from .signals.adapters import HearingsAdapter, BillsAdapter, OMEventsAdapter
 from .signals.output.audit_log import write_audit_log
-from .signals.output.slack import format_slack_alert, send_slack_alert
 from .signals.schema.loader import get_routing_rule
 
 logging.basicConfig(
@@ -199,23 +198,12 @@ def _process_route_result(
             version=envelope.version,
             cooldown_minutes=cooldown_minutes,
         )
-    # Send Slack alert if configured
+    # Log alert action (email notifications handled via daily digest)
     if "post_slack_alert" in result.actions:
-        payload = format_slack_alert(
-            event_id=envelope.event_id,
-            authority_id=envelope.authority_id,
-            indicator_id=result.indicator_id,
-            trigger_id=result.trigger_id,
-            severity=result.severity,
-            title=envelope.title,
-            result=result.evaluation,
-            source_url=envelope.source_url,
-            human_review_required=result.human_review_required,
+        logger.info(
+            f"Signal fired: {result.trigger_id} for {envelope.authority_id} "
+            f"(severity={result.severity})"
         )
-        try:
-            send_slack_alert("#signals", payload)
-        except Exception as e:
-            logger.warning(f"Failed to send Slack alert: {e}")
 
 
 def _get_routing_rule_for_result(router: SignalsRouter, result: RouteResult) -> dict:

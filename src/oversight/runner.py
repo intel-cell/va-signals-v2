@@ -315,10 +315,10 @@ def generate_digest(
     Args:
         start_date: Start date (YYYY-MM-DD)
         end_date: End date (YYYY-MM-DD)
-        output_format: "markdown" or "slack"
+        output_format: "markdown" (default)
 
     Returns:
-        Formatted digest string
+        Formatted digest string (markdown)
     """
     events = get_om_events_for_digest(start_date, end_date)
 

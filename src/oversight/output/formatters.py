@@ -1,112 +1,6 @@
-"""Output formatters for oversight events - Slack alerts and digests."""
+"""Output formatters for oversight events - email alerts and digests."""
 
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Optional
-
-
-@dataclass
-class SlackMessage:
-    """Slack message with blocks for rich formatting."""
-
-    channel: str
-    text: str  # Fallback text
-    blocks: list = field(default_factory=list)
-
-
-def _severity_emoji(severity: str) -> str:
-    """Get emoji for severity level."""
-    return {
-        "critical": "🚨",
-        "high": "⚠️",
-        "medium": "📋",
-        "low": "ℹ️",
-    }.get(severity, "📌")
-
-
-def _source_emoji(source_type: str) -> str:
-    """Get emoji for source type."""
-    return {
-        "gao": "📊",
-        "oig": "🔍",
-        "committee_press": "🏛️",
-        "congressional_record": "📜",
-        "news_wire": "📰",
-        "cafc": "⚖️",
-        "crs": "📚",
-    }.get(source_type, "📄")
-
-
-def format_immediate_alert(event: dict) -> SlackMessage:
-    """
-    Format an escalation event as a Slack immediate alert.
-
-    Args:
-        event: Event dict with escalation signals
-
-    Returns:
-        SlackMessage ready to send
-    """
-    severity = event.get("escalation_severity", "high")
-    emoji = _severity_emoji(severity)
-    source_emoji = _source_emoji(event.get("primary_source_type", ""))
-
-    title = event.get("title", "Unknown Event")
-    url = event.get("primary_url", "")
-    signals = event.get("escalation_signals", [])
-    summary = event.get("summary", "")[:300]
-
-    # Build fallback text
-    signal_text = ", ".join(signals) if signals else "escalation detected"
-    text = f"{emoji} [{severity.upper()}] {signal_text}: {title}"
-
-    # Build rich blocks
-    blocks = [
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": f"{emoji} Oversight Alert: {severity.upper()}",
-                "emoji": True,
-            },
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*<{url}|{title}>*",
-            },
-        },
-    ]
-
-    if signals:
-        blocks.append({
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": f"*Signals:*\n{', '.join(signals)}"},
-                {"type": "mrkdwn", "text": f"*Source:*\n{source_emoji} {event.get('primary_source_type', 'unknown')}"},
-            ],
-        })
-
-    if summary:
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": f"_{summary}_"},
-        })
-
-    blocks.append({
-        "type": "context",
-        "elements": [
-            {"type": "mrkdwn", "text": f"Published: {event.get('pub_timestamp', 'unknown')[:10]}"},
-        ],
-    })
-
-    return SlackMessage(
-        channel="#va-signals",
-        text=text,
-        blocks=blocks,
-    )
 
 
 def group_events_by_theme(events: list[dict]) -> dict[str, list[dict]]:
@@ -137,13 +31,13 @@ def _format_event_line(event: dict) -> str:
 
     flags = []
     if event.get("is_escalation"):
-        flags.append("🚨 ESCALATION")
+        flags.append("ESCALATION")
     if event.get("is_deviation"):
-        flags.append("📈 DEVIATION")
+        flags.append("DEVIATION")
 
     flag_str = f" [{', '.join(flags)}]" if flags else ""
 
-    return f"• [{source.upper()}] [{date}] {title}{flag_str}\n  {url}"
+    return f"- [{source.upper()}] [{date}] {title}{flag_str}\n  {url}"
 
 
 def format_weekly_digest(
@@ -152,7 +46,7 @@ def format_weekly_digest(
     period_end: str,
 ) -> str:
     """
-    Format events as a weekly digest.
+    Format events as a weekly digest (markdown).
 
     Args:
         events: List of event dicts
@@ -160,13 +54,13 @@ def format_weekly_digest(
         period_end: End of period (YYYY-MM-DD)
 
     Returns:
-        Formatted digest string
+        Formatted digest string (markdown)
     """
     if not events:
         return f"""# VA Oversight Weekly Digest
 ## {period_start} to {period_end}
 
-📊 **Summary**: A quiet week with no significant oversight activity flagged.
+**Summary**: A quiet week with no significant oversight activity flagged.
 
 No escalations or pattern deviations detected during this period.
 """
@@ -182,9 +76,9 @@ No escalations or pattern deviations detected during this period.
         f"# VA Oversight Weekly Digest",
         f"## {period_start} to {period_end}",
         "",
-        f"📊 **Summary**: {len(events)} significant events",
-        f"- 🚨 Escalations: {escalations}",
-        f"- 📈 Deviations: {deviations}",
+        f"**Summary**: {len(events)} significant events",
+        f"- Escalations: {escalations}",
+        f"- Deviations: {deviations}",
         "",
     ]
 
@@ -201,81 +95,45 @@ No escalations or pattern deviations detected during this period.
     return "\n".join(lines)
 
 
-def format_digest_slack(
-    events: list[dict],
-    period_start: str,
-    period_end: str,
-) -> SlackMessage:
+def format_escalation_alert(event: dict) -> tuple[str, str, str]:
     """
-    Format weekly digest as Slack message.
+    Format an escalation event for email notification.
 
     Args:
-        events: List of event dicts
-        period_start: Start of period
-        period_end: End of period
+        event: Event dict with escalation signals
 
     Returns:
-        SlackMessage ready to send
+        Tuple of (subject, html_body, text_body)
     """
-    escalations = sum(1 for e in events if e.get("is_escalation"))
-    deviations = sum(1 for e in events if e.get("is_deviation"))
+    severity = event.get("escalation_severity", "high").upper()
+    title = event.get("title", "Unknown Event")
+    url = event.get("primary_url", "")
+    signals = event.get("escalation_signals", [])
+    summary = event.get("summary", "")[:500]
+    source = event.get("primary_source_type", "unknown")
+    pub_date = event.get("pub_timestamp", "unknown")[:10]
 
-    text = f"Weekly Digest ({period_start} to {period_end}): {len(events)} events, {escalations} escalations, {deviations} deviations"
+    signal_text = ", ".join(signals) if signals else "escalation detected"
 
-    blocks = [
-        {
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": f"📋 VA Oversight Weekly Digest",
-                "emoji": True,
-            },
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*{period_start}* to *{period_end}*",
-            },
-        },
-        {
-            "type": "section",
-            "fields": [
-                {"type": "mrkdwn", "text": f"*Total Events:*\n{len(events)}"},
-                {"type": "mrkdwn", "text": f"*Escalations:*\n🚨 {escalations}"},
-            ],
-        },
-    ]
+    subject = f"VA Signals - Oversight Alert [{severity}]: {signal_text}"
 
-    if not events:
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "_A quiet week with no significant oversight activity._"},
-        })
-    else:
-        # Add top events
-        blocks.append({"type": "divider"})
+    html = f"""
+    <h2 style="color: #c53030;">Oversight Alert: {severity}</h2>
+    <p><strong>Title:</strong> <a href="{url}">{title}</a></p>
+    <p><strong>Signals:</strong> {signal_text}</p>
+    <p><strong>Source:</strong> {source}</p>
+    <p><strong>Published:</strong> {pub_date}</p>
+    {"<p><strong>Summary:</strong> " + summary + "</p>" if summary else ""}
+    """
 
-        for event in events[:5]:  # Top 5
-            emoji = "🚨" if event.get("is_escalation") else "📈"
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"{emoji} *<{event.get('primary_url', '')}|{event.get('title', '')[:60]}>*",
-                },
-            })
+    text = f"""Oversight Alert: {severity}
 
-        if len(events) > 5:
-            blocks.append({
-                "type": "context",
-                "elements": [
-                    {"type": "mrkdwn", "text": f"_...and {len(events) - 5} more events_"},
-                ],
-            })
+Title: {title}
+URL: {url}
+Signals: {signal_text}
+Source: {source}
+Published: {pub_date}
+{"Summary: " + summary if summary else ""}
+"""
 
-    return SlackMessage(
-        channel="#va-signals",
-        text=text,
-        blocks=blocks,
-    )
+    return subject, html, text

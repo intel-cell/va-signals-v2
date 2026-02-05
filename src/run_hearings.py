@@ -21,7 +21,7 @@ if __name__ == "__main__" and __package__ is None:
 
 from .db import init_db, insert_source_run, get_hearing_stats, get_hearings, get_new_hearings_since, get_hearing_changes_since
 from .fetch_hearings import sync_va_hearings
-from .notify_slack import post_slack, format_new_hearings_alert, format_hearing_changes_alert
+from .notify_email import send_error_alert
 from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -121,22 +121,9 @@ def run_hearings_sync(full: bool = False, congress: int = 119) -> dict[str, Any]
     }
     print(json.dumps(summary, indent=2))
 
-    # Send Slack alerts
-    if new_hearings:
-        alert_payload = format_new_hearings_alert(new_hearings)
-        if alert_payload:
-            try:
-                post_slack(alert_payload)
-            except Exception:
-                pass
-
-    if hearing_changes:
-        alert_payload = format_hearing_changes_alert(hearing_changes)
-        if alert_payload:
-            try:
-                post_slack(alert_payload)
-            except Exception:
-                pass
+    # Send error email if needed
+    if status == "ERROR" and errors:
+        send_error_alert(SOURCE_ID, errors, run_record)
 
     return run_record
 

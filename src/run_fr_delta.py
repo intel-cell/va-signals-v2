@@ -13,7 +13,7 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .notify_slack import post_slack, format_fr_delta_alert
+from .notify_email import send_new_docs_alert, send_error_alert
 from .provenance import utc_now_iso
 from .db import init_db, insert_source_run, upsert_fr_seen
 from .fr_bulk import list_latest_month_folders, list_month_packages
@@ -102,12 +102,12 @@ def run_fr_delta(max_months: int = 3) -> Dict[str, Any]:
     new_docs_count = len(new_docs)
     print(json.dumps({"run_record": run_record, "new_docs_count": new_docs_count}, indent=2))
 
-    alert_payload = format_fr_delta_alert(run_record, new_docs)
-    if alert_payload:
-        try:
-            post_slack(alert_payload)
-        except Exception:
-            pass
+    # Send email notifications
+    if final_status == "ERROR" and errors:
+        send_error_alert(source["id"], errors, run_record)
+    elif new_docs:
+        send_new_docs_alert(source["id"], new_docs, run_record)
+
     return run_record
 
 

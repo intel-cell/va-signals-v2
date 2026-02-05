@@ -9,7 +9,7 @@ from jsonschema import validate
 
 from .provenance import utc_now_iso
 from .db import init_db, insert_source_run, upsert_ecfr_seen
-from .notify_slack import post_slack
+from .notify_email import send_error_alert
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -85,24 +85,9 @@ def run_ecfr_delta() -> Dict[str, Any]:
     insert_source_run(run_record)
     write_run_record(run_record)
 
-    # Slack: only on change or error
-    if final_status == "ERROR":
-        try:
-            post_slack({"text": f"VA Signals — eCFR Title 38 ERROR\nsource={source['id']}\nerrors={errors}"})
-        except Exception:
-            pass
-    elif changed:
-        try:
-            post_slack({
-                "text": (
-                    "VA Signals — eCFR Title 38 UPDATED\n"
-                    f"Last-Modified: {last_modified}\n"
-                    f"ETag: {etag}\n"
-                    f"{url}"
-                )
-            })
-        except Exception:
-            pass
+    # Send error email if needed
+    if final_status == "ERROR" and errors:
+        send_error_alert(source["id"], errors, run_record)
 
     print(json.dumps({"run_record": run_record, "changed": changed, "last_modified": last_modified, "etag": etag}, indent=2))
     return run_record

@@ -15,6 +15,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Any, Dict, List, Optional
 
+import certifi
+
 # VA-themed colors
 VA_BLUE = "#003366"
 VA_LIGHT_BLUE = "#0071bc"
@@ -65,13 +67,15 @@ def _send_email(subject: str, html: str, text: str) -> bool:
         msg.attach(MIMEText(text, "plain", "utf-8"))
         msg.attach(MIMEText(html, "html", "utf-8"))
 
-        # Create secure TLS context
-        context = ssl.create_default_context()
+        # Create secure TLS context with certifi certificates (fixes macOS SSL issues)
+        context = ssl.create_default_context(cafile=certifi.where())
 
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as server:
             server.starttls(context=context)
             server.login(cfg["user"], cfg["password"])
-            server.sendmail(cfg["from_addr"], cfg["to_addr"], msg.as_string())
+            # Split multiple recipients by comma
+            recipients = [r.strip() for r in cfg["to_addr"].split(",")]
+            server.sendmail(cfg["from_addr"], recipients, msg.as_string())
 
         return True
 

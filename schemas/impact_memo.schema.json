@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VA Signals V2 - Impact Memo",
+  "description": "CEO-grade impact assessment for policy changes. CHARLIE COMMAND - LOE 3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "memo_id",
+    "issue_id",
+    "generated_date",
+    "policy_hook",
+    "what_it_does",
+    "why_it_matters",
+    "our_posture",
+    "recommended_action",
+    "decision_trigger",
+    "confidence_level"
+  ],
+  "properties": {
+    "memo_id": {
+      "type": "string",
+      "pattern": "^MEMO-[0-9]{8}-[A-Z0-9]{8}$",
+      "description": "Unique memo identifier: MEMO-YYYYMMDD-XXXXXXXX"
+    },
+    "issue_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Links to tracked issue/signal"
+    },
+    "generated_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When memo was created (ISO 8601)"
+    },
+    "policy_hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vehicle", "vehicle_type", "current_status", "source_url"],
+      "properties": {
+        "vehicle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Bill number (H.R. 1234), rule docket (RIN 2900-AQ66), etc."
+        },
+        "vehicle_type": {
+          "type": "string",
+          "enum": ["bill", "rule", "hearing", "report", "executive_order", "guidance", "memorandum"],
+          "description": "Type of policy vehicle"
+        },
+        "section_reference": {
+          "type": ["string", "null"],
+          "maxLength": 256,
+          "description": "Specific section/paragraph reference"
+        },
+        "current_status": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Current status (introduced, proposed_rule, final_rule, markup, etc.)"
+        },
+        "source_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Link to primary source"
+        },
+        "effective_date": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "When change takes effect (ISO 8601 date)"
+        }
+      }
+    },
+    "what_it_does": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 1000,
+      "description": "Plain language summary (2-3 sentences)"
+    },
+    "why_it_matters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operational_impact", "affected_workflows", "compliance_exposure", "reputational_risk"],
+      "properties": {
+        "operational_impact": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 1000,
+          "description": "Claims volume, cycle time, staffing impact"
+        },
+        "affected_workflows": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "claims_intake",
+              "claims_development",
+              "rating",
+              "notification",
+              "appeals",
+              "bva",
+              "exam_scheduling",
+              "medical_evidence",
+              "accreditation",
+              "fee_agreements",
+              "it_systems",
+              "training",
+              "contracting",
+              "staffing"
+            ]
+          },
+          "minItems": 1,
+          "description": "Affected operational workflows"
+        },
+        "affected_veteran_count": {
+          "type": ["string", "null"],
+          "maxLength": 64,
+          "description": "Estimate or range (e.g., '~100K', '50K-200K')"
+        },
+        "compliance_exposure": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "negligible"],
+          "description": "Compliance risk level"
+        },
+        "enforcement_mechanism": {
+          "type": ["string", "null"],
+          "maxLength": 256,
+          "description": "OIG audit, GAO review, court challenge, etc."
+        },
+        "compliance_deadline": {
+          "type": ["string", "null"],
+          "format": "date",
+          "description": "Regulatory compliance deadline"
+        },
+        "cost_impact": {
+          "type": ["string", "null"],
+          "maxLength": 128,
+          "description": "Quantified cost impact (e.g., '$2-5M annual')"
+        },
+        "cost_type": {
+          "type": ["string", "null"],
+          "enum": ["staffing", "it", "contracts", "benefits_increase", "training", "mixed", null],
+          "description": "Category of cost impact"
+        },
+        "reputational_risk": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low", "negligible"],
+          "description": "Reputational risk level"
+        },
+        "narrative_vulnerability": {
+          "type": ["string", "null"],
+          "maxLength": 500,
+          "description": "How media/VSOs might frame this"
+        }
+      }
+    },
+    "our_posture": {
+      "type": "string",
+      "enum": ["support", "oppose", "monitor", "neutral_engaged"],
+      "description": "Organization's position on the issue"
+    },
+    "recommended_action": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 500,
+      "description": "What CEO should do"
+    },
+    "decision_trigger": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 500,
+      "description": "Conditional action: 'if X appears, do Y'"
+    },
+    "confidence_level": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "Confidence in impact assessment"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": "Links to evidence pack citations"
+    },
+    "translated_by": {
+      "type": "string",
+      "default": "charlie_command",
+      "description": "Agent/analyst that created the memo"
+    },
+    "translation_method": {
+      "type": "string",
+      "enum": ["rule_based", "llm", "manual"],
+      "default": "rule_based",
+      "description": "How impact was translated"
+    }
+  }
+}

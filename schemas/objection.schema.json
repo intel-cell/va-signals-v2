@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VA Signals V2 - Objection",
+  "description": "Staff pushback response entry. CHARLIE COMMAND - LOE 3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "objection_id",
+    "issue_area",
+    "source_type",
+    "objection_text",
+    "response_text"
+  ],
+  "properties": {
+    "objection_id": {
+      "type": "string",
+      "pattern": "^OBJ-[A-Z]{3}-[0-9]{3}$",
+      "description": "Unique objection identifier: OBJ-XXX-NNN (e.g., OBJ-BEN-001)"
+    },
+    "issue_area": {
+      "type": "string",
+      "enum": [
+        "benefits",
+        "accreditation",
+        "appropriations",
+        "oversight",
+        "it_modernization",
+        "claims_processing"
+      ],
+      "description": "Primary issue domain"
+    },
+    "source_type": {
+      "type": "string",
+      "enum": [
+        "staff",
+        "vso",
+        "industry",
+        "media",
+        "congressional",
+        "va_internal"
+      ],
+      "description": "Source of the objection/pushback"
+    },
+    "objection_text": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 1000,
+      "description": "What they'll say (the objection)"
+    },
+    "response_text": {
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 500,
+      "description": "1-2 sentence reply"
+    },
+    "supporting_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": "Links to evidence pack citations"
+    },
+    "last_used_date": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "When this response was last used"
+    },
+    "effectiveness_rating": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "maximum": 5,
+      "description": "How effective this response is (1-5)"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 32
+      },
+      "description": "Additional categorization tags"
+    }
+  }
+}

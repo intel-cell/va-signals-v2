@@ -107,8 +107,8 @@ GitHub Actions runs the pipeline daily at **06:15 ET** (11:15 UTC during EST) vi
   - `fetch_fr_ping.py` — reachability ping (HEAD) + run record artifact
   - `db.py` — SQLite helpers (`source_runs`, `fr_seen`)
   - `provenance.py` — provenance gate for downstream signals
-  - `notify_slack.py` — Slack App bot posting (`SLACK_BOT_TOKEN` + `SLACK_CHANNEL`)
-- `tests/` — pytest tests (provenance gate + Slack formatting)
+  - `notify_email.py` — Email alerts via SMTP (Gmail)
+- `tests/` — pytest tests (provenance gate + email formatting)
 - `outputs/runs/` — generated run artifacts (ignored by git)
 - `docs/` — governance/doctrine/validation stubs
 
@@ -176,8 +176,12 @@ make fr-ping
 ## Secrets (GitHub Actions)
 
 Set these as **repository secrets**:
-- `SLACK_BOT_TOKEN` — Slack App Bot User OAuth Token (`xoxb-...`)
-- `SLACK_CHANNEL` — Slack channel ID for `sof-werks` (e.g., `CXXXXXXXX`)
+- `SMTP_HOST` — SMTP server hostname (e.g., `smtp.gmail.com`)
+- `SMTP_PORT` — SMTP port (e.g., `587`)
+- `SMTP_USER` — SMTP username (e.g., Gmail address)
+- `SMTP_PASS` — SMTP password (e.g., Gmail App Password)
+- `EMAIL_FROM` — From address for notifications
+- `EMAIL_TO` — Comma-separated recipient addresses
 
 ---
 
@@ -194,7 +198,7 @@ Set these as **repository secrets**:
 
 AI tools are allowed to assist implementation only. They are not allowed to invent facts, generate signals, or backfill missing data.
 
-**Important:** This repo does not use Slack incoming webhooks. Alerting is via Slack App bot token + channel ID (`SLACK_BOT_TOKEN`, `SLACK_CHANNEL`).
+**Note:** Alerting is via email only (SMTP). See `.env.cron` for configuration.
 
 When using Codex, enforce: **one task = one commit**, and use the work-order template in `docs/governance/AI_USAGE_POLICY.md`.
 
