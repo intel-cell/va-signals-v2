@@ -80,6 +80,9 @@ VETERAN_KEYWORDS = [
     "floridavets",
     "dmva",
     "odvs",
+    "ncdmva",
+    "gdvs",
+    "advs",
     "national guard",
 ]
 

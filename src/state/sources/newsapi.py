@@ -44,6 +44,26 @@ SEARCH_QUERIES = {
         "New York VA healthcare",
         "New York Division Veterans Services",
     ],
+    "NC": [
+        "North Carolina veterans PACT Act",
+        "North Carolina VA healthcare",
+        "North Carolina DMVA veterans",
+    ],
+    "GA": [
+        "Georgia veterans PACT Act",
+        "Georgia VA healthcare",
+        "Georgia Department Veterans Services",
+    ],
+    "VA": [
+        "Virginia veterans PACT Act",
+        "Virginia VA healthcare",
+        "Virginia Department Veterans Services",
+    ],
+    "AZ": [
+        "Arizona veterans PACT Act",
+        "Arizona VA healthcare",
+        "Arizona Department Veterans Services",
+    ],
 }
 
 

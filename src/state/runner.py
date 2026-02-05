@@ -1,6 +1,6 @@
 """Main runner orchestrator for State Intelligence.
 
-Orchestrates twice-daily monitoring runs for TX, CA, FL, PA, OH, NY.
+Orchestrates twice-daily monitoring runs for TX, CA, FL, PA, OH, NY, NC, GA, VA, AZ.
 """
 
 import argparse
@@ -26,6 +26,10 @@ from src.state.sources.fl_official import FLOfficialSource
 from src.state.sources.pa_official import PAOfficialSource
 from src.state.sources.oh_official import OHOfficialSource
 from src.state.sources.ny_official import NYOfficialSource
+from src.state.sources.nc_official import NCOfficialSource
+from src.state.sources.ga_official import GAOfficialSource
+from src.state.sources.va_official import VAOfficialSource
+from src.state.sources.az_official import AZOfficialSource
 from src.state.sources.newsapi import NewsAPISource
 from src.state.sources.rss import RSSSource
 from src.notify_email import is_configured as email_configured, _send_email
@@ -33,7 +37,7 @@ from src.notify_email import is_configured as email_configured, _send_email
 logger = logging.getLogger(__name__)
 
 # States we monitor
-MONITORED_STATES = ["TX", "CA", "FL", "PA", "OH", "NY"]
+MONITORED_STATES = ["TX", "CA", "FL", "PA", "OH", "NY", "NC", "GA", "VA", "AZ"]
 
 def _get_official_source(state: str):
     """Get the official source class for a state. Returns None if not supported."""
@@ -44,6 +48,10 @@ def _get_official_source(state: str):
         "PA": PAOfficialSource,
         "OH": OHOfficialSource,
         "NY": NYOfficialSource,
+        "NC": NCOfficialSource,
+        "GA": GAOfficialSource,
+        "VA": VAOfficialSource,
+        "AZ": AZOfficialSource,
     }
     return sources.get(state)
 

@@ -87,6 +87,46 @@ RSS_FEEDS: dict[str, list[FeedInfo]] = {
             "url": "https://news.google.com/rss/search?q=New+York+veterans&hl=en-US&gl=US&ceid=US:en",
         },
     ],
+    "NC": [
+        {
+            "name": "Charlotte Observer",
+            "url": "https://www.charlotteobserver.com/news/politics-government/rss.xml",
+        },
+        {
+            "name": "Google News NC Veterans",
+            "url": "https://news.google.com/rss/search?q=North+Carolina+veterans&hl=en-US&gl=US&ceid=US:en",
+        },
+    ],
+    "GA": [
+        {
+            "name": "Atlanta Journal-Constitution",
+            "url": "https://www.ajc.com/arcio/rss/category/news/",
+        },
+        {
+            "name": "Google News GA Veterans",
+            "url": "https://news.google.com/rss/search?q=Georgia+veterans&hl=en-US&gl=US&ceid=US:en",
+        },
+    ],
+    "VA": [
+        {
+            "name": "Richmond Times-Dispatch",
+            "url": "https://richmond.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc",
+        },
+        {
+            "name": "Google News VA Veterans",
+            "url": "https://news.google.com/rss/search?q=Virginia+veterans&hl=en-US&gl=US&ceid=US:en",
+        },
+    ],
+    "AZ": [
+        {
+            "name": "AZ Central",
+            "url": "https://rssfeeds.azcentral.com/phoenix/news",
+        },
+        {
+            "name": "Google News AZ Veterans",
+            "url": "https://news.google.com/rss/search?q=Arizona+veterans&hl=en-US&gl=US&ceid=US:en",
+        },
+    ],
 }
 
 

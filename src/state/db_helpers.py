@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from src.db import connect, execute, insert_returning_id
 
 
-# Default sources for TX, CA, FL, PA, OH, NY
+# Default sources for TX, CA, FL, PA, OH, NY, NC, GA, VA, AZ
 DEFAULT_SOURCES = [
     # Texas
     {
@@ -75,6 +75,38 @@ DEFAULT_SOURCES = [
         "name": "NY DVS Pressroom",
         "url": "https://veterans.ny.gov/pressroom",
     },
+    # North Carolina
+    {
+        "source_id": "nc_dmva_news",
+        "state": "NC",
+        "source_type": "official",
+        "name": "NC DMVA Press Releases",
+        "url": "https://www.milvets.nc.gov/news/press-releases",
+    },
+    # Georgia
+    {
+        "source_id": "ga_dvs_news",
+        "state": "GA",
+        "source_type": "official",
+        "name": "GA DVS Press Releases",
+        "url": "https://veterans.georgia.gov/press-releases",
+    },
+    # Virginia
+    {
+        "source_id": "va_dvs_news",
+        "state": "VA",
+        "source_type": "official",
+        "name": "Virginia DVS News",
+        "url": "https://www.dvs.virginia.gov/news-room/press-release",
+    },
+    # Arizona
+    {
+        "source_id": "az_dvs_news",
+        "state": "AZ",
+        "source_type": "official",
+        "name": "Arizona DVS Press Releases",
+        "url": "https://dvs.az.gov/press-releases",
+    },
     # RSS Feeds
     {
         "source_id": "rss_texas_tribune",
@@ -117,6 +149,34 @@ DEFAULT_SOURCES = [
         "source_type": "rss",
         "name": "Times Union Albany",
         "url": "https://www.timesunion.com/news/rss/feed/",
+    },
+    {
+        "source_id": "rss_charlotte_observer",
+        "state": "NC",
+        "source_type": "rss",
+        "name": "Charlotte Observer",
+        "url": "https://www.charlotteobserver.com/news/politics-government/rss.xml",
+    },
+    {
+        "source_id": "rss_ajc",
+        "state": "GA",
+        "source_type": "rss",
+        "name": "Atlanta Journal-Constitution",
+        "url": "https://www.ajc.com/arcio/rss/category/news/",
+    },
+    {
+        "source_id": "rss_richmond_td",
+        "state": "VA",
+        "source_type": "rss",
+        "name": "Richmond Times-Dispatch",
+        "url": "https://richmond.com/search/?f=rss&t=article&c=news&l=50&s=start_time&sd=desc",
+    },
+    {
+        "source_id": "rss_az_central",
+        "state": "AZ",
+        "source_type": "rss",
+        "name": "AZ Central",
+        "url": "https://rssfeeds.azcentral.com/phoenix/news",
     },
 ]
 

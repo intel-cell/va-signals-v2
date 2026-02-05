@@ -230,7 +230,7 @@ class TestRunStateMonitor:
             summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
 
             # All states should have been requested
-            assert set(states_requested) == {"TX", "CA", "FL", "PA", "OH", "NY"}
+            assert set(states_requested) == {"TX", "CA", "FL", "PA", "OH", "NY", "NC", "GA", "VA", "AZ"}
             assert summary["state"] is None
 
     def test_dry_run_skips_notifications(self):
