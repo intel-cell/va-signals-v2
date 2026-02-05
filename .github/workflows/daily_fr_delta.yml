@@ -34,3 +34,11 @@ jobs:
           make db-init
           make fr-delta
           make ecfr-delta
+
+      - name: Run Trend Aggregation
+        run: python -m scripts.run_trend_aggregation
+
+      - name: Cleanup Old Logs
+        run: python -m scripts.cleanup_logs
+        env:
+          LOG_RETENTION_DAYS: "90"
