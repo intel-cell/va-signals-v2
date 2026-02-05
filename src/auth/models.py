@@ -121,3 +121,20 @@ class CurrentUserResponse(BaseModel):
     display_name: Optional[str] = None
     role: str
     permissions: list[str]
+
+
+class SessionCreateRequest(BaseModel):
+    """Request to create session from Firebase ID token."""
+    idToken: str
+    provider: str = "google"  # "google" or "email"
+    rememberMe: bool = False
+
+
+class FirebaseConfigResponse(BaseModel):
+    """Firebase client configuration for frontend."""
+    apiKey: str
+    authDomain: str
+    projectId: str
+    storageBucket: Optional[str] = None
+    messagingSenderId: Optional[str] = None
+    appId: Optional[str] = None

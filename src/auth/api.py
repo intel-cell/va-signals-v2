@@ -27,6 +27,8 @@ from .models import (
     UserCreateRequest,
     UserUpdateRequest,
     CurrentUserResponse,
+    SessionCreateRequest,
+    FirebaseConfigResponse,
 )
 from .middleware import (
     get_current_user,
@@ -44,6 +46,37 @@ from .firebase_config import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
+
+
+# --- Firebase Config Endpoint ---
+
+@router.get("/config", response_model=FirebaseConfigResponse)
+async def get_firebase_config():
+    """
+    Get Firebase client configuration for frontend authentication.
+
+    This returns the PUBLIC Firebase config needed by the frontend JS SDK.
+    These are NOT secrets - they're meant to be public.
+    """
+    import os
+
+    api_key = os.environ.get("FIREBASE_API_KEY")
+    project_id = os.environ.get("FIREBASE_PROJECT_ID", "vetclaims-ai")
+
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Firebase not configured. Set FIREBASE_API_KEY environment variable."
+        )
+
+    return FirebaseConfigResponse(
+        apiKey=api_key,
+        authDomain=f"{project_id}.firebaseapp.com",
+        projectId=project_id,
+        storageBucket=os.environ.get("FIREBASE_STORAGE_BUCKET", f"{project_id}.appspot.com"),
+        messagingSenderId=os.environ.get("FIREBASE_MESSAGING_SENDER_ID"),
+        appId=os.environ.get("FIREBASE_APP_ID"),
+    )
 
 
 # --- Database Helpers ---
@@ -221,6 +254,182 @@ async def login(request: Request, response: Response, body: LoginRequest):
         },
         "csrf_token": csrf_token,
     }
+
+
+@router.post("/session")
+async def create_session(request: Request, response: Response, body: SessionCreateRequest):
+    """
+    Create a backend session from a Firebase ID token.
+
+    This is called by the frontend after Firebase authentication.
+    The frontend sends the Firebase ID token, and we verify it
+    and create a server-side session.
+    """
+    # Verify the Firebase ID token
+    claims = verify_firebase_token(body.idToken)
+    if not claims:
+        raise HTTPException(status_code=401, detail="Invalid Firebase token")
+
+    # Create or update user in database
+    user_data = _create_or_update_user(
+        user_id=claims["user_id"],
+        email=claims["email"],
+        display_name=claims.get("display_name"),
+    )
+
+    # Create session token with appropriate expiration
+    expires_hours = 24 * 30 if body.rememberMe else 24  # 30 days vs 1 day
+    session_token = create_session_token(
+        user_id=user_data["user_id"],
+        email=user_data["email"],
+        expires_in_hours=expires_hours,
+    )
+
+    # Generate CSRF token
+    csrf_token = generate_csrf_token()
+
+    # Set cookies
+    set_auth_cookies(response, session_token, csrf_token)
+
+    logger.info(f"Session created for user {user_data['email']} via {body.provider}")
+
+    return {
+        "status": "success",
+        "user": {
+            "user_id": user_data["user_id"],
+            "email": user_data["email"],
+            "display_name": user_data.get("display_name"),
+            "role": user_data["role"],
+        },
+        "csrf_token": csrf_token,
+    }
+
+
+@router.get("/google")
+async def google_oauth_redirect(request: Request):
+    """
+    Fallback Google OAuth redirect.
+
+    This endpoint is only used when Firebase SDK fails to load on the frontend.
+    It redirects to Google's OAuth consent screen.
+
+    Note: For this to work, you need to configure OAuth credentials in
+    Google Cloud Console and set GOOGLE_CLIENT_ID environment variable.
+    """
+    import os
+    from urllib.parse import urlencode
+
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    if not client_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Google OAuth not configured. Please use Firebase Sign-In instead, or configure GOOGLE_CLIENT_ID."
+        )
+
+    # Build the OAuth URL
+    redirect_uri = str(request.url_for("google_oauth_callback"))
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+    }
+
+    oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=oauth_url)
+
+
+@router.get("/google/callback")
+async def google_oauth_callback(
+    request: Request,
+    response: Response,
+    code: str = Query(None),
+    error: str = Query(None),
+):
+    """
+    Handle OAuth callback from Google.
+
+    Exchanges the authorization code for tokens and creates a session.
+    """
+    import os
+    import httpx
+
+    if error:
+        # Redirect to login with error
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=f"/login.html?error={error}")
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing authorization code")
+
+    client_id = os.environ.get("GOOGLE_CLIENT_ID")
+    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        raise HTTPException(status_code=503, detail="OAuth not configured")
+
+    # Exchange code for tokens
+    redirect_uri = str(request.url_for("google_oauth_callback"))
+
+    async with httpx.AsyncClient() as client:
+        token_response = await client.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri,
+            },
+        )
+
+        if token_response.status_code != 200:
+            logger.error(f"Token exchange failed: {token_response.text}")
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url="/login.html?error=token_exchange_failed")
+
+        tokens = token_response.json()
+
+        # Get user info
+        userinfo_response = await client.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {tokens['access_token']}"},
+        )
+
+        if userinfo_response.status_code != 200:
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(url="/login.html?error=userinfo_failed")
+
+        userinfo = userinfo_response.json()
+
+    # Create or update user
+    user_data = _create_or_update_user(
+        user_id=userinfo.get("id", userinfo.get("email")),
+        email=userinfo["email"],
+        display_name=userinfo.get("name"),
+    )
+
+    # Create session
+    session_token = create_session_token(
+        user_id=user_data["user_id"],
+        email=user_data["email"],
+    )
+
+    csrf_token = generate_csrf_token()
+    set_auth_cookies(response, session_token, csrf_token)
+
+    logger.info(f"OAuth login successful for {user_data['email']}")
+
+    # Redirect to dashboard
+    from fastapi.responses import RedirectResponse
+    redirect_response = RedirectResponse(url="/", status_code=302)
+    set_auth_cookies(redirect_response, session_token, csrf_token)
+    return redirect_response
 
 
 @router.post("/verify")
