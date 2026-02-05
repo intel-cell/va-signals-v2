@@ -19,7 +19,11 @@ CREATE TABLE IF NOT EXISTS fr_seen (
   doc_id TEXT PRIMARY KEY,
   published_date TEXT NOT NULL,
   first_seen_at TEXT NOT NULL,
-  source_url TEXT NOT NULL
+  source_url TEXT NOT NULL,
+  comments_close_date TEXT,
+  effective_date TEXT,
+  document_type TEXT,
+  title TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ecfr_seen (

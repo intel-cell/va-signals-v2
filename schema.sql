@@ -19,7 +19,11 @@ CREATE TABLE IF NOT EXISTS fr_seen (
   doc_id TEXT PRIMARY KEY,
   published_date TEXT NOT NULL,
   first_seen_at TEXT NOT NULL,
-  source_url TEXT NOT NULL
+  source_url TEXT NOT NULL,
+  comments_close_date TEXT,
+  effective_date TEXT,
+  document_type TEXT,
+  title TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ecfr_seen (
@@ -765,3 +769,73 @@ CREATE TABLE IF NOT EXISTS ceo_briefs (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ============================================================================
+-- TREND ANALYSIS (Historical Aggregations)
+-- ============================================================================
+
+-- Daily signal counts by trigger
+CREATE TABLE IF NOT EXISTS trend_daily_signals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    trigger_id TEXT NOT NULL,
+    signal_count INTEGER NOT NULL DEFAULT 0,
+    suppressed_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, trigger_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trend_daily_signals_date ON trend_daily_signals(date);
+CREATE INDEX IF NOT EXISTS idx_trend_daily_signals_trigger ON trend_daily_signals(trigger_id);
+
+-- Daily source health metrics
+CREATE TABLE IF NOT EXISTS trend_daily_source_health (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    run_count INTEGER NOT NULL DEFAULT 0,
+    success_count INTEGER NOT NULL DEFAULT 0,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    no_data_count INTEGER NOT NULL DEFAULT 0,
+    total_docs INTEGER NOT NULL DEFAULT 0,
+    success_rate REAL,
+    avg_duration_ms INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date, source_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trend_source_health_date ON trend_daily_source_health(date);
+CREATE INDEX IF NOT EXISTS idx_trend_source_health_source ON trend_daily_source_health(source_id);
+
+-- Weekly oversight summary
+CREATE TABLE IF NOT EXISTS trend_weekly_oversight (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_start TEXT NOT NULL,
+    week_end TEXT NOT NULL,
+    total_events INTEGER NOT NULL DEFAULT 0,
+    escalations INTEGER NOT NULL DEFAULT 0,
+    deviations INTEGER NOT NULL DEFAULT 0,
+    by_source_json TEXT NOT NULL DEFAULT '{}',
+    by_theme_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(week_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trend_weekly_oversight_week ON trend_weekly_oversight(week_start);
+
+-- Daily battlefield snapshot
+CREATE TABLE IF NOT EXISTS trend_daily_battlefield (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    total_vehicles INTEGER NOT NULL DEFAULT 0,
+    active_vehicles INTEGER NOT NULL DEFAULT 0,
+    critical_gates INTEGER NOT NULL DEFAULT 0,
+    alerts_count INTEGER NOT NULL DEFAULT 0,
+    by_type_json TEXT NOT NULL DEFAULT '{}',
+    by_posture_json TEXT NOT NULL DEFAULT '{}',
+    by_stage_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trend_daily_battlefield_date ON trend_daily_battlefield(date);

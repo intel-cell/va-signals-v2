@@ -178,9 +178,24 @@ def insert_source_run(run_record: dict):
   con.commit()
   con.close()
 
-def upsert_fr_seen(doc_id: str, published_date: str, first_seen_at: str, source_url: str) -> bool:
+def upsert_fr_seen(
+    doc_id: str,
+    published_date: str,
+    first_seen_at: str,
+    source_url: str,
+    comments_close_date: str | None = None,
+    effective_date: str | None = None,
+    document_type: str | None = None,
+    title: str | None = None,
+) -> bool:
     """
-    Returns True if inserted (new), False if already existed.
+    Insert or update FR document. Returns True if inserted (new), False if already existed.
+
+    New fields (optional):
+    - comments_close_date: Date when comments close (ISO format)
+    - effective_date: Date when rule becomes effective (ISO format)
+    - document_type: Type of document (proposed rule, final rule, notice, etc.)
+    - title: Document title
     """
     con = connect()
     cur = execute(con, "SELECT doc_id FROM fr_seen WHERE doc_id = :doc_id", {"doc_id": doc_id})
@@ -188,18 +203,65 @@ def upsert_fr_seen(doc_id: str, published_date: str, first_seen_at: str, source_
     if not exists:
         execute(
             con,
-            """INSERT INTO fr_seen(doc_id, published_date, first_seen_at, source_url)
-               VALUES(:doc_id, :published_date, :first_seen_at, :source_url)""",
+            """INSERT INTO fr_seen(doc_id, published_date, first_seen_at, source_url,
+                   comments_close_date, effective_date, document_type, title)
+               VALUES(:doc_id, :published_date, :first_seen_at, :source_url,
+                   :comments_close_date, :effective_date, :document_type, :title)""",
             {
                 "doc_id": doc_id,
                 "published_date": published_date,
                 "first_seen_at": first_seen_at,
                 "source_url": source_url,
+                "comments_close_date": comments_close_date,
+                "effective_date": effective_date,
+                "document_type": document_type,
+                "title": title,
             },
         )
         con.commit()
     con.close()
     return not exists
+
+
+def update_fr_seen_dates(
+    doc_id: str,
+    comments_close_date: str | None = None,
+    effective_date: str | None = None,
+    document_type: str | None = None,
+    title: str | None = None,
+) -> bool:
+    """
+    Update FR document with date fields. Returns True if updated, False if not found.
+    Only updates non-NULL values.
+    """
+    con = connect()
+    cur = execute(con, "SELECT doc_id FROM fr_seen WHERE doc_id = :doc_id", {"doc_id": doc_id})
+    exists = cur.fetchone() is not None
+    if exists:
+        updates = []
+        params = {"doc_id": doc_id}
+        if comments_close_date is not None:
+            updates.append("comments_close_date = :comments_close_date")
+            params["comments_close_date"] = comments_close_date
+        if effective_date is not None:
+            updates.append("effective_date = :effective_date")
+            params["effective_date"] = effective_date
+        if document_type is not None:
+            updates.append("document_type = :document_type")
+            params["document_type"] = document_type
+        if title is not None:
+            updates.append("title = :title")
+            params["title"] = title
+
+        if updates:
+            execute(
+                con,
+                f"UPDATE fr_seen SET {', '.join(updates)} WHERE doc_id = :doc_id",
+                params,
+            )
+            con.commit()
+    con.close()
+    return exists
 
 
 def get_existing_fr_doc_ids(doc_ids: list[str]) -> set[str]:

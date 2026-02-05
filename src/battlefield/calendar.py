@@ -63,6 +63,10 @@ def _determine_importance(event_type: str, days_until: int, status: Optional[str
     if days_until <= 30 and event_type == "comment_deadline":
         return "important"
 
+    # Important: effective dates within 60 days (need compliance prep time)
+    if days_until <= 60 and event_type == "effective_date":
+        return "important"
+
     return "watch"
 
 
@@ -226,10 +230,11 @@ def sync_bills_to_calendar() -> dict:
 
 def sync_federal_register_to_calendar() -> dict:
     """
-    Sync Federal Register documents to battlefield vehicles.
+    Sync Federal Register documents to battlefield vehicles and calendar events.
 
-    NOTE: Current fr_seen table lacks comments_close_date and effective_date.
-    This function creates vehicles but calendar events are limited without those fields.
+    Creates calendar events for:
+    - Comment deadlines (comments_close_date)
+    - Effective dates (effective_date)
 
     Returns: {created_vehicles: int, created_events: int, skipped_no_dates: int}
     """
@@ -241,6 +246,7 @@ def sync_federal_register_to_calendar() -> dict:
     rows = _execute(
         """
         SELECT f.doc_id, f.published_date, f.source_url,
+               f.comments_close_date, f.effective_date, f.document_type, f.title,
                s.summary, s.veteran_impact, s.tags
         FROM fr_seen f
         LEFT JOIN fr_summaries s ON f.doc_id = s.doc_id
@@ -254,24 +260,28 @@ def sync_federal_register_to_calendar() -> dict:
     for row in rows:
         vehicle_id = f"fr_{row['doc_id']}"
 
-        # Determine if this is a proposed or final rule from tags/summary
+        # Determine stage from document_type or tags/summary
+        doc_type = (row.get("document_type") or "").lower()
         tags = row["tags"] or ""
         summary = row["summary"] or ""
 
-        if "proposed rule" in tags.lower() or "proposed rule" in summary.lower():
+        if "proposed" in doc_type or "proposed rule" in tags.lower() or "proposed rule" in summary.lower():
             stage = "proposed_rule"
             vehicle_type = "rule"
-        elif "final rule" in tags.lower() or "final rule" in summary.lower():
+        elif "final" in doc_type or "final rule" in tags.lower() or "final rule" in summary.lower():
             stage = "final_rule"
             vehicle_type = "rule"
         else:
             stage = "active"
             vehicle_type = "rule"
 
+        # Use title from FR API if available, fallback to summary
+        title = row.get("title") or row["summary"] or f"FR Doc {row['doc_id']}"
+
         upsert_vehicle(
             vehicle_id=vehicle_id,
             vehicle_type=vehicle_type,
-            title=row["summary"][:200] if row["summary"] else f"FR Doc {row['doc_id']}",
+            title=title[:200],
             identifier=row["doc_id"],
             current_stage=stage,
             status_date=row["published_date"],
@@ -282,9 +292,51 @@ def sync_federal_register_to_calendar() -> dict:
         )
         stats["created_vehicles"] += 1
 
-        # Calendar events would go here if we had comment/effective dates
-        # TODO: Extend fr_seen schema or extract dates from FR API
-        stats["skipped_no_dates"] += 1
+        # Create calendar events for comment deadlines
+        comments_close = row.get("comments_close_date")
+        if comments_close:
+            days = _days_until(comments_close)
+            if days >= 0:  # Only future deadlines
+                event_id = f"evt_fr_comment_{row['doc_id']}"
+                importance = _determine_importance("comment_deadline", days)
+
+                upsert_calendar_event(
+                    event_id=event_id,
+                    vehicle_id=vehicle_id,
+                    date=comments_close,
+                    event_type="comment_deadline",
+                    title=f"Comment Deadline: {title[:150]}",
+                    importance=importance,
+                    prep_required="Submit public comments before deadline",
+                    source_type="fr_seen",
+                    source_id=row["doc_id"],
+                )
+                stats["created_events"] += 1
+
+        # Create calendar events for effective dates
+        effective = row.get("effective_date")
+        if effective:
+            days = _days_until(effective)
+            if days >= 0:  # Only future effective dates
+                event_id = f"evt_fr_effective_{row['doc_id']}"
+                importance = _determine_importance("effective_date", days)
+
+                upsert_calendar_event(
+                    event_id=event_id,
+                    vehicle_id=vehicle_id,
+                    date=effective,
+                    event_type="effective_date",
+                    title=f"Effective Date: {title[:150]}",
+                    importance=importance,
+                    prep_required="Ensure compliance readiness",
+                    source_type="fr_seen",
+                    source_id=row["doc_id"],
+                )
+                stats["created_events"] += 1
+
+        # Track if we skipped due to no dates
+        if not comments_close and not effective:
+            stats["skipped_no_dates"] += 1
 
     logger.info(f"Synced Federal Register to calendar: {stats}")
     return stats

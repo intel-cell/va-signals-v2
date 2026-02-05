@@ -41,8 +41,17 @@ from .auth.api import router as auth_router
 from .auth.audit import AuditMiddleware
 from .evidence.dashboard_routes import router as evidence_router
 from .ceo_brief.api import router as ceo_brief_router
+from .trends.api import router as trends_router
 from .auth.rbac import RoleChecker
 from .auth.models import UserRole
+
+# Prometheus metrics (optional - graceful fallback if not installed)
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+    Instrumentator = None
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "src" / "dashboard" / "static"
@@ -392,8 +401,48 @@ class OversightStatsResponse(BaseModel):
 
 app = FastAPI(
     title="VA Signals Dashboard API",
-    description="Monitoring API for VA regulatory signal tracking",
-    version="1.0.0",
+    description="""
+## VA Signals & Indicators Intelligence System API
+
+This API provides access to VA regulatory signal tracking, legislative monitoring,
+and intelligence aggregation services.
+
+### Authentication
+All endpoints require authentication via Firebase or Cloud IAP.
+Include the Authorization header with a valid Bearer token.
+
+### Roles
+- **viewer**: Read-only access to dashboards and reports
+- **analyst**: Access to detailed data and analysis tools
+- **leadership**: Access to executive summaries and briefs
+- **commander**: Full administrative access
+
+### Rate Limits
+API requests are subject to rate limiting. Contact admin for increased limits.
+
+### Support
+For API issues, contact: xavier@vetclaims.ai
+""",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    openapi_tags=[
+        {"name": "Health", "description": "System health and status endpoints"},
+        {"name": "Runs", "description": "Source run management and statistics"},
+        {"name": "Documents", "description": "Federal Register and eCFR document access"},
+        {"name": "Bills", "description": "Congressional bill tracking"},
+        {"name": "Hearings", "description": "Committee hearing monitoring"},
+        {"name": "Oversight", "description": "Oversight monitor events and analysis"},
+        {"name": "State", "description": "State-level intelligence signals"},
+        {"name": "Agenda Drift", "description": "Member rhetoric deviation detection"},
+        {"name": "CEO Briefs", "description": "Executive summary generation"},
+        {"name": "Evidence", "description": "Evidence pack assembly"},
+        {"name": "Impact", "description": "Impact memos and heat maps"},
+        {"name": "Battlefield", "description": "Policy vehicle tracking and calendar"},
+        {"name": "Admin", "description": "Administrative functions"},
+        {"name": "Audit", "description": "Audit log access"},
+    ],
 )
 
 # Middleware (Applied in reverse order: Last added is first executed)
@@ -427,6 +476,37 @@ app.include_router(evidence_router)
 
 # Include CEO Brief router (HOTEL integration)
 app.include_router(ceo_brief_router)
+
+# --- Prometheus Metrics ---
+# Exposes /metrics endpoint for Prometheus scraping
+if PROMETHEUS_AVAILABLE:
+    instrumentator = Instrumentator(
+        should_group_status_codes=True,
+        should_ignore_untemplated=True,
+        should_respect_env_var=True,
+        should_instrument_requests_inprogress=True,
+        excluded_handlers=["/metrics", "/health", "/docs", "/redoc", "/openapi.json"],
+        inprogress_name="va_signals_requests_inprogress",
+        inprogress_labels=True,
+    )
+
+    # Add default metrics
+    instrumentator.add(
+        instrumentator.metrics.default(
+            metric_namespace="va_signals",
+            metric_subsystem="api",
+        )
+    )
+
+    # Instrument the app
+    instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=True, tags=["Metrics"])
+
+    logger.info("Prometheus metrics enabled at /metrics")
+else:
+    logger.warning("prometheus-fastapi-instrumentator not installed, /metrics endpoint disabled")
+
+# Include trends router
+app.include_router(trends_router)
 
 
 def _parse_errors_json(errors_json: str) -> list[str]:

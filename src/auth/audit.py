@@ -483,3 +483,139 @@ def export_audit_logs_csv(
 def shutdown_audit_worker():
     """Gracefully shutdown the audit worker."""
     _audit_queue.put(None)
+
+
+# --- Log Retention ---
+
+import os
+
+# Default retention period in days (configurable via LOG_RETENTION_DAYS env var)
+DEFAULT_RETENTION_DAYS = 90
+
+
+def get_retention_days() -> int:
+    """Get log retention period from environment or default."""
+    try:
+        return int(os.environ.get("LOG_RETENTION_DAYS", DEFAULT_RETENTION_DAYS))
+    except (ValueError, TypeError):
+        return DEFAULT_RETENTION_DAYS
+
+
+def cleanup_old_audit_logs(retention_days: int | None = None, dry_run: bool = False) -> dict:
+    """
+    Delete audit logs older than the retention period.
+
+    Args:
+        retention_days: Number of days to retain logs (default: from env or 90)
+        dry_run: If True, count but don't delete
+
+    Returns:
+        Dict with cleanup stats: {deleted: int, retention_days: int, cutoff_date: str}
+    """
+    from ..db import connect, execute
+
+    if retention_days is None:
+        retention_days = get_retention_days()
+
+    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+
+    con = connect()
+
+    # Count records to delete
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM audit_log WHERE timestamp < :cutoff_date",
+        {"cutoff_date": cutoff_date}
+    )
+    count_to_delete = cur.fetchone()[0]
+
+    deleted = 0
+    if not dry_run and count_to_delete > 0:
+        execute(
+            con,
+            "DELETE FROM audit_log WHERE timestamp < :cutoff_date",
+            {"cutoff_date": cutoff_date}
+        )
+        con.commit()
+        deleted = count_to_delete
+        logger.info(f"Deleted {deleted} audit log entries older than {retention_days} days")
+
+    con.close()
+
+    return {
+        "deleted": deleted,
+        "would_delete": count_to_delete,
+        "retention_days": retention_days,
+        "cutoff_date": cutoff_date,
+    }
+
+
+def cleanup_old_signal_audit_logs(retention_days: int | None = None, dry_run: bool = False) -> dict:
+    """
+    Delete signal audit logs older than the retention period.
+
+    Args:
+        retention_days: Number of days to retain logs (default: from env or 90)
+        dry_run: If True, count but don't delete
+
+    Returns:
+        Dict with cleanup stats
+    """
+    from ..db import connect, execute
+
+    if retention_days is None:
+        retention_days = get_retention_days()
+
+    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+
+    con = connect()
+
+    # Count records to delete
+    cur = execute(
+        con,
+        "SELECT COUNT(*) FROM signal_audit_log WHERE created_at < :cutoff_date",
+        {"cutoff_date": cutoff_date}
+    )
+    count_to_delete = cur.fetchone()[0]
+
+    deleted = 0
+    if not dry_run and count_to_delete > 0:
+        execute(
+            con,
+            "DELETE FROM signal_audit_log WHERE created_at < :cutoff_date",
+            {"cutoff_date": cutoff_date}
+        )
+        con.commit()
+        deleted = count_to_delete
+        logger.info(f"Deleted {deleted} signal audit log entries older than {retention_days} days")
+
+    con.close()
+
+    return {
+        "deleted": deleted,
+        "would_delete": count_to_delete,
+        "retention_days": retention_days,
+        "cutoff_date": cutoff_date,
+    }
+
+
+def run_all_log_cleanup(retention_days: int | None = None, dry_run: bool = False) -> dict:
+    """
+    Run cleanup on all audit log tables.
+
+    Args:
+        retention_days: Number of days to retain logs
+        dry_run: If True, count but don't delete
+
+    Returns:
+        Combined cleanup stats
+    """
+    audit_result = cleanup_old_audit_logs(retention_days, dry_run)
+    signal_result = cleanup_old_signal_audit_logs(retention_days, dry_run)
+
+    return {
+        "audit_log": audit_result,
+        "signal_audit_log": signal_result,
+        "total_deleted": audit_result["deleted"] + signal_result["deleted"],
+        "total_would_delete": audit_result["would_delete"] + signal_result["would_delete"],
+    }
