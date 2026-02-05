@@ -146,6 +146,19 @@
                 // Default to session persistence
                 auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
+                // Handle redirect result (for when signInWithRedirect was used)
+                try {
+                    const result = await auth.getRedirectResult();
+                    if (result.user) {
+                        const idToken = await result.user.getIdToken();
+                        const rememberMe = sessionStorage.getItem('rememberMe') === 'true';
+                        sessionStorage.removeItem('rememberMe');
+                        await createBackendSession(idToken, 'google');
+                    }
+                } catch (redirectError) {
+                    console.warn('Redirect result error:', redirectError.message);
+                }
+
                 // Listen for auth state changes
                 auth.onAuthStateChanged(handleAuthStateChange);
             }
@@ -190,11 +203,23 @@
                     : firebase.auth.Auth.Persistence.SESSION;
                 await auth.setPersistence(persistence);
 
-                const result = await auth.signInWithPopup(provider);
-                const idToken = await result.user.getIdToken();
-
-                // Send token to backend to create session
-                await createBackendSession(idToken, 'google');
+                try {
+                    // Try popup first
+                    const result = await auth.signInWithPopup(provider);
+                    const idToken = await result.user.getIdToken();
+                    await createBackendSession(idToken, 'google');
+                } catch (popupError) {
+                    // If popup blocked or fails, use redirect
+                    if (popupError.code === 'auth/popup-blocked' ||
+                        popupError.code === 'auth/popup-closed-by-user' ||
+                        popupError.code === 'auth/cancelled-popup-request') {
+                        // Store remember me preference for after redirect
+                        sessionStorage.setItem('rememberMe', elements.rememberMe?.checked ? 'true' : 'false');
+                        await auth.signInWithRedirect(provider);
+                    } else {
+                        throw popupError;
+                    }
+                }
             } else {
                 // Fallback: Redirect to backend OAuth flow
                 window.location.href = `${CONFIG.apiBase}/auth/google`;
