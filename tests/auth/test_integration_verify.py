@@ -108,6 +108,30 @@ class TestAuthMiddleware:
             assert response.status_code == 401
 
 
+    def test_dev_mode_bypass_removed(self, app_client, monkeypatch):
+        """Regression guard: DEV_MODE must NOT bypass authentication.
+
+        If this test fails, someone has re-introduced the DEV_MODE bypass
+        in get_current_user() or require_auth(). This is a critical
+        security vulnerability — every protected endpoint becomes open.
+        """
+        monkeypatch.setenv("DEV_MODE", "true")
+        response = app_client.get("/api/auth/me")
+        assert response.status_code == 401, (
+            "DEV_MODE bypass is still active! "
+            "Remove the DEV_MODE check from src/auth/middleware.py"
+        )
+
+    def test_session_secret_fails_closed_in_production(self, monkeypatch):
+        """Regression guard: missing SESSION_SECRET must crash in production."""
+        monkeypatch.setenv("ENV", "production")
+        monkeypatch.delenv("SESSION_SECRET", raising=False)
+
+        from src.auth.firebase_config import _get_session_secret
+        with pytest.raises(RuntimeError, match="SESSION_SECRET must be set"):
+            _get_session_secret()
+
+
 class TestCSRFProtection:
     """Verify CSRF protection is active."""
 

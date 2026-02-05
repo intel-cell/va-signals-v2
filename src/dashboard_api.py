@@ -7,13 +7,10 @@ document tracking, and system health.
 
 import json
 import os
-import secrets
 import asyncio
 import time
 import logging
 import sys
-import base64
-import binascii
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Optional
@@ -59,9 +56,12 @@ STATIC_DIR = ROOT / "src" / "dashboard" / "static"
 
 # --- Configuration & Logging ---
 
-# Basic Auth Config
-AUTH_USERNAME = os.environ.get("AUTH_USERNAME", "admin")
-AUTH_PASSWORD = os.environ.get("AUTH_PASSWORD", "secret")
+# CORS: environment-driven allowed origins (comma-separated)
+ALLOWED_ORIGINS = [
+    o.strip() for o in
+    os.environ.get("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080").split(",")
+    if o.strip()
+]
 
 # Configure JSON Logging
 logger = logging.getLogger()
@@ -98,47 +98,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             
         logger.info("request_processed", extra=log_data)
         return response
-
-class BasicAuthMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        # Allow health checks if we had them, but protecting all for now.
-        
-        if "Authorization" not in request.headers:
-            return Response(
-                status_code=401,
-                headers={"WWW-Authenticate": "Basic"},
-                content="Unauthorized"
-            )
-            
-        auth = request.headers["Authorization"]
-        try:
-            scheme, credentials = auth.split()
-            if scheme.lower() != 'basic':
-                raise ValueError
-            decoded = base64.b64decode(credentials).decode("ascii")
-            username, _, password = decoded.partition(":")
-            
-            # Constant time comparison
-            is_correct_username = secrets.compare_digest(username, AUTH_USERNAME)
-            is_correct_password = secrets.compare_digest(password, AUTH_PASSWORD)
-            
-            if not (is_correct_username and is_correct_password):
-                 return Response(
-                    status_code=401,
-                    headers={"WWW-Authenticate": "Basic"},
-                    content="Invalid credentials"
-                )
-                
-            request.state.user = username
-            
-        except (ValueError, UnicodeDecodeError, binascii.Error):
-            return Response(
-                status_code=401,
-                headers={"WWW-Authenticate": "Basic"},
-                content="Invalid authentication header"
-            )
-            
-        return await call_next(request)
 
 # --- Pydantic Models ---
 
@@ -463,7 +422,7 @@ app.add_middleware(AuthMiddleware, require_auth=False)
 # 1. CORS (Innermost - handles preflight)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

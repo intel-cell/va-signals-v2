@@ -17,6 +17,19 @@ logger = logging.getLogger(__name__)
 _firebase_app = None
 _firebase_initialized = False
 
+# Dev-only fallback for session signing (never used in production)
+_DEV_SESSION_SECRET = "dev-secret-change-in-production"
+
+
+def _get_session_secret() -> str:
+    """Get session signing secret. Fails closed in production if missing."""
+    secret = os.environ.get("SESSION_SECRET")
+    if secret:
+        return secret
+    if os.environ.get("ENV") == "production":
+        raise RuntimeError("SESSION_SECRET must be set in production — refusing to use dev fallback")
+    return _DEV_SESSION_SECRET
+
 
 def _get_firebase_credentials():
     """
@@ -215,7 +228,7 @@ def create_session_token(user_id: str, email: str, expires_in_hours: int = 24) -
     import base64
     from datetime import timedelta
 
-    secret = os.environ.get("SESSION_SECRET", "dev-secret-change-in-production")
+    secret = _get_session_secret()
     now = datetime.now(timezone.utc)
     expires = now + timedelta(hours=expires_in_hours)
 
@@ -248,7 +261,7 @@ def verify_session_token(token: str) -> Optional[dict]:
     import hashlib
     import base64
 
-    secret = os.environ.get("SESSION_SECRET", "dev-secret-change-in-production")
+    secret = _get_session_secret()
 
     try:
         # Decode

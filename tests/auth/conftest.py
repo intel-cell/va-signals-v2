@@ -172,11 +172,15 @@ def test_db():
     con = sqlite3.connect(":memory:")
     con.execute("""
         CREATE TABLE users (
-            uid TEXT PRIMARY KEY,
-            email TEXT NOT NULL UNIQUE,
+            user_id TEXT PRIMARY KEY,
+            email TEXT UNIQUE NOT NULL,
+            display_name TEXT,
             role TEXT NOT NULL DEFAULT 'viewer',
-            created_at TEXT NOT NULL,
-            last_login TEXT
+            created_at TEXT DEFAULT (datetime('now')),
+            last_login TEXT,
+            is_active INTEGER DEFAULT 1,
+            created_by TEXT,
+            CONSTRAINT valid_role CHECK (role IN ('commander', 'leadership', 'analyst', 'viewer'))
         )
     """)
     con.execute("""
@@ -202,14 +206,14 @@ def seeded_test_db(test_db):
 
     now = datetime.now(timezone.utc).isoformat()
     users = [
-        ("test-commander-uid", "commander@veteran-signals.com", "commander", now),
-        ("test-leadership-uid", "leadership@veteran-signals.com", "leadership", now),
-        ("test-analyst-uid", "analyst@veteran-signals.com", "analyst", now),
-        ("test-viewer-uid", "viewer@veteran-signals.com", "viewer", now),
+        ("test-commander-uid", "commander@veteran-signals.com", "Test Commander", "commander", now),
+        ("test-leadership-uid", "leadership@veteran-signals.com", "Test Leadership", "leadership", now),
+        ("test-analyst-uid", "analyst@veteran-signals.com", "Test Analyst", "analyst", now),
+        ("test-viewer-uid", "viewer@veteran-signals.com", "Test Viewer", "viewer", now),
     ]
 
     test_db.executemany(
-        "INSERT INTO users (uid, email, role, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO users (user_id, email, display_name, role, created_at) VALUES (?, ?, ?, ?, ?)",
         users
     )
     test_db.commit()

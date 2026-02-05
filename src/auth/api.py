@@ -636,11 +636,11 @@ async def deactivate_user(
 
 
 @router.post("/init")
-async def init_tables():
+async def init_tables(user: AuthContext = Depends(require_auth)):
     """
     Initialize authentication database tables.
 
-    This is an admin endpoint for setup.
+    Requires authentication (Commander role recommended for production use).
     """
     try:
         _init_auth_tables()
