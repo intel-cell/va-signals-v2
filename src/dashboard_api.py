@@ -483,23 +483,18 @@ if PROMETHEUS_AVAILABLE:
     instrumentator = Instrumentator(
         should_group_status_codes=True,
         should_ignore_untemplated=True,
-        should_respect_env_var=True,
+        should_respect_env_var=False,  # Always enable, don't check env var
         should_instrument_requests_inprogress=True,
         excluded_handlers=["/metrics", "/health", "/docs", "/redoc", "/openapi.json"],
         inprogress_name="va_signals_requests_inprogress",
         inprogress_labels=True,
     )
 
-    # Add default metrics
-    instrumentator.add(
-        instrumentator.metrics.default(
-            metric_namespace="va_signals",
-            metric_subsystem="api",
-        )
-    )
-
     # Instrument the app
-    instrumentator.instrument(app).expose(app, endpoint="/metrics", include_in_schema=True, tags=["Metrics"])
+    instrumentator.instrument(app)
+
+    # Expose metrics endpoint - must be done after instrument()
+    instrumentator.expose(app, endpoint="/metrics", include_in_schema=True, tags=["Metrics"])
 
     logger.info("Prometheus metrics enabled at /metrics")
 else:
