@@ -211,6 +211,15 @@ def get_current_user(request: Request) -> Optional[AuthContext]:
         async def me(user: AuthContext = Depends(get_current_user)):
             return {"email": user.email}
     """
+    # TEMPORARY DEV BYPASS - Remove before production
+    if os.environ.get("DEV_MODE") == "true":
+        return AuthContext(
+            user_id="dev-commander",
+            email="xavier@veteran-signals.com",
+            role=UserRole.COMMANDER,
+            display_name="Commander (Dev Mode)",
+            auth_method="dev_bypass",
+        )
     return getattr(request.state, "auth_context", None)
 
 
@@ -225,6 +234,16 @@ def require_auth(request: Request) -> AuthContext:
         async def protected(user: AuthContext = Depends(require_auth)):
             return {"email": user.email}
     """
+    # TEMPORARY DEV BYPASS - Remove before production
+    if os.environ.get("DEV_MODE") == "true":
+        return AuthContext(
+            user_id="dev-commander",
+            email="xavier@veteran-signals.com",
+            role=UserRole.COMMANDER,
+            display_name="Commander (Dev Mode)",
+            auth_method="dev_bypass",
+        )
+
     auth_context = getattr(request.state, "auth_context", None)
     if not auth_context:
         raise HTTPException(

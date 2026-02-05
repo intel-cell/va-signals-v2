@@ -25,8 +25,9 @@ def get_env_or_keychain(
     cmd.append("-w")
 
     try:
-        output = subprocess.check_output(cmd, text=True).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError):
+        # Add timeout to prevent hanging on Keychain prompts
+        output = subprocess.check_output(cmd, text=True, timeout=5).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         output = ""
 
     if output:

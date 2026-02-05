@@ -22,7 +22,7 @@ def test_get_env_or_keychain_falls_back_to_keychain(monkeypatch):
 
     captured = {}
 
-    def fake_check_output(cmd, text=True):
+    def fake_check_output(cmd, text=True, **kwargs):
         captured["cmd"] = cmd
         return "keychain-value\n"
 

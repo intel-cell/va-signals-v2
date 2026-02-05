@@ -130,27 +130,8 @@ def _create_or_update_user(user_id: str, email: str, display_name: str = None) -
 
 def _init_auth_tables():
     """Initialize auth database tables."""
-    from ..db import connect, execute
-    import os
-
-    con = connect()
-
-    # Read and execute schema
-    schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
-    with open(schema_path, "r") as f:
-        schema_sql = f.read()
-
-    # Execute each statement
-    for statement in schema_sql.split(";"):
-        statement = statement.strip()
-        if statement:
-            try:
-                execute(con, statement)
-            except Exception as e:
-                logger.debug(f"Schema statement skipped: {e}")
-
-    con.commit()
-    con.close()
+    from ..db import init_db
+    init_db()
     logger.info("Auth tables initialized")
 
 

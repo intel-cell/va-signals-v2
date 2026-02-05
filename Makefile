@@ -62,4 +62,14 @@ state-monitor-dry:
 	./.venv/bin/python -m src.state.runner --dry-run
 
 state-digest:
-	./.venv/bin/python -c "from src.state.digest import generate_weekly_digest; from src.notify_slack import send_slack_message; msg = generate_weekly_digest(); print(msg) if msg else print('No digest signals')"
+	./.venv/bin/python -m src.state.digest
+
+# Phase 2 Commands
+battlefield:
+	./.venv/bin/python -m src.run_battlefield --all
+
+battlefield-init:
+	./.venv/bin/python -m src.run_battlefield --init
+
+authority-docs:
+	./.venv/bin/python -m src.run_authority_docs
