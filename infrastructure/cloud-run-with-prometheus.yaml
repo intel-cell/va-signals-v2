@@ -1,0 +1,75 @@
+# Cloud Run service configuration with Prometheus sidecar
+# Deploy with: gcloud run services replace infrastructure/cloud-run-with-prometheus.yaml --region us-central1
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: va-signals-dashboard
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/cloudsql-instances: veteran-signals:us-central1:va-signals-db
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/cpu-throttling: "false"  # Always-allocated CPU for reliable scraping
+        run.googleapis.com/container-dependencies: '{"collector":["dashboard"]}'
+    spec:
+      containerConcurrency: 80
+      timeoutSeconds: 300
+      serviceAccountName: 595196122440-compute@developer.gserviceaccount.com
+      containers:
+        # Main application container
+        - name: dashboard
+          image: us-central1-docker.pkg.dev/veteran-signals/va-signals/dashboard:latest
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://app_user:3B7o4iz1iYbB6p4P0Y9%2F14NmdJiwHTjO@/va_signals?host=/cloudsql/veteran-signals:us-central1:va-signals-db"
+            - name: FIREBASE_PROJECT_ID
+              value: veteran-signals
+            - name: AUTH_ENABLED
+              value: "true"
+            - name: ENV
+              value: production
+            - name: CEO_BRIEF_OUTPUT_DIR
+              value: outputs/ceo_briefs
+            - name: EVIDENCE_PACK_OUTPUT_DIR
+              value: outputs/evidence_packs
+            - name: FIREBASE_SERVICE_ACCOUNT_JSON
+              valueFrom:
+                secretKeyRef:
+                  name: FIREBASE_ADMIN_SDK_KEY
+                  key: latest
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: SESSION_SECRET
+                  key: latest
+            - name: CSRF_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: CSRF_SECRET
+                  key: latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+        # Prometheus sidecar for metrics collection (Managed Service for Prometheus)
+        # Automatically scrapes /metrics on port 8080 every 30 seconds
+        - name: collector
+          image: us-docker.pkg.dev/cloud-ops-agents-artifacts/cloud-run-gmp-sidecar/cloud-run-gmp-sidecar:1.2.0
+          resources:
+            limits:
+              cpu: "0.25"
+              memory: 256Mi
