@@ -2772,7 +2772,7 @@ function initQuickActions() {
     document.getElementById('action-generate-brief')?.addEventListener('click', async () => {
         showToast('Generating CEO brief...', 'info');
         try {
-            const response = await fetch(`${CONFIG.apiBase}/briefs/generate`, {
+            const response = await fetch(`${CONFIG.apiBase}/ceo-brief/generate`, {
                 method: 'POST',
                 credentials: 'include',
             });
@@ -2905,7 +2905,7 @@ async function loadMissionStatus() {
     try {
         const briefEl = document.getElementById('latest-brief-date');
         if (briefEl) {
-            const response = await fetch(`${CONFIG.apiBase}/briefs/latest`);
+            const response = await fetch(`${CONFIG.apiBase}/ceo-brief/briefs/latest`);
             if (response.ok) {
                 const data = await response.json();
                 if (data.generated_at) {
@@ -3219,16 +3219,16 @@ async function loadExecutiveSummary() {
 async function loadExecMetrics() {
     try {
         // Federal Register count
-        const frResponse = await fetch(`${CONFIG.apiBase}/fr/documents?limit=1`);
+        const frResponse = await fetch(`${CONFIG.apiBase}/documents/fr?limit=1`);
         if (frResponse.ok) {
             const data = await frResponse.json();
             const el = document.getElementById('metric-fr-count');
             const trendEl = document.getElementById('metric-fr-trend');
-            if (el) el.textContent = data.total || '0';
+            if (el) el.textContent = data.count || '0';
+            // Trend not available in this endpoint, placeholder
             if (trendEl) {
-                const trend = data.trend || 0;
-                trendEl.textContent = Math.abs(trend);
-                trendEl.className = 'metric-trend ' + (trend > 0 ? 'up' : trend < 0 ? 'down' : 'neutral');
+                trendEl.textContent = '-';
+                trendEl.className = 'metric-trend neutral';
             }
         }
     } catch (e) {}
@@ -3276,12 +3276,14 @@ async function loadExecMetrics() {
 
 async function loadExecHeatMap() {
     try {
-        const response = await fetch(`${CONFIG.apiBase}/battlefield/heat-scores`);
+        // Use vehicles endpoint to calculate heat map
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/vehicles?limit=100`);
         if (response.ok) {
             const data = await response.json();
+            const vehicles = data.vehicles || [];
 
             const levels = { critical: 0, high: 0, medium: 0, low: 0 };
-            (data.scores || []).forEach(item => {
+            vehicles.forEach(item => {
                 const score = item.heat_score || 0;
                 if (score >= 80) levels.critical++;
                 else if (score >= 60) levels.high++;
@@ -3368,11 +3370,11 @@ async function loadExecCriticalItems() {
     if (!listEl) return;
 
     try {
-        // Try to get critical items from battlefield
-        const response = await fetch(`${CONFIG.apiBase}/battlefield/critical-items?limit=5`);
+        // Try to get critical items (top vehicles by heat)
+        const response = await fetch(`${CONFIG.apiBase}/battlefield/vehicles?limit=5`);
         if (response.ok) {
             const data = await response.json();
-            const items = data.items || [];
+            const items = data.vehicles || [];
 
             if (items.length === 0) {
                 listEl.innerHTML = '<li class="critical-item">No critical items at this time</li>';
@@ -3380,7 +3382,7 @@ async function loadExecCriticalItems() {
             }
 
             listEl.innerHTML = items.map(item => `
-                <li class="critical-item">${escapeHtml(item.title || item.description)}</li>
+                <li class="critical-item">${escapeHtml(item.title || item.name || 'Untitled')}</li>
             `).join('');
         } else {
             listEl.innerHTML = '<li class="critical-item">Critical items unavailable</li>';
@@ -3406,7 +3408,7 @@ async function initBriefViewer() {
 
     // Load available briefs
     try {
-        const response = await fetch(`${CONFIG.apiBase}/briefs?limit=20`);
+        const response = await fetch(`${CONFIG.apiBase}/ceo-brief/briefs?limit=20`);
         if (response.ok) {
             const data = await response.json();
             briefsCache = data.briefs || [];
@@ -3421,7 +3423,7 @@ async function initBriefViewer() {
                         hour: '2-digit',
                         minute: '2-digit'
                     });
-                    return `<option value="${brief.id}">${dateStr}</option>`;
+                    return `<option value="${brief.brief_id}">${dateStr}</option>`;
                 }).join('');
         }
     } catch (e) {
@@ -3444,7 +3446,7 @@ async function loadBrief(briefId) {
     container.innerHTML = '<div class="brief-empty"><p>Loading brief...</p></div>';
 
     try {
-        const response = await fetch(`${CONFIG.apiBase}/briefs/${briefId}`);
+        const response = await fetch(`${CONFIG.apiBase}/ceo-brief/briefs/${briefId}`);
         if (response.ok) {
             const brief = await response.json();
             renderBrief(brief);
@@ -3461,7 +3463,7 @@ function renderBrief(brief) {
     if (!container) return;
 
     // Parse markdown to HTML (simple implementation)
-    let content = brief.content || brief.markdown || '';
+    let content = brief.content || brief.markdown || brief.markdown_output || '';
 
     // Convert markdown to HTML (basic)
     content = parseMarkdown(content);

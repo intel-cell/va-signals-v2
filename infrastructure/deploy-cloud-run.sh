@@ -69,7 +69,11 @@ FIREBASE_PROJECT_ID=${PROJECT_ID},\
 AUTH_ENABLED=true,\
 ENV=production,\
 CEO_BRIEF_OUTPUT_DIR=outputs/ceo_briefs,\
-EVIDENCE_PACK_OUTPUT_DIR=outputs/evidence_packs\""
+EVIDENCE_PACK_OUTPUT_DIR=outputs/evidence_packs\" \
+    --set-secrets=\"\
+FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_ADMIN_SDK_KEY:latest,\
+SESSION_SECRET=SESSION_SECRET:latest,\
+CSRF_SECRET=CSRF_SECRET:latest\""
 
 if [[ "$DRY_RUN" == "true" ]]; then
     log_info "Would run: $DEPLOY_CMD"
