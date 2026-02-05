@@ -1,6 +1,6 @@
 """Main runner orchestrator for State Intelligence.
 
-Orchestrates twice-daily monitoring runs for TX, CA, FL.
+Orchestrates twice-daily monitoring runs for TX, CA, FL, PA, OH, NY.
 """
 
 import argparse
@@ -23,6 +23,9 @@ from src.state.db_helpers import (
 from src.state.sources.tx_official import TXOfficialSource
 from src.state.sources.ca_official import CAOfficialSource
 from src.state.sources.fl_official import FLOfficialSource
+from src.state.sources.pa_official import PAOfficialSource
+from src.state.sources.oh_official import OHOfficialSource
+from src.state.sources.ny_official import NYOfficialSource
 from src.state.sources.newsapi import NewsAPISource
 from src.state.sources.rss import RSSSource
 from src.notify_email import is_configured as email_configured, _send_email
@@ -30,7 +33,7 @@ from src.notify_email import is_configured as email_configured, _send_email
 logger = logging.getLogger(__name__)
 
 # States we monitor
-MONITORED_STATES = ["TX", "CA", "FL"]
+MONITORED_STATES = ["TX", "CA", "FL", "PA", "OH", "NY"]
 
 def _get_official_source(state: str):
     """Get the official source class for a state. Returns None if not supported."""
@@ -38,6 +41,9 @@ def _get_official_source(state: str):
         "TX": TXOfficialSource,
         "CA": CAOfficialSource,
         "FL": FLOfficialSource,
+        "PA": PAOfficialSource,
+        "OH": OHOfficialSource,
+        "NY": NYOfficialSource,
     }
     return sources.get(state)
 
@@ -59,6 +65,9 @@ def _is_official_source(source_id: str) -> bool:
         "tvc_news",
         "calvet_news",
         "dva_news",
+        "dmva_news",
+        "odvs_news",
+        "dvs_news",
         "register",
         "oal_register",
         "admin_register",

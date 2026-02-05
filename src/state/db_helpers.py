@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from src.db import connect, execute, insert_returning_id
 
 
-# Default sources for TX, CA, FL
+# Default sources for TX, CA, FL, PA, OH, NY
 DEFAULT_SOURCES = [
     # Texas
     {
@@ -51,6 +51,30 @@ DEFAULT_SOURCES = [
         "name": "Florida Administrative Register",
         "url": "https://flrules.org",
     },
+    # Pennsylvania
+    {
+        "source_id": "pa_dmva_news",
+        "state": "PA",
+        "source_type": "official",
+        "name": "PA DMVA Press Releases",
+        "url": "https://www.pa.gov/agencies/dmva/",
+    },
+    # Ohio
+    {
+        "source_id": "oh_odvs_news",
+        "state": "OH",
+        "source_type": "official",
+        "name": "Ohio DVS News",
+        "url": "https://dvs.ohio.gov/news-and-events",
+    },
+    # New York
+    {
+        "source_id": "ny_dvs_news",
+        "state": "NY",
+        "source_type": "official",
+        "name": "NY DVS Pressroom",
+        "url": "https://veterans.ny.gov/pressroom",
+    },
     # RSS Feeds
     {
         "source_id": "rss_texas_tribune",
@@ -72,6 +96,27 @@ DEFAULT_SOURCES = [
         "source_type": "rss",
         "name": "Florida Phoenix",
         "url": "https://floridaphoenix.com/feed/",
+    },
+    {
+        "source_id": "rss_pennlive",
+        "state": "PA",
+        "source_type": "rss",
+        "name": "PennLive",
+        "url": "https://www.pennlive.com/arc/outboundfeeds/rss/?outputType=xml",
+    },
+    {
+        "source_id": "rss_columbus_dispatch",
+        "state": "OH",
+        "source_type": "rss",
+        "name": "Columbus Dispatch",
+        "url": "https://www.dispatch.com/arcio/rss/category/news/",
+    },
+    {
+        "source_id": "rss_times_union",
+        "state": "NY",
+        "source_type": "rss",
+        "name": "Times Union Albany",
+        "url": "https://www.timesunion.com/news/rss/feed/",
     },
 ]
 

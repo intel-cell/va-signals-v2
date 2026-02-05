@@ -78,6 +78,9 @@ VETERAN_KEYWORDS = [
     "calvet",
     "tvc",
     "floridavets",
+    "dmva",
+    "odvs",
+    "national guard",
 ]
 
 # Separate pattern for "VA" and "V.A." with word boundaries

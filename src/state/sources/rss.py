@@ -57,6 +57,36 @@ RSS_FEEDS: dict[str, list[FeedInfo]] = {
             "url": "https://www.tampabay.com/arcio/rss/category/news-politics-state/",
         },
     ],
+    "PA": [
+        {
+            "name": "PennLive",
+            "url": "https://www.pennlive.com/arc/outboundfeeds/rss/?outputType=xml",
+        },
+        {
+            "name": "Google News PA Veterans",
+            "url": "https://news.google.com/rss/search?q=Pennsylvania+veterans&hl=en-US&gl=US&ceid=US:en",
+        },
+    ],
+    "OH": [
+        {
+            "name": "Columbus Dispatch",
+            "url": "https://www.dispatch.com/arcio/rss/category/news/",
+        },
+        {
+            "name": "Google News OH Veterans",
+            "url": "https://news.google.com/rss/search?q=Ohio+veterans&hl=en-US&gl=US&ceid=US:en",
+        },
+    ],
+    "NY": [
+        {
+            "name": "Times Union Albany",
+            "url": "https://www.timesunion.com/news/rss/feed/",
+        },
+        {
+            "name": "Google News NY Veterans",
+            "url": "https://news.google.com/rss/search?q=New+York+veterans&hl=en-US&gl=US&ceid=US:en",
+        },
+    ],
 }
 
 

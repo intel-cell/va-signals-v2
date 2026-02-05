@@ -29,6 +29,21 @@ SEARCH_QUERIES = {
         "Florida VA healthcare",
         "Florida veterans affairs",
     ],
+    "PA": [
+        "Pennsylvania veterans PACT Act",
+        "Pennsylvania VA healthcare",
+        "Pennsylvania DMVA veterans",
+    ],
+    "OH": [
+        "Ohio veterans PACT Act",
+        "Ohio VA healthcare",
+        "Ohio Department Veterans Services",
+    ],
+    "NY": [
+        "New York veterans PACT Act",
+        "New York VA healthcare",
+        "New York Division Veterans Services",
+    ],
 }
 
 
