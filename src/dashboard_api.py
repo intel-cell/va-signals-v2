@@ -42,6 +42,7 @@ from .auth.audit import AuditMiddleware
 from .evidence.dashboard_routes import router as evidence_router
 from .ceo_brief.api import router as ceo_brief_router
 from .trends.api import router as trends_router
+from .websocket import websocket_router, ws_manager
 from .auth.rbac import RoleChecker
 from .auth.models import UserRole
 
@@ -442,6 +443,8 @@ For API issues, contact: xavier@vetclaims.ai
         {"name": "Battlefield", "description": "Policy vehicle tracking and calendar"},
         {"name": "Admin", "description": "Administrative functions"},
         {"name": "Audit", "description": "Audit log access"},
+        {"name": "WebSocket", "description": "Real-time signal push notifications"},
+        {"name": "Metrics", "description": "Prometheus metrics endpoint"},
     ],
 )
 
@@ -502,6 +505,9 @@ else:
 
 # Include trends router
 app.include_router(trends_router)
+
+# Include WebSocket router for real-time signal push
+app.include_router(websocket_router)
 
 
 def _parse_errors_json(errors_json: str) -> list[str]:

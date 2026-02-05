@@ -1,0 +1,172 @@
+# OWASP ZAP Configuration for VA Signals Dashboard
+# https://www.zaproxy.org/docs/docker/baseline-scan/
+
+env:
+  contexts:
+    - name: "VA Signals Dashboard"
+      urls:
+        - "https://va-signals-dashboard-595196122440.us-central1.run.app"
+      includePaths:
+        - "https://va-signals-dashboard-595196122440.us-central1.run.app/.*"
+      excludePaths:
+        - "https://va-signals-dashboard-595196122440.us-central1.run.app/metrics"
+        - "https://va-signals-dashboard-595196122440.us-central1.run.app/docs"
+        - "https://va-signals-dashboard-595196122440.us-central1.run.app/redoc"
+        - "https://va-signals-dashboard-595196122440.us-central1.run.app/openapi.json"
+      authentication:
+        method: "form"
+        parameters:
+          loginUrl: "https://va-signals-dashboard-595196122440.us-central1.run.app/api/auth/login"
+          loginRequestData: "email={%username%}&password={%password%}"
+      users:
+        - name: "test-user"
+          credentials:
+            username: "${ZAP_TEST_USER}"
+            password: "${ZAP_TEST_PASS}"
+
+  parameters:
+    failOnError: true
+    failOnWarning: false
+    progressToStdout: true
+
+jobs:
+  # Spider the application to discover all endpoints
+  - type: spider
+    parameters:
+      context: "VA Signals Dashboard"
+      user: "test-user"
+      maxDuration: 5  # minutes
+      maxDepth: 5
+      maxChildren: 10
+
+  # AJAX Spider for JavaScript-heavy pages
+  - type: spiderAjax
+    parameters:
+      context: "VA Signals Dashboard"
+      user: "test-user"
+      maxDuration: 5
+      maxDepth: 3
+      numberOfBrowsers: 2
+
+  # Active scan for vulnerabilities
+  - type: activeScan
+    parameters:
+      context: "VA Signals Dashboard"
+      user: "test-user"
+      policy: "Default Policy"
+      maxRuleDurationInMins: 5
+      maxScanDurationInMins: 30
+
+  # Passive scan rules (run during spider)
+  - type: passiveScan-config
+    parameters:
+      maxAlertsPerRule: 10
+      scanOnlyInScope: true
+    rules:
+      # Critical rules
+      - id: 10016  # Web Browser XSS Protection Not Enabled
+        threshold: Medium
+      - id: 10017  # Cross-Domain JavaScript Source File Inclusion
+        threshold: Medium
+      - id: 10019  # Content-Type Header Missing
+        threshold: Low
+      - id: 10020  # X-Frame-Options Header
+        threshold: Medium
+      - id: 10021  # X-Content-Type-Options Header Missing
+        threshold: Low
+      - id: 10023  # Information Disclosure - Debug Error Messages
+        threshold: Medium
+      - id: 10024  # Information Disclosure - Sensitive Information in URL
+        threshold: Medium
+      - id: 10025  # Information Disclosure - Sensitive Information in HTTP Referrer Header
+        threshold: Medium
+      - id: 10027  # Information Disclosure - Suspicious Comments
+        threshold: Low
+      - id: 10028  # Open Redirect
+        threshold: Medium
+      - id: 10029  # Cookie Poisoning
+        threshold: Medium
+      - id: 10030  # User Controllable Charset
+        threshold: Medium
+      - id: 10031  # User Controllable HTML Element Attribute
+        threshold: Medium
+      - id: 10032  # Viewstate
+        threshold: Medium
+      - id: 10035  # Strict-Transport-Security Header
+        threshold: Low
+      - id: 10036  # Server Leaks Version Information
+        threshold: Low
+      - id: 10037  # Server Leaks Information via X-Powered-By
+        threshold: Low
+      - id: 10038  # Content Security Policy Header Not Set
+        threshold: Medium
+      - id: 10039  # X-Backend-Server Header Information Leak
+        threshold: Low
+      - id: 10040  # Secure Pages Include Mixed Content
+        threshold: Medium
+      - id: 10041  # HTTP to HTTPS Insecure Transition
+        threshold: Medium
+      - id: 10042  # HTTPS to HTTP Insecure Transition
+        threshold: Medium
+      - id: 10043  # User Controllable JavaScript Event
+        threshold: Medium
+      - id: 10044  # Big Redirect Detected
+        threshold: Low
+      - id: 10045  # Source Code Disclosure
+        threshold: Medium
+      - id: 10049  # Storable and Cacheable Content
+        threshold: Low
+      - id: 10050  # Retrieved from Cache
+        threshold: Low
+      - id: 10054  # Cookie without SameSite Attribute
+        threshold: Low
+      - id: 10055  # CSP
+        threshold: Medium
+      - id: 10056  # X-Debug-Token Information Leak
+        threshold: Low
+      - id: 10057  # Username Hash Found
+        threshold: Low
+      - id: 10061  # X-AspNet-Version Response Header
+        threshold: Low
+      - id: 10062  # PII Disclosure
+        threshold: High
+      - id: 10063  # Permissions Policy Header Not Set
+        threshold: Low
+      - id: 10096  # Timestamp Disclosure
+        threshold: Low
+      - id: 10097  # Hash Disclosure
+        threshold: Medium
+      - id: 10098  # Cross-Domain Misconfiguration
+        threshold: Medium
+
+  # Generate reports
+  - type: report
+    parameters:
+      template: "traditional-html"
+      reportDir: "/zap/reports"
+      reportFile: "va-signals-zap-report"
+    risks:
+      - high
+      - medium
+      - low
+      - info
+
+  - type: report
+    parameters:
+      template: "sarif-json"
+      reportDir: "/zap/reports"
+      reportFile: "va-signals-zap-sarif"
+    risks:
+      - high
+      - medium
+      - low
+
+  - type: report
+    parameters:
+      template: "traditional-json"
+      reportDir: "/zap/reports"
+      reportFile: "va-signals-zap-json"
+    risks:
+      - high
+      - medium
+      - low

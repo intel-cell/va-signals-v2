@@ -1,0 +1,95 @@
+# OWASP ZAP Baseline Scan Rules Configuration
+# Format: Rule ID	Alert Name	Action
+# Actions: IGNORE, WARN, FAIL
+#
+# IGNORE: Don't report this alert
+# WARN: Report but don't fail the build
+# FAIL: Report and fail the build
+
+# High severity - FAIL on these
+10016	Web Browser XSS Protection Not Enabled	WARN
+10017	Cross-Domain JavaScript Source File Inclusion	FAIL
+10019	Content-Type Header Missing	WARN
+10020	X-Frame-Options Header	FAIL
+10021	X-Content-Type-Options Header Missing	WARN
+10023	Information Disclosure - Debug Error Messages	FAIL
+10024	Information Disclosure - Sensitive Information in URL	FAIL
+10025	Information Disclosure - Sensitive Information in HTTP Referrer Header	WARN
+10027	Information Disclosure - Suspicious Comments	WARN
+10028	Open Redirect	FAIL
+10029	Cookie Poisoning	FAIL
+10030	User Controllable Charset	WARN
+10031	User Controllable HTML Element Attribute	WARN
+10032	Viewstate	WARN
+10035	Strict-Transport-Security Header	WARN
+10036	Server Leaks Version Information via "Server" HTTP Response Header Field	WARN
+10037	Server Leaks Information via "X-Powered-By" HTTP Response Header Field(s)	WARN
+10038	Content Security Policy (CSP) Header Not Set	WARN
+10039	X-Backend-Server Header Information Leak	WARN
+10040	Secure Pages Include Mixed Content	FAIL
+10041	HTTP to HTTPS Insecure Transition in Form Post	FAIL
+10042	HTTPS to HTTP Insecure Transition in Form Post	FAIL
+10043	User Controllable JavaScript Event (XSS)	FAIL
+10044	Big Redirect Detected (Potential Sensitive Information Leak)	WARN
+10045	Source Code Disclosure - /WEB-INF folder	FAIL
+10049	Storable and Cacheable Content	IGNORE
+10050	Retrieved from Cache	IGNORE
+10054	Cookie without SameSite Attribute	WARN
+10055	CSP	WARN
+10056	X-Debug-Token Information Leak	WARN
+10057	Username Hash Found	WARN
+10061	X-AspNet-Version Response Header	WARN
+10062	PII Disclosure	FAIL
+10063	Permissions Policy Header Not Set	WARN
+10096	Timestamp Disclosure - Unix	IGNORE
+10097	Hash Disclosure	WARN
+10098	Cross-Domain Misconfiguration	WARN
+
+# SQL Injection - always FAIL
+40018	SQL Injection	FAIL
+40019	SQL Injection - MySQL	FAIL
+40020	SQL Injection - Hypersonic SQL	FAIL
+40021	SQL Injection - Oracle	FAIL
+40022	SQL Injection - PostgreSQL	FAIL
+40024	SQL Injection - SQLite	FAIL
+
+# XSS - always FAIL
+40012	Cross Site Scripting (Reflected)	FAIL
+40014	Cross Site Scripting (Persistent)	FAIL
+40016	Cross Site Scripting (Persistent) - Prime	FAIL
+40017	Cross Site Scripting (Persistent) - Spider	FAIL
+
+# Path Traversal - FAIL
+6	Path Traversal	FAIL
+
+# Remote File Include - FAIL
+7	Remote File Inclusion	FAIL
+
+# Command Injection - FAIL
+90020	Remote OS Command Injection	FAIL
+
+# LDAP Injection - FAIL
+40015	LDAP Injection	FAIL
+
+# Server Side Include - FAIL
+40009	Server Side Include	FAIL
+
+# External Redirect - FAIL
+20019	External Redirect	FAIL
+
+# Authentication - WARN
+10011	Cookie Without Secure Flag	WARN
+10010	Cookie No HttpOnly Flag	WARN
+
+# Information Disclosure
+90022	Application Error Disclosure	WARN
+90033	Loosely Scoped Cookie	WARN
+
+# Cloud Run specific - IGNORE (handled by GCP)
+10109	Modern Web Application	IGNORE
+10110	Dangerous JS Functions	WARN
+
+# API specific
+40025	Proxy Disclosure	WARN
+40034	.htaccess Information Leak	WARN
+40035	Hidden File Found	WARN

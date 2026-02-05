@@ -1,0 +1,179 @@
+name: Security Scan (OWASP ZAP)
+
+on:
+  # Run weekly on Sundays at 2am UTC
+  schedule:
+    - cron: '0 2 * * 0'
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of scan to run'
+        required: true
+        type: choice
+        options:
+          - baseline
+          - full
+          - api
+        default: 'baseline'
+      target_url:
+        description: 'Target URL to scan'
+        required: false
+        default: 'https://va-signals-dashboard-595196122440.us-central1.run.app'
+
+env:
+  TARGET_URL: ${{ inputs.target_url || 'https://va-signals-dashboard-595196122440.us-central1.run.app' }}
+
+jobs:
+  zap-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create reports directory
+        run: mkdir -p zap-reports
+
+      - name: OWASP ZAP Baseline Scan
+        if: ${{ inputs.scan_type == 'baseline' || github.event_name == 'schedule' }}
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: ${{ env.TARGET_URL }}
+          rules_file_name: 'infrastructure/zap-baseline-rules.tsv'
+          cmd_options: '-a -j'
+          allow_issue_writing: true
+          issue_title: 'ZAP Baseline Scan Report'
+          fail_action: false
+          artifact_name: 'zap-baseline-report'
+
+      - name: OWASP ZAP Full Scan
+        if: ${{ inputs.scan_type == 'full' }}
+        uses: zaproxy/action-full-scan@v0.10.0
+        with:
+          target: ${{ env.TARGET_URL }}
+          rules_file_name: 'infrastructure/zap-baseline-rules.tsv'
+          cmd_options: '-a -j'
+          allow_issue_writing: true
+          issue_title: 'ZAP Full Scan Report'
+          fail_action: false
+          artifact_name: 'zap-full-report'
+
+      - name: OWASP ZAP API Scan
+        if: ${{ inputs.scan_type == 'api' }}
+        uses: zaproxy/action-api-scan@v0.7.0
+        with:
+          target: '${{ env.TARGET_URL }}/openapi.json'
+          format: openapi
+          cmd_options: '-a -j'
+          allow_issue_writing: true
+          issue_title: 'ZAP API Scan Report'
+          fail_action: false
+          artifact_name: 'zap-api-report'
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-scan-results
+          path: |
+            zap-reports/
+            report_html.html
+            report_json.json
+            report_md.md
+          retention-days: 30
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'report_json.json'
+        continue-on-error: true
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety pip-audit
+
+      - name: Run Safety check
+        run: |
+          pip install -r requirements.txt -r requirements.dashboard.txt
+          safety check --full-report --output json > safety-report.json || true
+        continue-on-error: true
+
+      - name: Run pip-audit
+        run: |
+          pip-audit --format json --output pip-audit-report.json || true
+        continue-on-error: true
+
+      - name: Upload dependency reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-results
+          path: |
+            safety-report.json
+            pip-audit-report.json
+          retention-days: 30
+
+  secrets-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: TruffleHog Secrets Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
+        continue-on-error: true
+
+      - name: Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+  summarize:
+    needs: [zap-scan, dependency-check, secrets-scan]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Summary
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Scan | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| OWASP ZAP | ${{ needs.zap-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Check | ${{ needs.dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Secrets Scan | ${{ needs.secrets-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📊 View detailed reports in the Artifacts section" >> $GITHUB_STEP_SUMMARY
