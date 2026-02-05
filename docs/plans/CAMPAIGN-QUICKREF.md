@@ -9,7 +9,7 @@ Veterans affairs policy changes detected within 24-72 hours. <5 min/day human at
 |-----|------|-----------|--------|
 | **1** | Federal Authority | 100% detection of binding VA federal actions | ✅ Operational |
 | **2** | Oversight Intel | GAO/OIG/CRS/CAFC coverage with 90-day baseline | ✅ 9/9 agents |
-| **3** | State Implementation | Top-10 states monitored | ⚠️ 3/10 |
+| **3** | State Implementation | Top-10 states monitored | ⚠️ 6/10 |
 | **4** | Behavioral Intel | Predict policy shifts via rhetoric analysis | ✅ Operational |
 | **5** | Command & Control | Unified ops picture, self-sustaining | ✅ Operational |
 
@@ -22,7 +22,7 @@ Phase III: OPTIMIZATION   (Weeks 9-12)  - Complete 10 states, predictive indicat
 Phase IV:  SUSTAINMENT    (Ongoing)     - <5 min/day attention, continuous ops
 ```
 
-## Phase I Status (Updated 5 Feb 2026 — Week 2)
+## Phase I Status (Complete — 5 Feb 2026)
 
 1. [x] GAO reports agent → operational (25 reports in DB)
 2. [x] VA OIG reports agent → operational (vaoig.gov, 10 reports)
@@ -38,24 +38,26 @@ Phase IV:  SUSTAINMENT    (Ongoing)     - <5 min/day attention, continuous ops
 12. [ ] 90-day baseline computation
 13. [ ] 7 consecutive days zero critical failures (tracking from 5 Feb)
 
+## Phase II Status (In Progress — 5 Feb 2026)
+
+1. [x] Pennsylvania sources (730K vets) — PA DMVA scraper + 3 NewsAPI queries + 2 RSS feeds (8 signals)
+2. [x] Ohio sources (680K vets) — ODVS scraper (disabled, site 404) + 3 NewsAPI queries + 2 RSS feeds (3 signals)
+3. [x] New York sources (670K vets) — NY DVS scraper + 3 NewsAPI queries + 2 RSS feeds (41 signals, 1 HIGH)
+4. [ ] Cross-source deduplication refinement
+5. [ ] Phase III states: NC, GA, VA, AZ
+
 ## Key Metrics
 
 | Metric | Target | Current |
 |--------|--------|---------|
 | FR detection latency | <24 hr | ~12 hr ✅ |
 | Oversight currency | <72 hr | ~24 hr ✅ (9/9 agents) |
-| State coverage | 10 states | 3 states ⚠️ |
+| State coverage | 10 states | 6 states ⚠️ (TX, CA, FL, PA, OH, NY) |
 | Alert precision | >95% | ~90% ⚠️ |
 | Daily ops attention | <5 min | ~8 min ⚠️ |
 | Total oversight events | — | 240 |
 | Escalations detected | — | 6 |
-
-## Phase II Preparation (Weeks 5-8)
-
-- [ ] Pennsylvania sources (730K vets) — DMVA scraper + NewsAPI + RSS
-- [ ] Ohio sources (680K vets) — ODVS scraper + NewsAPI + RSS
-- [ ] New York sources (670K vets) — DVS scraper + NewsAPI + RSS
-- [ ] Cross-source deduplication refinement
+| State signals (new) | — | 52 (PA:8, OH:3, NY:41) |
 
 ## Commander's Intent
 

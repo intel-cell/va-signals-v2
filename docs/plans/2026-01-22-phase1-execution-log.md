@@ -165,3 +165,40 @@ Completed between Jan 22 and Feb 5:
 - [x] CI/CD pipeline updated with oversight + state monitor
 - [ ] 90-day baseline computation (pending backfill completion)
 - [ ] 7 consecutive days zero critical source failures (tracking from 2026-02-05)
+
+---
+
+## Date: 2026-02-05 (Phase II)
+
+### State Expansion: PA, OH, NY Implemented
+
+Added 3 new state intelligence sources per the Campaign Plan LOE 3 Phase II targets.
+
+| State | Vet Pop | Official Source | Status | Dry-Run Signals | Notes |
+|-------|---------|----------------|--------|-----------------|-------|
+| PA | 730K | PA DMVA (pa.gov/agencies/dmva/) | ✅ OPERATIONAL | 8 (6 official + 2 NewsAPI) | Static HTML scraper; dates extracted from link text |
+| OH | 680K | OH ODVS (dvs.ohio.gov) | ⚠️ DISABLED | 3 (all NewsAPI) | dvs.ohio.gov returning 404; coverage from NewsAPI + Google News RSS |
+| NY | 670K | NY DVS (veterans.ny.gov/pressroom) | ✅ OPERATIONAL | 41 (30 official + 11 NewsAPI, 1 HIGH) | Drupal WebNY theme; 3-page pagination |
+
+### Files Changed (9 files, +612 lines)
+
+**New files:**
+- `src/state/sources/pa_official.py` — PA DMVA scraper (httpx + BS4, date extraction from concatenated link text)
+- `src/state/sources/oh_official.py` — OH ODVS scraper (disabled; ready to enable when site returns)
+- `src/state/sources/ny_official.py` — NY DVS scraper (httpx + BS4, Drupal article.webny-teaser pattern)
+
+**Modified files:**
+- `src/state/runner.py` — MONITORED_STATES: added PA, OH, NY; _get_official_source: added 3 mappings; _is_official_source: added dmva_news, odvs_news, dvs_news patterns
+- `src/state/sources/newsapi.py` — SEARCH_QUERIES: added PA, OH, NY (3 queries each)
+- `src/state/sources/rss.py` — RSS_FEEDS: added PA (PennLive, Google News), OH (Columbus Dispatch, Google News), NY (Times Union, Google News)
+- `src/state/db_helpers.py` — DEFAULT_SOURCES: added pa_dmva_news, oh_odvs_news, ny_dvs_news + 3 RSS entries
+- `src/state/common.py` — VETERAN_KEYWORDS: added "dmva", "odvs", "national guard"
+- `tests/state/test_runner.py` — Updated expected states set to include PA, OH, NY
+
+### Test Results
+
+633 passed, 0 failed, 22 skipped. No regressions.
+
+### Commit
+
+`6dea3dd` — "Phase II state expansion: add PA, OH, NY state intelligence sources"
