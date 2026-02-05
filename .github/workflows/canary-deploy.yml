@@ -1,0 +1,159 @@
+name: Canary Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy'
+        required: true
+        default: 'latest'
+      canary_percentage:
+        description: 'Initial canary traffic percentage'
+        required: true
+        default: '10'
+      action:
+        description: 'Deployment action'
+        required: true
+        type: choice
+        options:
+          - deploy
+          - promote
+          - rollback
+          - status
+      rollback_revision:
+        description: 'Revision to rollback to (only for rollback action)'
+        required: false
+
+env:
+  PROJECT_ID: veteran-signals
+  REGION: us-central1
+  SERVICE: va-signals-dashboard
+  REPOSITORY: us-central1-docker.pkg.dev/veteran-signals/va-signals/dashboard
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: veteran-signals
+
+      - name: Get current traffic status
+        if: ${{ inputs.action == 'status' }}
+        run: |
+          gcloud run services describe va-signals-dashboard \
+            --region us-central1 \
+            --format='table(status.traffic[].revisionName,status.traffic[].percent)'
+
+      - name: Deploy canary
+        if: ${{ inputs.action == 'deploy' }}
+        run: |
+          IMAGE="us-central1-docker.pkg.dev/veteran-signals/va-signals/dashboard:${{ inputs.image_tag }}"
+
+          # Get current revision
+          CURRENT_REV=$(gcloud run services describe va-signals-dashboard \
+            --region us-central1 \
+            --format='value(status.traffic[0].revisionName)')
+          echo "Current revision: $CURRENT_REV"
+
+          # Deploy with no traffic
+          gcloud run deploy va-signals-dashboard \
+            --image $IMAGE \
+            --region us-central1 \
+            --no-traffic \
+            --quiet
+
+          # Get new revision
+          NEW_REV=$(gcloud run services describe va-signals-dashboard \
+            --region us-central1 \
+            --format='value(status.latestReadyRevisionName)')
+          echo "New revision: $NEW_REV"
+
+          if [ "$NEW_REV" = "$CURRENT_REV" ]; then
+            echo "No changes detected"
+            exit 0
+          fi
+
+          # Set canary traffic
+          CANARY_PCT="${{ inputs.canary_percentage }}"
+          OLD_PCT=$((100 - CANARY_PCT))
+          gcloud run services update-traffic va-signals-dashboard \
+            --region us-central1 \
+            --to-revisions="${CURRENT_REV}=${OLD_PCT},${NEW_REV}=${CANARY_PCT}" \
+            --quiet
+
+          echo "Canary deployed: $NEW_REV at ${CANARY_PCT}%"
+
+          # Save revisions for later steps
+          echo "NEW_REV=$NEW_REV" >> $GITHUB_ENV
+          echo "CURRENT_REV=$CURRENT_REV" >> $GITHUB_ENV
+
+      - name: Health check
+        if: ${{ inputs.action == 'deploy' }}
+        run: |
+          sleep 30
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://va-signals-dashboard-595196122440.us-central1.run.app/")
+
+          if [ "$STATUS" != "200" ]; then
+            echo "Health check failed: HTTP $STATUS"
+            echo "Rolling back..."
+            gcloud run services update-traffic va-signals-dashboard \
+              --region us-central1 \
+              --to-revisions="${CURRENT_REV}=100" \
+              --quiet
+            exit 1
+          fi
+
+          echo "Health check passed!"
+
+      - name: Promote to 100%
+        if: ${{ inputs.action == 'promote' }}
+        run: |
+          NEW_REV=$(gcloud run services describe va-signals-dashboard \
+            --region us-central1 \
+            --format='value(status.latestReadyRevisionName)')
+
+          gcloud run services update-traffic va-signals-dashboard \
+            --region us-central1 \
+            --to-revisions="${NEW_REV}=100" \
+            --quiet
+
+          echo "Promoted $NEW_REV to 100%"
+
+      - name: Rollback
+        if: ${{ inputs.action == 'rollback' }}
+        run: |
+          ROLLBACK_REV="${{ inputs.rollback_revision }}"
+          if [ -z "$ROLLBACK_REV" ]; then
+            echo "Error: rollback_revision is required for rollback action"
+            exit 1
+          fi
+
+          gcloud run services update-traffic va-signals-dashboard \
+            --region us-central1 \
+            --to-revisions="${ROLLBACK_REV}=100" \
+            --quiet
+
+          echo "Rolled back to $ROLLBACK_REV"
+
+      - name: Summary
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          gcloud run services describe va-signals-dashboard \
+            --region us-central1 \
+            --format='table(status.traffic[].revisionName,status.traffic[].percent)' >> $GITHUB_STEP_SUMMARY
