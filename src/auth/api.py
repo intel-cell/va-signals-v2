@@ -9,8 +9,11 @@ Provides:
 - Current user info
 """
 
+import os
+import time
 import uuid
 import logging
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -46,6 +49,91 @@ from .firebase_config import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
+
+
+# =============================================================================
+# PER-IP RATE LIMITER FOR AUTH ENDPOINTS
+# =============================================================================
+
+class _AuthRateLimiter:
+    """
+    Per-IP token bucket rate limiter for authentication endpoints.
+
+    Prevents brute-force attacks by limiting login attempts per IP.
+    Defaults: 5 attempts burst, refill 1 token per 5 seconds (12/min sustained).
+    Stale entries are cleaned up every 1000 requests to prevent memory leaks.
+    """
+
+    def __init__(self, burst: int = 5, refill_rate: float = 0.2):
+        self._buckets: dict[str, list] = {}  # ip -> [tokens, last_update]
+        self._burst = burst
+        self._refill_rate = refill_rate  # tokens per second
+        self._request_count = 0
+
+    def reset(self) -> None:
+        """Clear all rate limit state (for testing)."""
+        self._buckets.clear()
+        self._request_count = 0
+
+    def check(self, ip: str) -> tuple[bool, float]:
+        """
+        Check if request from IP is allowed.
+
+        Returns:
+            (allowed, retry_after_seconds)
+        """
+        now = time.time()
+        self._request_count += 1
+
+        # Periodic cleanup of stale entries (>10 min idle)
+        if self._request_count % 1000 == 0:
+            cutoff = now - 600
+            self._buckets = {
+                k: v for k, v in self._buckets.items() if v[1] > cutoff
+            }
+
+        if ip not in self._buckets:
+            self._buckets[ip] = [float(self._burst), now]
+
+        bucket = self._buckets[ip]
+        elapsed = now - bucket[1]
+        bucket[0] = min(self._burst, bucket[0] + elapsed * self._refill_rate)
+        bucket[1] = now
+
+        if bucket[0] >= 1.0:
+            bucket[0] -= 1.0
+            return True, 0.0
+        else:
+            retry_after = (1.0 - bucket[0]) / self._refill_rate
+            return False, retry_after
+
+
+# Singleton — shared across all auth endpoints
+_auth_limiter = _AuthRateLimiter(
+    burst=int(os.environ.get("AUTH_RATE_LIMIT_BURST", "5")),
+    refill_rate=float(os.environ.get("AUTH_RATE_LIMIT_RATE", "0.2")),
+)
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract client IP, respecting X-Forwarded-For behind Cloud Run proxy."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _check_auth_rate_limit(request: Request) -> None:
+    """FastAPI dependency that enforces auth rate limiting."""
+    ip = _get_client_ip(request)
+    allowed, retry_after = _auth_limiter.check(ip)
+    if not allowed:
+        logger.warning(f"Auth rate limit exceeded for IP {ip}")
+        raise HTTPException(
+            status_code=429,
+            detail="Too many authentication attempts. Please try again later.",
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
 
 
 # --- Firebase Config Endpoint ---
@@ -213,7 +301,7 @@ def get_permissions(role: UserRole) -> list[str]:
 
 # --- Endpoints ---
 
-@router.post("/login")
+@router.post("/login", dependencies=[Depends(_check_auth_rate_limit)])
 async def login(request: Request, response: Response, body: LoginRequest):
     """
     Login with email/password via Firebase.
@@ -268,7 +356,7 @@ async def login(request: Request, response: Response, body: LoginRequest):
     }
 
 
-@router.post("/session")
+@router.post("/session", dependencies=[Depends(_check_auth_rate_limit)])
 async def create_session(request: Request, response: Response, body: SessionCreateRequest):
     """
     Create a backend session from a Firebase ID token.
@@ -444,8 +532,8 @@ async def google_oauth_callback(
     return redirect_response
 
 
-@router.post("/verify")
-async def verify_token(body: TokenVerifyRequest):
+@router.post("/verify", dependencies=[Depends(_check_auth_rate_limit)])
+async def verify_token(request: Request, body: TokenVerifyRequest):
     """
     Verify a Firebase ID token.
 

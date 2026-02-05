@@ -42,6 +42,13 @@ def _mock_user_data(user_id="test-uid", email="test@veteran-signals.com",
     }
 
 
+@pytest.fixture(autouse=True)
+def _reset_auth_rate_limiter():
+    """Reset auth rate limiter between tests to prevent cross-test interference."""
+    from src.auth.api import _auth_limiter
+    _auth_limiter.reset()
+
+
 @pytest.fixture
 def app_client():
     """TestClient with mocked Firebase init."""
@@ -341,7 +348,10 @@ class TestCSRFProtection:
             auth_method="session",  # Session auth requires CSRF
         )
 
-        with patch("src.auth.middleware.get_current_user", return_value=mock_auth):
+        # Must mock at middleware._authenticate so the CSRF check in dispatch()
+        # sees this as a session-authenticated request.
+        with patch("src.auth.middleware.AuthMiddleware._authenticate",
+                   return_value=mock_auth):
             # POST to a non-CSRF-exempt endpoint without CSRF token
             response = app_client.post("/api/auth/users", json={
                 "email": "new@veteran-signals.com",
@@ -365,7 +375,8 @@ class TestCSRFProtection:
         # Get a CSRF token (sets the cookie)
         csrf_token = self._get_csrf_token(app_client)
 
-        with patch("src.auth.middleware.get_current_user", return_value=mock_auth), \
+        with patch("src.auth.middleware.AuthMiddleware._authenticate",
+                   return_value=mock_auth), \
              patch("src.auth.api._get_user_by_email", return_value=None), \
              patch("src.auth.api._execute_write"):
 
@@ -391,7 +402,8 @@ class TestCSRFProtection:
             auth_method="session",
         )
 
-        with patch("src.auth.middleware.get_current_user", return_value=mock_auth):
+        with patch("src.auth.middleware.AuthMiddleware._authenticate",
+                   return_value=mock_auth):
             response = app_client.post(
                 "/api/auth/users",
                 json={"email": "new@veteran-signals.com", "role": "viewer"},
@@ -433,3 +445,64 @@ class TestCSRFProtection:
             )
             assert response.status_code != 403, \
                 f"Bearer auth should not require CSRF. Got {response.status_code}"
+
+
+# =============================================================================
+# RATE LIMITING TESTS
+# =============================================================================
+
+class TestAuthRateLimiting:
+    """Test per-IP rate limiting on auth endpoints."""
+
+    def test_rate_limit_triggers_after_burst(self, app_client):
+        """Auth endpoints return 429 after burst limit exceeded."""
+        with patch("src.auth.api.verify_firebase_token", return_value=None):
+            # Send requests up to the burst limit (5 by default)
+            for i in range(5):
+                response = app_client.post("/api/auth/login", json={
+                    "email": "attacker@example.com",
+                    "password": "bad-token",
+                })
+                # Should be 401 (invalid token), NOT 429
+                assert response.status_code == 401, \
+                    f"Request {i+1} should be allowed, got {response.status_code}"
+
+            # Next request should be rate limited
+            response = app_client.post("/api/auth/login", json={
+                "email": "attacker@example.com",
+                "password": "bad-token",
+            })
+            assert response.status_code == 429, \
+                "Should be rate limited after burst exceeded"
+            assert "Retry-After" in response.headers
+
+    def test_rate_limit_applies_to_session_endpoint(self, app_client):
+        """Rate limit also applies to /api/auth/session."""
+        with patch("src.auth.api.verify_firebase_token", return_value=None):
+            for _ in range(5):
+                app_client.post("/api/auth/session", json={
+                    "idToken": "bad-token",
+                    "provider": "google",
+                })
+
+            response = app_client.post("/api/auth/session", json={
+                "idToken": "bad-token",
+                "provider": "google",
+            })
+            assert response.status_code == 429
+
+    def test_rate_limit_per_ip_isolation(self, app_client):
+        """Different IPs have independent rate limits."""
+        from src.auth.api import _auth_limiter
+
+        # Exhaust limit for one IP
+        for _ in range(5):
+            _auth_limiter.check("192.168.1.1")
+
+        # First IP should be limited
+        allowed, _ = _auth_limiter.check("192.168.1.1")
+        assert not allowed, "First IP should be rate limited"
+
+        # Second IP should still have full quota
+        allowed, _ = _auth_limiter.check("192.168.1.2")
+        assert allowed, "Second IP should not be affected"
