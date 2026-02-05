@@ -456,8 +456,9 @@ app.add_middleware(LoggingMiddleware)
 # 3. Audit Logging (Records all API requests for compliance)
 app.add_middleware(AuditMiddleware)
 
-# 2. Basic Auth - DISABLED (Cloud Run IAM handles authentication)
-# app.add_middleware(BasicAuthMiddleware)
+# 2. Firebase/Session Auth (Reads cookies + Bearer tokens, sets request.state.auth_context)
+from .auth.middleware import AuthMiddleware
+app.add_middleware(AuthMiddleware, require_auth=False)
 
 # 1. CORS (Innermost - handles preflight)
 app.add_middleware(

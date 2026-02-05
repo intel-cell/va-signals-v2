@@ -2576,8 +2576,8 @@ async function handleLogout() {
         }
     }
 
-    // Redirect to login
-    redirectToLogin();
+    // Redirect to login with logout flag so login page clears Firebase state
+    window.location.href = AUTH_CONFIG.loginUrl + '?logout=true';
 }
 
 function redirectToLogin(expired = false) {

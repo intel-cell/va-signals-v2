@@ -97,8 +97,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         else:
             request.state.auth_context = None
 
-        # CSRF check for state-changing methods
-        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        # CSRF check for state-changing methods (exempt logout and session creation)
+        csrf_exempt_paths = {"/api/auth/logout", "/api/auth/session", "/api/auth/login"}
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and path not in csrf_exempt_paths:
             if not self._verify_csrf(request):
                 # For API calls, we can be lenient if they have Bearer auth
                 if not auth_context or auth_context.auth_method == "session":

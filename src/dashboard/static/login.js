@@ -159,8 +159,16 @@
                     console.warn('Redirect result error:', redirectError.message);
                 }
 
-                // Listen for auth state changes
-                auth.onAuthStateChanged(handleAuthStateChange);
+                // If arriving from logout, sign out of Firebase to clear cached Google session
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('logout') === 'true') {
+                    await auth.signOut();
+                    // Clean up the URL
+                    window.history.replaceState({}, '', CONFIG.loginUrl);
+                }
+                // Note: We intentionally do NOT use onAuthStateChanged for auto-redirect.
+                // It causes redirect loops because Firebase caches Google auth state.
+                // checkExistingSession() handles valid backend session detection instead.
             }
         } catch (error) {
             console.warn('Firebase initialization skipped:', error.message);
@@ -346,6 +354,12 @@
     // =========================================================================
 
     function checkExistingSession() {
+        // Skip session check if user just logged out
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('logout') === 'true') {
+            return;
+        }
+
         // Check if user already has a valid session
         fetch(`${CONFIG.apiBase}/auth/me`, {
             credentials: 'include',

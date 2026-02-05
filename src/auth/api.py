@@ -88,13 +88,25 @@ def _get_db():
 
 
 def _execute(sql: str, params: dict = None):
-    """Execute a query and return results."""
-    from ..db import connect, execute
+    """Execute a query and return results as list of dicts."""
+    from ..db import connect, execute, get_db_backend
     con = connect()
-    con.row_factory = lambda cursor, row: dict(
-        zip([col[0] for col in cursor.description], row)
-    )
-    cur = execute(con, sql, params)
+    if get_db_backend() == "postgres":
+        # psycopg uses cursor-level row_factory via dict_row
+        from psycopg.rows import dict_row
+        cur = con.cursor(row_factory=dict_row)
+        from ..db import _prepare_query
+        sql, params = _prepare_query(sql, params)
+        if params is None:
+            cur.execute(sql)
+        else:
+            cur.execute(sql, params)
+    else:
+        # sqlite3 uses connection-level row_factory
+        con.row_factory = lambda cursor, row: dict(
+            zip([col[0] for col in cursor.description], row)
+        )
+        cur = execute(con, sql, params)
     results = cur.fetchall()
     con.close()
     return results

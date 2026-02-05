@@ -14,6 +14,8 @@ COPY src ./src
 COPY schemas ./schemas
 COPY schema.sql schema.postgres.sql ./
 COPY config ./config
+COPY migrations ./migrations
+COPY scripts ./scripts
 
 EXPOSE 8080
 
