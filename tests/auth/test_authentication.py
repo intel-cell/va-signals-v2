@@ -1,121 +1,174 @@
 """Authentication Test Suite.
 
-HOTEL COMMAND - Phase 2 Testing
-ORDER_HOTEL_002 Section 3, Phase 2
-
 Tests authentication flows:
-- Email/password login
-- Google OAuth login
-- Session management
-- Password reset
-- CSRF protection
+- Google OAuth login (primary production flow)
+- Email/password login (secondary flow via Firebase)
+- Session management (creation, persistence, logout)
+- CSRF protection on state-changing operations
 
-Status: STUB - Awaiting ECHO auth module delivery
+Uses mock Firebase token verification to avoid external dependencies.
 """
 
+import time
 import pytest
 from unittest.mock import patch, MagicMock
 
 
 # =============================================================================
-# EMAIL LOGIN TESTS
+# HELPERS
 # =============================================================================
 
-class TestEmailLogin:
-    """Test email/password authentication flow."""
+def _mock_claims(user_id="test-uid", email="test@veteran-signals.com",
+                 display_name="Test User"):
+    """Build mock Firebase token claims."""
+    now = int(time.time())
+    return {
+        "user_id": user_id,
+        "email": email,
+        "display_name": display_name,
+        "iat": now,
+        "exp": now + 3600,
+    }
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_email_login_success(self, test_client):
-        """Test successful email/password login."""
-        # GIVEN: Valid email and password
-        credentials = {
-            "email": "test@veteran-signals.com",
-            "password": "valid-password-123"
-        }
 
-        # WHEN: User submits login request
-        # response = test_client.post("/api/auth/login", json=credentials)
+def _mock_user_data(user_id="test-uid", email="test@veteran-signals.com",
+                     display_name="Test User", role="viewer"):
+    """Build mock user data as returned by _create_or_update_user."""
+    return {
+        "user_id": user_id,
+        "email": email,
+        "display_name": display_name,
+        "role": role,
+    }
 
-        # THEN: Login succeeds with session cookie
-        # assert response.status_code == 200
-        # assert "session" in response.cookies
-        pass
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_email_login_wrong_password(self, test_client):
-        """Test login with incorrect password."""
-        # GIVEN: Valid email, wrong password
-        credentials = {
-            "email": "test@veteran-signals.com",
-            "password": "wrong-password"
-        }
-
-        # WHEN: User submits login request
-        # response = test_client.post("/api/auth/login", json=credentials)
-
-        # THEN: Login fails with 401
-        # assert response.status_code == 401
-        # assert "session" not in response.cookies
-        pass
-
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_email_login_nonexistent_user(self, test_client):
-        """Test login with non-existent email."""
-        # GIVEN: Non-existent email
-        credentials = {
-            "email": "nonexistent@veteran-signals.com",
-            "password": "any-password"
-        }
-
-        # WHEN: User submits login request
-        # response = test_client.post("/api/auth/login", json=credentials)
-
-        # THEN: Login fails with 401 (same as wrong password for security)
-        # assert response.status_code == 401
-        pass
-
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_email_login_invalid_email_format(self, test_client):
-        """Test login with invalid email format."""
-        credentials = {
-            "email": "not-an-email",
-            "password": "password123"
-        }
-
-        # Should return 400 for invalid format
-        pass
+@pytest.fixture
+def app_client():
+    """TestClient with mocked Firebase init."""
+    with patch("src.auth.firebase_config.init_firebase"):
+        from fastapi.testclient import TestClient
+        from src.dashboard_api import app
+        yield TestClient(app)
 
 
 # =============================================================================
-# GOOGLE LOGIN TESTS
+# GOOGLE LOGIN TESTS (Primary production flow: /api/auth/session)
 # =============================================================================
 
 class TestGoogleLogin:
-    """Test Google OAuth authentication flow."""
+    """Test Google OAuth authentication flow via /api/auth/session."""
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_google_login_success(self, test_client, valid_firebase_token):
-        """Test successful Google login with valid Firebase token."""
-        # GIVEN: Valid Google/Firebase token
-        # WHEN: User authenticates with Google
-        # THEN: Login succeeds, user created if new
-        pass
+    def test_google_login_success(self, app_client):
+        """Test successful Google login: valid Firebase token creates session."""
+        claims = _mock_claims()
+        user_data = _mock_user_data()
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_google_login_invalid_token(self, test_client, invalid_firebase_token):
-        """Test Google login with invalid token."""
-        # GIVEN: Invalid Firebase token
-        # WHEN: User attempts authentication
-        # THEN: Login fails with 401
-        pass
+        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
+             patch("src.auth.api._create_or_update_user", return_value=user_data):
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_google_login_expired_token(self, test_client, expired_firebase_token):
-        """Test Google login with expired token."""
-        # GIVEN: Expired Firebase token
-        # WHEN: User attempts authentication
-        # THEN: Login fails with 401, specific error for expired
-        pass
+            response = app_client.post("/api/auth/session", json={
+                "idToken": "valid-firebase-token",
+                "provider": "google",
+                "rememberMe": False,
+            })
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "success"
+            assert data["user"]["email"] == "test@veteran-signals.com"
+            assert data["user"]["role"] == "viewer"
+            assert "csrf_token" in data
+
+            # Verify session cookie was set
+            assert "va_signals_session" in response.cookies
+
+    def test_google_login_invalid_token(self, app_client):
+        """Test Google login with invalid Firebase token returns 401."""
+        with patch("src.auth.api.verify_firebase_token", return_value=None):
+            response = app_client.post("/api/auth/session", json={
+                "idToken": "invalid-token",
+                "provider": "google",
+            })
+
+            assert response.status_code == 401
+            assert "va_signals_session" not in response.cookies
+
+    def test_google_login_expired_token(self, app_client):
+        """Test Google login with expired token returns 401."""
+        # verify_firebase_token returns None for expired tokens
+        with patch("src.auth.api.verify_firebase_token", return_value=None):
+            response = app_client.post("/api/auth/session", json={
+                "idToken": "expired-token",
+                "provider": "google",
+            })
+
+            assert response.status_code == 401
+
+
+# =============================================================================
+# EMAIL LOGIN TESTS (Secondary flow: /api/auth/login)
+# =============================================================================
+
+class TestEmailLogin:
+    """Test email/password authentication via /api/auth/login.
+
+    Note: The 'password' field is actually a Firebase ID token obtained
+    after the client authenticates with Firebase email/password.
+    """
+
+    def test_email_login_success(self, app_client):
+        """Test successful email login with valid Firebase ID token."""
+        claims = _mock_claims(email="user@veteran-signals.com")
+        user_data = _mock_user_data(email="user@veteran-signals.com")
+
+        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
+             patch("src.auth.api._create_or_update_user", return_value=user_data):
+
+            response = app_client.post("/api/auth/login", json={
+                "email": "user@veteran-signals.com",
+                "password": "firebase-id-token",
+            })
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "success"
+            assert data["user"]["email"] == "user@veteran-signals.com"
+            assert "va_signals_session" in response.cookies
+
+    def test_email_login_wrong_password(self, app_client):
+        """Test login with invalid Firebase token returns 401."""
+        with patch("src.auth.api.verify_firebase_token", return_value=None):
+            response = app_client.post("/api/auth/login", json={
+                "email": "user@veteran-signals.com",
+                "password": "bad-token",
+            })
+
+            assert response.status_code == 401
+            assert "va_signals_session" not in response.cookies
+
+    def test_email_login_nonexistent_user(self, app_client):
+        """Test login with invalid token for non-existent user returns 401."""
+        with patch("src.auth.api.verify_firebase_token", return_value=None):
+            response = app_client.post("/api/auth/login", json={
+                "email": "nobody@veteran-signals.com",
+                "password": "any-token",
+            })
+
+            # Returns 401 (same as wrong password — no user enumeration)
+            assert response.status_code == 401
+
+    def test_email_login_email_mismatch(self, app_client):
+        """Test login fails when token email doesn't match request email."""
+        # Token is valid but for a different email
+        claims = _mock_claims(email="real@veteran-signals.com")
+
+        with patch("src.auth.api.verify_firebase_token", return_value=claims):
+            response = app_client.post("/api/auth/login", json={
+                "email": "different@veteran-signals.com",
+                "password": "valid-token-wrong-email",
+            })
+
+            assert response.status_code == 401
 
 
 # =============================================================================
@@ -123,41 +176,109 @@ class TestGoogleLogin:
 # =============================================================================
 
 class TestSessionManagement:
-    """Test session handling."""
+    """Test session handling: creation, persistence, and logout."""
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_session_persistence(self, authenticated_client):
-        """Test session persists across requests."""
-        # GIVEN: Authenticated user with session
-        # WHEN: User makes multiple requests
-        # THEN: Session remains valid
-        pass
+    def test_session_persistence(self, app_client):
+        """Test session created via /api/auth/session persists for /api/auth/me."""
+        claims = _mock_claims()
+        user_data = _mock_user_data()
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_session_timeout(self, authenticated_client):
-        """Test session expires after timeout."""
-        # GIVEN: Authenticated user
-        # WHEN: Session timeout period passes
-        # THEN: Session becomes invalid, requires re-auth
-        pass
+        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
+             patch("src.auth.api._create_or_update_user", return_value=user_data):
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_logout_clears_session(self, authenticated_client):
-        """Test logout invalidates session."""
-        # GIVEN: Authenticated user with session
-        # WHEN: User logs out
-        # THEN: Session is invalidated
-        # AND: Subsequent requests require re-auth
-        pass
+            # Step 1: Create session
+            session_resp = app_client.post("/api/auth/session", json={
+                "idToken": "valid-token",
+                "provider": "google",
+            })
+            assert session_resp.status_code == 200
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_session_cookie_secure_flags(self, test_client):
-        """Test session cookie has secure flags set."""
-        # Session cookie should have:
-        # - HttpOnly flag
-        # - Secure flag (in production)
-        # - SameSite=Lax or Strict
-        pass
+        # Step 2: Use the session cookie to access /api/auth/me
+        # The TestClient automatically carries cookies forward.
+        # We mock _get_user_role since there's no real DB in tests.
+        from src.auth.models import UserRole
+        with patch("src.auth.middleware.AuthMiddleware._get_user_role",
+                   return_value=UserRole.VIEWER):
+            me_resp = app_client.get("/api/auth/me")
+            # Session cookie authenticates the request — should get 200
+            assert me_resp.status_code == 200
+            data = me_resp.json()
+            assert data["email"] == "test@veteran-signals.com"
+
+    def test_session_timeout(self, app_client):
+        """Test expired session token is rejected."""
+        from src.auth.firebase_config import create_session_token, verify_session_token
+
+        # Create a token that expires immediately
+        token = create_session_token("test-uid", "test@test.com", expires_in_hours=0)
+
+        # Advance time conceptually — the token with 0 hours expiry should
+        # be expired at verification time (or very close to it)
+        result = verify_session_token(token)
+        # With 0 hours, the token expires at creation time
+        # verify_session_token checks exp < now, so it should be None or valid
+        # depending on timing. The important thing is the mechanism works.
+        # For a definitive test, we mock time:
+        with patch("src.auth.firebase_config.datetime") as mock_dt:
+            from datetime import datetime, timezone, timedelta
+            # Set "now" to 2 hours in the future
+            future = datetime.now(timezone.utc) + timedelta(hours=2)
+            mock_dt.now.return_value = future
+            mock_dt.fromtimestamp = datetime.fromtimestamp
+            result = verify_session_token(token)
+            assert result is None, "Expired session token should be rejected"
+
+    def test_logout_clears_session(self, app_client):
+        """Test logout clears session cookies."""
+        claims = _mock_claims()
+        user_data = _mock_user_data()
+
+        # Step 1: Create session
+        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
+             patch("src.auth.api._create_or_update_user", return_value=user_data):
+            session_resp = app_client.post("/api/auth/session", json={
+                "idToken": "valid-token",
+                "provider": "google",
+            })
+            assert session_resp.status_code == 200
+            assert "va_signals_session" in session_resp.cookies
+
+        # Step 2: Logout
+        logout_resp = app_client.post("/api/auth/logout")
+        # Logout should work even without full auth (clears cookies)
+        assert logout_resp.status_code == 200
+        assert logout_resp.json()["status"] == "logged_out"
+
+        # Verify cookies are cleared (set to empty/deleted)
+        # After logout, the session cookie should be deleted
+        set_cookie_headers = logout_resp.headers.get_list("set-cookie")
+        session_cleared = any(
+            "va_signals_session" in h and ('=""' in h or "max-age=0" in h or 'expires=' in h.lower())
+            for h in set_cookie_headers
+        )
+        assert session_cleared, f"Session cookie not cleared. Headers: {set_cookie_headers}"
+
+    def test_session_cookie_secure_flags(self, app_client):
+        """Test session cookie has proper security flags."""
+        claims = _mock_claims()
+        user_data = _mock_user_data()
+
+        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
+             patch("src.auth.api._create_or_update_user", return_value=user_data):
+
+            response = app_client.post("/api/auth/session", json={
+                "idToken": "valid-token",
+                "provider": "google",
+            })
+
+            # Check Set-Cookie headers for security flags
+            set_cookie_headers = response.headers.get_list("set-cookie")
+            session_cookie = [h for h in set_cookie_headers if "va_signals_session" in h]
+            assert len(session_cookie) == 1, "Should set exactly one session cookie"
+
+            cookie_str = session_cookie[0].lower()
+            assert "httponly" in cookie_str, "Session cookie must be httpOnly"
+            assert "samesite=lax" in cookie_str, "Session cookie should have SameSite=Lax"
 
 
 # =============================================================================
@@ -165,23 +286,34 @@ class TestSessionManagement:
 # =============================================================================
 
 class TestPasswordReset:
-    """Test password reset flow."""
+    """Test password reset flow.
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_password_reset_request(self, test_client):
-        """Test requesting password reset email."""
-        # GIVEN: Valid user email
-        # WHEN: Password reset requested
-        # THEN: Reset email sent (via Firebase)
-        pass
+    Note: Password reset is handled entirely client-side by Firebase SDK.
+    The backend has no password reset endpoint. These tests verify the
+    expected behavior when no such endpoint exists.
+    """
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_password_reset_invalid_email(self, test_client):
-        """Test password reset for non-existent email."""
-        # GIVEN: Non-existent email
-        # WHEN: Password reset requested
-        # THEN: Same response as valid (security)
-        pass
+    def test_password_reset_handled_by_firebase(self):
+        """Password reset is a client-side Firebase operation — no backend endpoint."""
+        # Firebase SDK handles sendPasswordResetEmail() entirely client-side.
+        # The backend doesn't expose a /api/auth/reset-password endpoint.
+        # This test documents that design decision.
+        from src.auth import api
+        route_paths = [r.path for r in api.router.routes if hasattr(r, "path")]
+        assert "/reset-password" not in route_paths
+        assert "/forgot-password" not in route_paths
+
+    def test_password_reset_no_user_enumeration(self, app_client):
+        """Verify no endpoint leaks whether an email exists."""
+        # POST to a non-existent reset endpoint should NOT return 200 or 400
+        # (which would indicate the endpoint exists and processes requests).
+        # It may return 403 (CSRF), 404, or 405 — all acceptable since
+        # they don't leak user existence info.
+        response = app_client.post("/api/auth/reset-password", json={
+            "email": "test@veteran-signals.com"
+        })
+        assert response.status_code not in (200, 400), \
+            "Should not have a functioning reset-password endpoint"
 
 
 # =============================================================================
@@ -191,26 +323,113 @@ class TestPasswordReset:
 class TestCSRFProtection:
     """Test CSRF protection on state-changing operations."""
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_csrf_protection_on_post(self, authenticated_client):
-        """Test POST requests require CSRF token."""
-        # GIVEN: Authenticated user
-        # WHEN: POST request without CSRF token
-        # THEN: Request rejected with 403
-        pass
+    def _get_csrf_token(self, client):
+        """Helper to get a CSRF token and cookie from the server."""
+        resp = client.get("/api/auth/csrf")
+        assert resp.status_code == 200
+        return resp.json()["csrf_token"]
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_csrf_token_provided(self, authenticated_client):
-        """Test POST request succeeds with valid CSRF token."""
-        # GIVEN: Authenticated user with CSRF token
-        # WHEN: POST request with valid CSRF token
-        # THEN: Request succeeds
-        pass
+    def test_csrf_protection_on_post(self, app_client):
+        """POST with session auth but no CSRF token gets 403."""
+        from src.auth.models import AuthContext, UserRole
 
-    @pytest.mark.skip(reason="Awaiting ECHO auth module")
-    def test_csrf_token_invalid(self, authenticated_client):
-        """Test POST request fails with invalid CSRF token."""
-        # GIVEN: Authenticated user
-        # WHEN: POST request with invalid CSRF token
-        # THEN: Request rejected with 403
-        pass
+        mock_auth = AuthContext(
+            user_id="test-uid",
+            email="test@veteran-signals.com",
+            role=UserRole.COMMANDER,
+            display_name="Test",
+            auth_method="session",  # Session auth requires CSRF
+        )
+
+        with patch("src.auth.middleware.get_current_user", return_value=mock_auth):
+            # POST to a non-CSRF-exempt endpoint without CSRF token
+            response = app_client.post("/api/auth/users", json={
+                "email": "new@veteran-signals.com",
+                "role": "viewer",
+            })
+            assert response.status_code == 403, \
+                "Session-authed POST without CSRF should be rejected"
+
+    def test_csrf_token_provided(self, app_client):
+        """POST with matching CSRF cookie and header succeeds."""
+        from src.auth.models import AuthContext, UserRole
+
+        mock_auth = AuthContext(
+            user_id="test-uid",
+            email="test@veteran-signals.com",
+            role=UserRole.COMMANDER,
+            display_name="Test",
+            auth_method="session",
+        )
+
+        # Get a CSRF token (sets the cookie)
+        csrf_token = self._get_csrf_token(app_client)
+
+        with patch("src.auth.middleware.get_current_user", return_value=mock_auth), \
+             patch("src.auth.api._get_user_by_email", return_value=None), \
+             patch("src.auth.api._execute_write"):
+
+            response = app_client.post(
+                "/api/auth/users",
+                json={"email": "new@veteran-signals.com", "role": "viewer"},
+                headers={"X-CSRF-Token": csrf_token},
+                cookies={"csrf_token": csrf_token},
+            )
+            # Should not be 403 (CSRF passed)
+            assert response.status_code != 403, \
+                f"CSRF should pass with valid token. Got {response.status_code}"
+
+    def test_csrf_token_invalid(self, app_client):
+        """POST with mismatched CSRF cookie and header gets 403."""
+        from src.auth.models import AuthContext, UserRole
+
+        mock_auth = AuthContext(
+            user_id="test-uid",
+            email="test@veteran-signals.com",
+            role=UserRole.COMMANDER,
+            display_name="Test",
+            auth_method="session",
+        )
+
+        with patch("src.auth.middleware.get_current_user", return_value=mock_auth):
+            response = app_client.post(
+                "/api/auth/users",
+                json={"email": "new@veteran-signals.com", "role": "viewer"},
+                headers={"X-CSRF-Token": "wrong-token"},
+                cookies={"csrf_token": "different-token"},
+            )
+            assert response.status_code == 403, \
+                "Mismatched CSRF tokens should be rejected"
+
+    def test_csrf_not_required_for_bearer_auth(self, app_client):
+        """Bearer token auth should bypass CSRF (API clients).
+
+        The CSRF check in AuthMiddleware is lenient for non-session auth:
+        if auth_context.auth_method != 'session', CSRF is not enforced.
+        We must mock at the middleware._authenticate level so the middleware
+        itself sees the Firebase auth context during dispatch.
+        """
+        from src.auth.models import AuthContext, UserRole
+
+        mock_auth = AuthContext(
+            user_id="test-uid",
+            email="test@veteran-signals.com",
+            role=UserRole.COMMANDER,
+            display_name="Test",
+            auth_method="firebase",  # Bearer auth, not session
+        )
+
+        # Mock _authenticate at the middleware level so CSRF check sees firebase auth
+        with patch("src.auth.middleware.AuthMiddleware._authenticate",
+                   return_value=mock_auth), \
+             patch("src.auth.api._get_user_by_email", return_value=None), \
+             patch("src.auth.api._execute_write"):
+
+            response = app_client.post(
+                "/api/auth/users",
+                json={"email": "new@veteran-signals.com", "role": "viewer"},
+                headers={"Authorization": "Bearer mock-token"},
+                # No CSRF header — should still work for Bearer auth
+            )
+            assert response.status_code != 403, \
+                f"Bearer auth should not require CSRF. Got {response.status_code}"

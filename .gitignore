@@ -16,6 +16,7 @@ __pycache__/
 # Secrets - NEVER commit these
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 credentials.json
