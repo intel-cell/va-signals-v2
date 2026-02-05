@@ -8,12 +8,12 @@ Veterans affairs policy changes detected within 24-72 hours. <5 min/day human at
 | LOE | Name | Objective | Status |
 |-----|------|-----------|--------|
 | **1** | Federal Authority | 100% detection of binding VA federal actions | ✅ Operational |
-| **2** | Oversight Intel | GAO/OIG/CRS/CAFC coverage with 90-day baseline | ⚠️ 5/9 agents |
+| **2** | Oversight Intel | GAO/OIG/CRS/CAFC coverage with 90-day baseline | ✅ 9/9 agents |
 | **3** | State Implementation | Top-10 states monitored | ⚠️ 3/10 |
 | **4** | Behavioral Intel | Predict policy shifts via rhetoric analysis | ✅ Operational |
 | **5** | Command & Control | Unified ops picture, self-sustaining | ✅ Operational |
 
-## 4 Phases (90 days)
+## 4 Phases (90 days from 22 Jan 2026)
 
 ```
 Phase I:   CONSOLIDATION  (Weeks 1-4)   - Complete oversight agents, build baselines
@@ -22,24 +22,40 @@ Phase III: OPTIMIZATION   (Weeks 9-12)  - Complete 10 states, predictive indicat
 Phase IV:  SUSTAINMENT    (Ongoing)     - <5 min/day attention, continuous ops
 ```
 
-## Phase I Priority Tasks (This Week)
+## Phase I Status (Updated 5 Feb 2026 — Week 2)
 
 1. [x] GAO reports agent → operational (25 reports in DB)
-2. [x] VA OIG reports agent → operational (FIXED: vaoig.gov, 10 reports in DB)
-3. [x] CRS reports agent → operational (everycrsreport.com RSS, filtering for VA)
-4. [ ] Congressional Record agent → needs GovInfo API
-5. [x] Trade Press agent → operational (Military Times, Stars & Stripes)
-6. [x] Investigative agent → operational (ProPublica)
+2. [x] VA OIG reports agent → operational (vaoig.gov, 10 reports)
+3. [x] CRS reports agent → configured (everycrsreport.com RSS)
+4. [x] Congressional Record agent → operational (Congress.gov API v3)
+5. [x] Committee Press agent → operational (HVAC + SVAC scraping, 17 events)
+6. [x] News Wire agent → operational (NewsAPI.org, 169 events, 6 escalations)
+7. [x] Trade Press agent → operational (Military Times, Stars & Stripes)
+8. [x] Investigative agent → operational (ProPublica)
+9. [x] CAFC agent → operational (RSS + HTML fallback, 5 VA cases)
+10. [x] Auth hardening complete (Cloud Run rev 34, 60 tests passing)
+11. [x] CI/CD pipeline updated (oversight + state monitor in daily workflow)
+12. [ ] 90-day baseline computation
+13. [ ] 7 consecutive days zero critical failures (tracking from 5 Feb)
 
 ## Key Metrics
 
 | Metric | Target | Current |
 |--------|--------|---------|
 | FR detection latency | <24 hr | ~12 hr ✅ |
-| Oversight currency | <72 hr | ~24 hr ✅ (5/9 agents) |
+| Oversight currency | <72 hr | ~24 hr ✅ (9/9 agents) |
 | State coverage | 10 states | 3 states ⚠️ |
 | Alert precision | >95% | ~90% ⚠️ |
-| Daily ops attention | <5 min | ~10 min ⚠️ |
+| Daily ops attention | <5 min | ~8 min ⚠️ |
+| Total oversight events | — | 240 |
+| Escalations detected | — | 6 |
+
+## Phase II Preparation (Weeks 5-8)
+
+- [ ] Pennsylvania sources (730K vets) — DMVA scraper + NewsAPI + RSS
+- [ ] Ohio sources (680K vets) — ODVS scraper + NewsAPI + RSS
+- [ ] New York sources (670K vets) — DVS scraper + NewsAPI + RSS
+- [ ] Cross-source deduplication refinement
 
 ## Commander's Intent
 
