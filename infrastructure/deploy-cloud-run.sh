@@ -43,7 +43,7 @@ fi
 # Build container image
 log_info "Building container image..."
 if [[ "$DRY_RUN" == "false" ]]; then
-    docker build -t "$IMAGE_NAME" .
+    docker build --platform linux/amd64 -t "$IMAGE_NAME" .
 fi
 
 # Push to Container Registry
