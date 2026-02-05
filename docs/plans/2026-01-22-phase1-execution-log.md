@@ -202,3 +202,42 @@ Added 3 new state intelligence sources per the Campaign Plan LOE 3 Phase II targ
 ### Commit
 
 `6dea3dd` — "Phase II state expansion: add PA, OH, NY state intelligence sources"
+
+---
+
+## Date: 2026-02-05 (Phase III)
+
+### State Expansion: NC, GA, VA, AZ Implemented — 10/10 States Complete
+
+Added final 4 state intelligence sources, completing LOE 3 target of 10-state coverage.
+
+| State | Vet Pop | Official Source | Status | Dry-Run Signals | Notes |
+|-------|---------|----------------|--------|-----------------|-------|
+| NC | 630K | NCDMVA (milvets.nc.gov) | ✅ OPERATIONAL | 21 (official + NewsAPI) | Drupal .views-row pattern; 2-page pagination |
+| GA | 590K | GDVS (veterans.georgia.gov) | ✅ OPERATIONAL | 21 (official + NewsAPI) | GovHub theme; date extracted from URL path |
+| VA | 580K | DVS (dvs.virginia.gov) | ⚠️ DISABLED | 6 (all NewsAPI) | Site returns 403; coverage from NewsAPI + Google News RSS |
+| AZ | 480K | DVS (dvs.az.gov) | ⚠️ DISABLED | 3 (all NewsAPI) | Site returns 403; coverage from NewsAPI + Google News RSS |
+
+### Files Changed (10 files, +715 lines)
+
+**New files:**
+- `src/state/sources/nc_official.py` — NC NCDMVA scraper (httpx + BS4, Drupal .views-row + time[datetime])
+- `src/state/sources/ga_official.py` — GA GDVS scraper (httpx + BS4, date-in-URL /press-releases/YYYY-MM-DD/)
+- `src/state/sources/va_official.py` — Virginia DVS scraper (disabled; WordPress-based selectors ready)
+- `src/state/sources/az_official.py` — Arizona DVS scraper (disabled; Drupal-based selectors ready)
+
+**Modified files:**
+- `src/state/runner.py` — MONITORED_STATES: added NC, GA, VA, AZ; _get_official_source: added 4 mappings
+- `src/state/sources/newsapi.py` — SEARCH_QUERIES: added NC, GA, VA, AZ (3 queries each)
+- `src/state/sources/rss.py` — RSS_FEEDS: added NC (Charlotte Observer, Google News), GA (AJC, Google News), VA (RTD, Google News), AZ (AZ Central, Google News)
+- `src/state/db_helpers.py` — DEFAULT_SOURCES: added nc_dmva_news, ga_dvs_news, va_dvs_news, az_dvs_news + 4 RSS entries
+- `src/state/common.py` — VETERAN_KEYWORDS: added "ncdmva", "gdvs", "advs"
+- `tests/state/test_runner.py` — Updated expected states set to include all 10 states
+
+### Test Results
+
+633 passed, 0 failed, 22 skipped. No regressions.
+
+### Commit
+
+`e690981` — "Phase III state expansion: add NC, GA, VA, AZ state intelligence sources"

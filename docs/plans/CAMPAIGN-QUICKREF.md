@@ -9,7 +9,7 @@ Veterans affairs policy changes detected within 24-72 hours. <5 min/day human at
 |-----|------|-----------|--------|
 | **1** | Federal Authority | 100% detection of binding VA federal actions | ✅ Operational |
 | **2** | Oversight Intel | GAO/OIG/CRS/CAFC coverage with 90-day baseline | ✅ 9/9 agents |
-| **3** | State Implementation | Top-10 states monitored | ⚠️ 6/10 |
+| **3** | State Implementation | Top-10 states monitored | ✅ 10/10 |
 | **4** | Behavioral Intel | Predict policy shifts via rhetoric analysis | ✅ Operational |
 | **5** | Command & Control | Unified ops picture, self-sustaining | ✅ Operational |
 
@@ -38,13 +38,19 @@ Phase IV:  SUSTAINMENT    (Ongoing)     - <5 min/day attention, continuous ops
 12. [ ] 90-day baseline computation
 13. [ ] 7 consecutive days zero critical failures (tracking from 5 Feb)
 
-## Phase II Status (In Progress — 5 Feb 2026)
+## Phase II Status (Complete — 5 Feb 2026)
 
 1. [x] Pennsylvania sources (730K vets) — PA DMVA scraper + 3 NewsAPI queries + 2 RSS feeds (8 signals)
 2. [x] Ohio sources (680K vets) — ODVS scraper (disabled, site 404) + 3 NewsAPI queries + 2 RSS feeds (3 signals)
 3. [x] New York sources (670K vets) — NY DVS scraper + 3 NewsAPI queries + 2 RSS feeds (41 signals, 1 HIGH)
 4. [ ] Cross-source deduplication refinement
-5. [ ] Phase III states: NC, GA, VA, AZ
+
+## Phase III Status (Complete — 5 Feb 2026)
+
+1. [x] North Carolina sources (630K vets) — NCDMVA scraper + 3 NewsAPI queries + 2 RSS feeds (21 signals)
+2. [x] Georgia sources (590K vets) — GDVS scraper + 3 NewsAPI queries + 2 RSS feeds (21 signals)
+3. [x] Virginia sources (580K vets) — DVS scraper (disabled, site 403) + 3 NewsAPI queries + 2 RSS feeds (6 signals)
+4. [x] Arizona sources (480K vets) — DVS scraper (disabled, site 403) + 3 NewsAPI queries + 2 RSS feeds (3 signals)
 
 ## Key Metrics
 
@@ -52,12 +58,12 @@ Phase IV:  SUSTAINMENT    (Ongoing)     - <5 min/day attention, continuous ops
 |--------|--------|---------|
 | FR detection latency | <24 hr | ~12 hr ✅ |
 | Oversight currency | <72 hr | ~24 hr ✅ (9/9 agents) |
-| State coverage | 10 states | 6 states ⚠️ (TX, CA, FL, PA, OH, NY) |
+| State coverage | 10 states | 10 states ✅ (TX, CA, FL, PA, OH, NY, NC, GA, VA, AZ) |
 | Alert precision | >95% | ~90% ⚠️ |
 | Daily ops attention | <5 min | ~8 min ⚠️ |
 | Total oversight events | — | 240 |
 | Escalations detected | — | 6 |
-| State signals (new) | — | 52 (PA:8, OH:3, NY:41) |
+| State signals (new) | — | 103 (PA:8, OH:3, NY:41, NC:21, GA:21, VA:6, AZ:3) |
 
 ## Commander's Intent
 
