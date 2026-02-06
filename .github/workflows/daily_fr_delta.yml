@@ -51,9 +51,11 @@ jobs:
           ./.venv/bin/python -m src.state.runner --run-type morning
 
       - name: Run Trend Aggregation
-        run: python -m scripts.run_trend_aggregation
+        continue-on-error: true
+        run: ./.venv/bin/python -m scripts.run_trend_aggregation
 
       - name: Cleanup Old Logs
-        run: python -m scripts.cleanup_logs
+        continue-on-error: true
+        run: ./.venv/bin/python -m scripts.cleanup_logs
         env:
           LOG_RETENTION_DAYS: "90"
