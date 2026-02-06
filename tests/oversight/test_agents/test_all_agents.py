@@ -32,6 +32,7 @@ def test_crs_agent_source_type():
     assert agent.source_type == "crs"
 
 
+@patch.dict("os.environ", {"CONGRESS_API_KEY": "test-key-for-ci"})
 def test_congressional_record_agent_source_type():
     agent = CongressionalRecordAgent()
     assert agent.source_type == "congressional_record"
