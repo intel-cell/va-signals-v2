@@ -38,6 +38,7 @@ from .auth.api import router as auth_router
 from .auth.audit import AuditMiddleware
 from .evidence.dashboard_routes import router as evidence_router
 from .ceo_brief.api import router as ceo_brief_router
+from .ml.api import router as ml_router
 from .trends.api import router as trends_router
 from .websocket import websocket_router, ws_manager
 from .auth.rbac import RoleChecker
@@ -439,6 +440,9 @@ app.include_router(evidence_router)
 
 # Include CEO Brief router (HOTEL integration)
 app.include_router(ceo_brief_router)
+
+# Include ML scoring router
+app.include_router(ml_router)
 
 # --- Prometheus Metrics ---
 # Exposes /metrics endpoint for Prometheus scraping
