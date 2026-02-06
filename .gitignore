@@ -21,6 +21,14 @@ __pycache__/
 *.key
 credentials.json
 
+# Test/coverage artifacts
+.coverage
+htmlcov/
+
+# IDE and tool configs
+.claude/
+.cursor/
+
 # Git worktrees
 .worktrees/
 
