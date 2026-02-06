@@ -1,0 +1,38 @@
+# Expected data source schedules for staleness detection.
+# Sources that don't deliver within tolerance are flagged.
+sources:
+  federal_register:
+    frequency: daily
+    tolerance_hours: 6
+    alert_after_hours: 24
+    is_critical: true
+  bills_congress:
+    frequency: daily
+    tolerance_hours: 12
+    alert_after_hours: 48
+    is_critical: false
+  hearings_congress:
+    frequency: daily
+    tolerance_hours: 12
+    alert_after_hours: 48
+    is_critical: false
+  ecfr_delta:
+    frequency: daily
+    tolerance_hours: 6
+    alert_after_hours: 24
+    is_critical: true
+  state_intelligence:
+    frequency: daily
+    tolerance_hours: 6
+    alert_after_hours: 24
+    is_critical: true
+  oversight:
+    frequency: daily
+    tolerance_hours: 6
+    alert_after_hours: 24
+    is_critical: true
+  lda:
+    frequency: daily
+    tolerance_hours: 12
+    alert_after_hours: 48
+    is_critical: false

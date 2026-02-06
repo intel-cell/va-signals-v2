@@ -4,13 +4,14 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from ..db import connect, execute, table_exists
 from ..notify_email import check_smtp_health
 from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..resilience.staleness_monitor import check_all_sources, load_expectations
 from ._helpers import utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -211,5 +212,59 @@ def get_deadman_switch(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     return DeadManResponse(
         pipelines=pipelines,
         overall_status=overall.status,
+        checked_at=utc_now_iso(),
+    )
+
+
+# --- Staleness Detection Models ---
+
+class StalenessAlert(BaseModel):
+    source_id: str
+    last_success_at: Optional[str]
+    hours_overdue: Optional[float]
+    consecutive_failures: int
+    severity: str
+    is_critical_source: bool
+    message: str
+
+
+class StalenessResponse(BaseModel):
+    alerts: list[StalenessAlert]
+    sources_checked: int
+    overall_status: str  # worst severity or "healthy"
+    checked_at: str
+
+
+@router.get("/api/health/staleness", response_model=StalenessResponse, tags=["Health"])
+def get_staleness_alerts(
+    severity: Optional[str] = Query(None, description="Filter by severity: warning, alert, critical"),
+    _: None = Depends(RoleChecker(UserRole.VIEWER)),
+):
+    """Get expected-but-missing signal alerts per source."""
+    expectations = load_expectations()
+    alerts = check_all_sources()
+
+    if severity:
+        alerts = [a for a in alerts if a.severity == severity]
+
+    severity_priority = {"critical": 2, "alert": 1, "warning": 0}
+    if alerts:
+        worst = max(alerts, key=lambda a: severity_priority.get(a.severity, 0))
+        overall_status = worst.severity
+    else:
+        overall_status = "healthy"
+
+    return StalenessResponse(
+        alerts=[StalenessAlert(
+            source_id=a.source_id,
+            last_success_at=a.last_success_at,
+            hours_overdue=a.hours_overdue,
+            consecutive_failures=a.consecutive_failures,
+            severity=a.severity,
+            is_critical_source=a.is_critical_source,
+            message=a.message,
+        ) for a in alerts],
+        sources_checked=len(expectations),
+        overall_status=overall_status,
         checked_at=utc_now_iso(),
     )

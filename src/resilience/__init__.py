@@ -11,6 +11,13 @@ Provides:
 from .circuit_breaker import CircuitBreaker, CircuitState, CircuitBreakerOpen
 from .retry import retry_with_backoff, RetryConfig
 from .rate_limiter import RateLimiter, RateLimitExceeded
+from .staleness_monitor import (
+    StaleSourceAlert,
+    SourceExpectation,
+    check_all_sources,
+    check_source,
+    load_expectations,
+)
 
 __all__ = [
     "CircuitBreaker",
@@ -20,4 +27,9 @@ __all__ = [
     "RetryConfig",
     "RateLimiter",
     "RateLimitExceeded",
+    "StaleSourceAlert",
+    "SourceExpectation",
+    "check_all_sources",
+    "check_source",
+    "load_expectations",
 ]
