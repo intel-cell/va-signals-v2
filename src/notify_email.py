@@ -31,7 +31,7 @@ def _get_config() -> Dict[str, Any]:
     """Get email configuration from environment variables."""
     return {
         "host": os.environ.get("SMTP_HOST", ""),
-        "port": int(os.environ.get("SMTP_PORT", "587")),
+        "port": int(os.environ.get("SMTP_PORT", "") or "587"),
         "user": os.environ.get("SMTP_USER", ""),
         "password": os.environ.get("SMTP_PASS", ""),
         "from_addr": os.environ.get("EMAIL_FROM", ""),
