@@ -210,5 +210,5 @@ def test_run_all_agents_parallelism(mock_run_agent):
     results = run_all_agents()
     elapsed = time.monotonic() - start
 
-    assert len(results) == 9, f"Expected 9 results, got {len(results)}"
+    assert len(results) == 10, f"Expected 10 results, got {len(results)}"
     assert elapsed < 0.5, f"Took {elapsed:.2f}s — agents likely running sequentially"

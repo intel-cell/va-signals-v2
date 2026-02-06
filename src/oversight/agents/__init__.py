@@ -10,6 +10,7 @@ from .news_wire import NewsWireAgent
 from .investigative import InvestigativeAgent
 from .trade_press import TradePressAgent
 from .cafc import CAFCAgent
+from .bva import BVAAgent
 
 __all__ = [
     "OversightAgent",
@@ -24,4 +25,5 @@ __all__ = [
     "InvestigativeAgent",
     "TradePressAgent",
     "CAFCAgent",
+    "BVAAgent",
 ]

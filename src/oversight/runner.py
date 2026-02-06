@@ -16,6 +16,7 @@ from .agents.news_wire import NewsWireAgent
 from .agents.investigative import InvestigativeAgent
 from .agents.trade_press import TradePressAgent
 from .agents.cafc import CAFCAgent
+from .agents.bva import BVAAgent
 from .agents.base import RawEvent, TimestampResult
 from .db_helpers import (
     insert_om_event,
@@ -45,6 +46,7 @@ AGENT_REGISTRY = {
     "investigative": InvestigativeAgent,
     "trade_press": TradePressAgent,
     "cafc": CAFCAgent,
+    "bva": BVAAgent,
 }
 
 
