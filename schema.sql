@@ -910,3 +910,24 @@ CREATE TABLE IF NOT EXISTS staleness_alerts (
 
 CREATE INDEX IF NOT EXISTS idx_staleness_alerts_source ON staleness_alerts(source_id);
 CREATE INDEX IF NOT EXISTS idx_staleness_alerts_severity ON staleness_alerts(severity);
+
+-- ============================================================
+-- COMPOUND SIGNALS (Cross-Source Correlation Engine)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS compound_signals (
+    compound_id TEXT PRIMARY KEY,
+    rule_id TEXT NOT NULL,
+    severity_score REAL NOT NULL,
+    narrative TEXT,
+    temporal_window_hours INTEGER,
+    member_events TEXT NOT NULL,
+    topics TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    resolved_at TEXT,
+    UNIQUE(rule_id, compound_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_compound_signals_rule ON compound_signals(rule_id);
+CREATE INDEX IF NOT EXISTS idx_compound_signals_created ON compound_signals(created_at);
+CREATE INDEX IF NOT EXISTS idx_compound_signals_severity ON compound_signals(severity_score);

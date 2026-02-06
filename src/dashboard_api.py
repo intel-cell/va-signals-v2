@@ -37,6 +37,7 @@ from .routers.agenda_drift import router as agenda_drift_router
 from .routers.legislative import router as legislative_router
 from .routers.state import router as state_router
 from .routers.oversight import router as oversight_router
+from .routers.compound import router as compound_router
 
 # Prometheus metrics (optional - graceful fallback if not installed)
 try:
@@ -207,6 +208,7 @@ app.include_router(agenda_drift_router)
 app.include_router(legislative_router)
 app.include_router(state_router)
 app.include_router(oversight_router)
+app.include_router(compound_router)
 
 # Mount static files last (catch-all for SPA)
 if STATIC_DIR.exists():

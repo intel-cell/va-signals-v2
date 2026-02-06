@@ -86,3 +86,10 @@ from .lda import (
     get_new_lda_filings_since,
     get_lda_stats,
 )
+from .compound import (
+    insert_compound_signal,
+    get_compound_signal,
+    get_compound_signals,
+    resolve_compound_signal,
+    get_compound_stats,
+)

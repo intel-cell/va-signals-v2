@@ -1,0 +1,51 @@
+- rule_id: legislative_to_oversight
+  name: Legislative to Oversight Correlation
+  description: Bill introduced and related oversight report published within temporal window
+  source_types:
+    - bill
+    - oversight
+  temporal_window_hours: 336
+  min_topic_overlap: 1
+  severity_base: 0.6
+  severity_multipliers:
+    topic_overlap_bonus: 0.1
+    escalation_bonus: 0.15
+
+- rule_id: state_divergence
+  name: State Divergence Detection
+  description: 3+ states report same topic within temporal window
+  source_types:
+    - state
+  temporal_window_hours: 168
+  min_topic_overlap: 1
+  min_source_count: 3
+  severity_base: 0.5
+  severity_multipliers:
+    topic_overlap_bonus: 0.1
+    source_count_bonus: 0.05
+
+- rule_id: oversight_escalation
+  name: Oversight Escalation Correlation
+  description: Hearing scheduled and related oversight report within temporal window
+  source_types:
+    - hearing
+    - oversight
+  temporal_window_hours: 504
+  min_topic_overlap: 1
+  severity_base: 0.7
+  severity_multipliers:
+    topic_overlap_bonus: 0.1
+    escalation_bonus: 0.2
+
+- rule_id: regulatory_federal_register
+  name: Regulatory Federal Register Correlation
+  description: FR rule published and related bill or hearing within temporal window
+  source_types:
+    - federal_register
+    - bill
+    - hearing
+  temporal_window_hours: 720
+  min_topic_overlap: 1
+  severity_base: 0.55
+  severity_multipliers:
+    topic_overlap_bonus: 0.1
