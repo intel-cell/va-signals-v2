@@ -9,6 +9,7 @@ from src.oversight.runner import (
     run_all_agents,
     run_backfill,
     generate_digest,
+    _process_raw_event,
     OversightRunResult,
 )
 
@@ -134,3 +135,54 @@ def test_generate_digest(mock_get_events):
 
     assert digest is not None
     assert "Test Event" in digest or len(digest) > 50
+
+
+@patch("src.oversight.runner.deduplicate_event")
+@patch("src.oversight.runner.extract_entities")
+@patch("src.oversight.runner.check_quality_gate")
+@patch("src.oversight.runner.check_escalation")
+def test_processed_event_includes_ml_fields(
+    mock_escalation, mock_qg, mock_entities, mock_dedup
+):
+    """Processed events should include ml_score and ml_risk_level from escalation."""
+    from src.oversight.agents.base import RawEvent
+    from src.oversight.pipeline.escalation import EscalationResult
+
+    # Setup mocks
+    mock_qg.return_value = MagicMock(passed=True)
+    mock_entities.return_value = set()
+    mock_dedup.return_value = MagicMock(is_duplicate=False)
+    mock_escalation.return_value = EscalationResult(
+        is_escalation=False,
+        matched_signals=[],
+        severity="none",
+        ml_score=0.72,
+        ml_risk_level="HIGH",
+        ml_confidence=0.85,
+    )
+
+    raw = RawEvent(
+        url="https://gao.gov/ml-test",
+        title="ML Test Report",
+        raw_html="<p>Content</p>",
+        fetched_at="2026-01-20T12:00:00Z",
+        metadata={},
+    )
+
+    mock_agent = MagicMock()
+    mock_agent.extract_timestamps.return_value = MagicMock(
+        pub_timestamp="2026-01-20T10:00:00Z",
+        pub_precision="datetime",
+        pub_source="extracted",
+        event_timestamp=None,
+        event_precision=None,
+        event_source=None,
+    )
+    mock_agent.extract_canonical_refs.return_value = {}
+
+    event, rejection = _process_raw_event(raw, mock_agent, "gao")
+
+    assert rejection is None
+    assert event is not None
+    assert event["ml_score"] == 0.72
+    assert event["ml_risk_level"] == "HIGH"

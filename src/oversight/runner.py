@@ -127,6 +127,8 @@ def _process_raw_event(
         "raw_content": raw.raw_html[:5000] if raw.raw_html else None,
         "is_escalation": esc_result.is_escalation,
         "escalation_signals": esc_result.matched_signals if esc_result.is_escalation else None,
+        "ml_score": esc_result.ml_score,
+        "ml_risk_level": esc_result.ml_risk_level,
         "is_deviation": 0,  # Will be set by deviation classifier
         "deviation_reason": None,
         "canonical_refs": entities if entities else None,
