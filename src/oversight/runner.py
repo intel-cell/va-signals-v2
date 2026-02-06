@@ -229,23 +229,39 @@ def run_agent(agent_name: str, since: Optional[datetime] = None) -> OversightRun
 
 def run_all_agents(since: Optional[datetime] = None) -> list[OversightRunResult]:
     """
-    Run all registered oversight agents.
+    Run all registered oversight agents in parallel using ThreadPoolExecutor.
 
     Args:
         since: Only fetch events since this time
 
     Returns:
-        List of results for each agent
+        List of results for each agent (in registry order)
     """
-    results = []
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    for agent_name in AGENT_REGISTRY:
-        logger.info(f"Running agent: {agent_name}")
-        result = run_agent(agent_name, since=since)
-        results.append(result)
-        logger.info(f"[{agent_name}] {result.status}: {result.events_processed} processed")
+    agent_results: dict[str, OversightRunResult] = {}
 
-    return results
+    with ThreadPoolExecutor(max_workers=len(AGENT_REGISTRY)) as executor:
+        future_to_agent = {
+            executor.submit(run_agent, agent_name, since): agent_name
+            for agent_name in AGENT_REGISTRY
+        }
+        for future in as_completed(future_to_agent):
+            agent_name = future_to_agent[future]
+            try:
+                result = future.result()
+                agent_results[agent_name] = result
+                logger.info(f"[{agent_name}] {result.status}: {result.events_processed} processed")
+            except Exception as e:
+                logger.error(f"[{agent_name}] Thread failed: {e}")
+                agent_results[agent_name] = OversightRunResult(
+                    agent=agent_name,
+                    status="ERROR",
+                    errors=[f"Thread exception: {repr(e)}"],
+                )
+
+    # Return in registry order for deterministic output
+    return [agent_results[name] for name in AGENT_REGISTRY]
 
 
 def run_backfill(

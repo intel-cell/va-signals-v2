@@ -1,5 +1,6 @@
 """Tests for oversight CLI runner."""
 
+import time
 import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime
@@ -186,3 +187,28 @@ def test_processed_event_includes_ml_fields(
     assert event is not None
     assert event["ml_score"] == 0.72
     assert event["ml_risk_level"] == "HIGH"
+
+
+@patch("src.oversight.runner.run_agent")
+def test_run_all_agents_parallelism(mock_run_agent):
+    """run_all_agents should run agents concurrently, not sequentially.
+
+    9 agents each sleep 0.1s: sequential ~0.9s, parallel < 0.5s.
+    """
+    def slow_agent(agent_name, since=None):
+        time.sleep(0.1)
+        return OversightRunResult(
+            agent=agent_name,
+            status="SUCCESS",
+            events_fetched=0,
+            events_processed=0,
+        )
+
+    mock_run_agent.side_effect = slow_agent
+
+    start = time.monotonic()
+    results = run_all_agents()
+    elapsed = time.monotonic() - start
+
+    assert len(results) == 9, f"Expected 9 results, got {len(results)}"
+    assert elapsed < 0.5, f"Took {elapsed:.2f}s — agents likely running sequentially"
