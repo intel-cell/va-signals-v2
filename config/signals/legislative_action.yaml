@@ -1,0 +1,213 @@
+schema_version: "1.0"
+category_id: "legislative_action"
+description: "Legislative actions — bills, hearings, mandates, and sunset provisions affecting VA programs"
+priority: "high"
+owner: "VetClaims.ai Signals Cell"
+created_at: "2026-02-06"
+last_updated: "2026-02-06"
+
+field_access:
+  description: "Evaluators may only access these envelope fields"
+  allowed_top_level:
+    - event_id
+    - authority_id
+    - authority_source
+    - authority_type
+    - committee
+    - subcommittee
+    - topics
+    - title
+    - body_text
+    - content_hash
+    - version
+    - published_at
+    - published_at_source
+    - event_start_at
+    - source_url
+    - fetched_at
+  allowed_nested_prefix: "metadata."
+
+evaluator_whitelist:
+  - contains_any
+  - field_in
+  - field_intersects
+  - equals
+  - gt
+  - field_exists
+  - nested_field_in
+
+indicators:
+  - indicator_id: "bill_activity"
+    description: "New bills or bill progression events affecting VA programs"
+    indicator_condition:
+      all_of:
+        - evaluator: "field_in"
+          args:
+            field: "authority_source"
+            values: ["congress_gov"]
+        - evaluator: "field_in"
+          args:
+            field: "authority_type"
+            values: ["bill_text"]
+    triggers:
+      - trigger_id: "va_bill_introduced"
+        description: "New bill introduced affecting VA or veteran programs"
+        condition:
+          all_of:
+            - evaluator: "contains_any"
+              args:
+                field: "body_text"
+                terms: ["Department of Veterans Affairs", "veterans benefits", "disability compensation", "Title 38", "Secretary of Veterans Affairs"]
+            - evaluator: "equals"
+              args:
+                field: "version"
+                value: 1
+
+      - trigger_id: "bill_markup_or_vote"
+        description: "Bill advancing through markup, committee vote, or floor vote"
+        condition:
+          all_of:
+            - evaluator: "contains_any"
+              args:
+                field: "body_text"
+                terms: ["ordered to be reported", "passed House", "passed Senate", "enrolled", "markup", "committee vote"]
+            - any_of:
+                - evaluator: "field_intersects"
+                  args:
+                    field: "topics"
+                    values: ["disability_benefits", "rating", "claims_backlog", "vasrd", "appeals"]
+                - evaluator: "contains_any"
+                  args:
+                    field: "body_text"
+                    terms: ["veterans", "Department of Veterans Affairs", "VA"]
+              label: "anti_spam_discriminator"
+
+  - indicator_id: "hearing_activity"
+    description: "Congressional hearings on VA disability and appropriations topics"
+    indicator_condition:
+      all_of:
+        - evaluator: "field_in"
+          args:
+            field: "authority_type"
+            values: ["hearing_notice"]
+        - evaluator: "field_in"
+          args:
+            field: "committee"
+            values: ["HVAC", "SVAC"]
+    triggers:
+      - trigger_id: "oversight_hearing"
+        description: "Hearing on VA disability benefits, ratings, or claims processing"
+        condition:
+          evaluator: "field_intersects"
+          args:
+            field: "topics"
+            values: ["disability_benefits", "rating", "exam_quality", "claims_backlog"]
+
+      - trigger_id: "appropriations_hearing"
+        description: "Hearing on VA appropriations, budget, or funding"
+        condition:
+          evaluator: "contains_any"
+          args:
+            field: "body_text"
+            terms: ["appropriations", "budget request", "funding", "mandatory spending"]
+
+  - indicator_id: "legislative_mandate"
+    description: "Legislative language imposing reporting deadlines or sunset provisions"
+    indicator_condition:
+      evaluator: "field_in"
+      args:
+        field: "authority_source"
+        values: ["congress_gov"]
+    triggers:
+      - trigger_id: "reporting_deadline"
+        description: "Legislative language requiring reports or imposing deadlines"
+        condition:
+          all_of:
+            - evaluator: "contains_any"
+              args:
+                field: "body_text"
+                terms: ["shall report", "not later than", "within 90 days", "within 180 days", "submit to Congress"]
+            - any_of:
+                - evaluator: "field_intersects"
+                  args:
+                    field: "topics"
+                    values: ["disability_benefits", "rating", "vasrd", "exam_quality"]
+                - evaluator: "contains_any"
+                  args:
+                    field: "body_text"
+                    terms: ["disability", "rating schedule", "VASRD", "veterans benefits"]
+              label: "anti_spam_discriminator"
+
+      - trigger_id: "sunset_provision"
+        description: "Sunset clauses, expiration dates, or reauthorization requirements"
+        condition:
+          all_of:
+            - evaluator: "contains_any"
+              args:
+                field: "body_text"
+                terms: ["sunset", "expires on", "termination date", "reauthorization"]
+            - any_of:
+                - evaluator: "field_intersects"
+                  args:
+                    field: "topics"
+                    values: ["disability_benefits", "rating", "vasrd", "appeals"]
+                - evaluator: "contains_any"
+                  args:
+                    field: "body_text"
+                    terms: ["veterans", "Department of Veterans Affairs", "VA program"]
+              label: "anti_spam_discriminator"
+
+routing:
+  - trigger_id: "va_bill_introduced"
+    severity: "low"
+    human_review_required: false
+    actions: ["write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 1440
+      version_aware: true
+
+  - trigger_id: "bill_markup_or_vote"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 60
+      version_aware: true
+
+  - trigger_id: "oversight_hearing"
+    severity: "medium"
+    human_review_required: false
+    actions: ["create_exec_brief_card", "update_hearing_tracker", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 1440
+      version_aware: true
+
+  - trigger_id: "appropriations_hearing"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 1440
+      version_aware: true
+
+  - trigger_id: "reporting_deadline"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "add_to_oversight_pressure_register", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 1440
+      version_aware: true
+
+  - trigger_id: "sunset_provision"
+    severity: "high"
+    human_review_required: true
+    actions: ["post_slack_alert", "create_exec_brief_card", "notify_product_policy_leads", "write_audit_log"]
+    suppression:
+      dedupe_key: ["trigger_id", "authority_id"]
+      cooldown_minutes: 1440
+      version_aware: true

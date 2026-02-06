@@ -42,3 +42,21 @@ def test_schema_validates_evaluators():
     # Should not raise - all evaluators in whitelist
     schema = load_category_schema("oversight_accountability")
     assert schema is not None
+
+
+ALL_SCHEMAS = [
+    "oversight_accountability",
+    "regulatory_change",
+    "claims_operations",
+    "legislative_action",
+]
+
+
+@pytest.mark.parametrize("category_id", ALL_SCHEMAS)
+def test_all_schemas_load_and_validate(category_id):
+    """Every signal schema in config/signals/ should load without errors."""
+    schema = load_category_schema(category_id)
+    assert schema.category_id == category_id
+    assert len(schema.indicators) > 0
+    assert len(schema.routing) > 0
+    assert schema.priority in ("high", "medium", "low")
