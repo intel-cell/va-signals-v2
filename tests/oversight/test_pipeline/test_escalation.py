@@ -66,3 +66,15 @@ def test_escalation_matches_whistleblower():
 
     assert result.is_escalation is True
     assert "whistleblower" in result.matched_signals
+
+
+def test_escalation_includes_ml_score():
+    """check_escalation should include ml_score and ml_risk_level fields."""
+    result = check_escalation(
+        title="GAO audit of VA disability claims backlog",
+        content="The Government Accountability Office found systemic delays.",
+    )
+    assert hasattr(result, "ml_score"), "EscalationResult missing ml_score"
+    assert hasattr(result, "ml_risk_level"), "EscalationResult missing ml_risk_level"
+    assert isinstance(result.ml_score, (float, type(None)))
+    assert isinstance(result.ml_risk_level, (str, type(None)))

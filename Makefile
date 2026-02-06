@@ -1,4 +1,4 @@
-.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest lda-daily lda-summary
+.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest lda-daily lda-summary ceo-brief ceo-brief-dry
 
 PORT ?= 8000
 
@@ -80,3 +80,11 @@ battlefield-init:
 
 authority-docs:
 	./.venv/bin/python -m src.run_authority_docs
+
+# CEO Brief Generation
+ceo-brief:
+	ANTHROPIC_API_KEY=$$(security find-generic-password -s "claude-api" -a "$$USER" -w) \
+	./.venv/bin/python -m src.ceo_brief.runner
+
+ceo-brief-dry:
+	./.venv/bin/python -m src.ceo_brief.runner --dry-run

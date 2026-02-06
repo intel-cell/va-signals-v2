@@ -1,0 +1,23 @@
+# VA Signals - Cron jobs
+# Source .env.cron for API keys (Keychain unavailable when locked)
+
+# 6am runs
+0 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make fr-delta >> /tmp/va-signals-cron.log 2>&1
+5 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make ecfr-delta >> /tmp/va-signals-cron.log 2>&1
+10 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make bills >> /tmp/va-signals-cron.log 2>&1
+15 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make hearings >> /tmp/va-signals-cron.log 2>&1
+
+# 6pm runs
+0 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make fr-delta >> /tmp/va-signals-cron.log 2>&1
+5 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make ecfr-delta >> /tmp/va-signals-cron.log 2>&1
+10 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make bills >> /tmp/va-signals-cron.log 2>&1
+15 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make hearings >> /tmp/va-signals-cron.log 2>&1
+
+# Oversight/State (add ANTHROPIC_API_KEY to .env.cron if LLM features fail)
+20 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && ./.venv/bin/python -m src.run_oversight --all >> /tmp/va-signals-cron.log 2>&1
+25 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make state-monitor-morning >> /tmp/va-signals-cron.log 2>&1
+20 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && ./.venv/bin/python -m src.run_oversight --all >> /tmp/va-signals-cron.log 2>&1
+25 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make state-monitor-evening >> /tmp/va-signals-cron.log 2>&1
+
+# CEO Brief (daily at 7am, after all sources have run)
+0 7 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make ceo-brief >> /tmp/va-signals-cron.log 2>&1
