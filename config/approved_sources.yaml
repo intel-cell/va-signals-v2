@@ -14,6 +14,16 @@ approved_sources:
       - "https://www.govinfo.gov/bulkdata/FR/"
     notes: "Primary source for FR bulk data. Ping first; ingest later."
 
+  - id: lda_gov
+    name: "LDA.gov Lobbying Disclosure Act"
+    type: "primary/intelligence"
+    domains:
+      - "lda.gov"
+    endpoints:
+      - "https://lda.gov/api/v1/filings/"
+      - "https://lda.gov/api/v1/registrants/"
+    notes: "Lobbying disclosure filings. VA = entity 42. Anonymous API, 15 req/min."
+
   - id: govinfo_ecfr_title_38
     name: "GovInfo eCFR Title 38 Bulk XML"
     type: "authoritative/signaling"

@@ -1,4 +1,4 @@
-.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest
+.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest lda-daily lda-summary
 
 PORT ?= 8000
 
@@ -63,6 +63,13 @@ state-monitor-dry:
 
 state-digest:
 	./.venv/bin/python -m src.state.digest
+
+# LDA Lobbying Disclosure
+lda-daily:
+	./.venv/bin/python -m src.run_lda --mode daily
+
+lda-summary:
+	./.venv/bin/python -m src.run_lda --summary
 
 # Phase 2 Commands
 battlefield:

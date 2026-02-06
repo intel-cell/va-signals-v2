@@ -36,6 +36,10 @@ make state-monitor-evening  # Evening run type
 make state-monitor-dry      # Dry run (no alerts)
 make state-digest           # Generate weekly state digest
 
+# LDA Lobbying Disclosure
+make lda-daily         # Daily LDA delta detection (VA-targeting filings)
+make lda-summary       # Show LDA filing statistics
+
 # Phase 2 commands
 make battlefield       # Run all battlefield gates
 make battlefield-init  # Initialize battlefield data
@@ -82,6 +86,7 @@ External Sources --> Fetch Modules --> SQLite/PostgreSQL --> Dashboard API
 | State Intelligence | `state_signals`, `state_classifications`, `state_runs` | `src/state/runner.py` |
 | Authority Docs | via `fr_seen` / dedicated tables | `run_authority_docs.py` |
 | Battlefield | via trend/gate tables | `run_battlefield.py` |
+| LDA Lobbying Disclosure | `lda_filings`, `lda_alerts` | `run_lda.py` |
 
 ### Oversight Monitor (`src/oversight/`)
 

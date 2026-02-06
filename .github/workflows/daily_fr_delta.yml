@@ -50,6 +50,10 @@ jobs:
         run: |
           ./.venv/bin/python -m src.state.runner --run-type morning
 
+      - name: Run LDA Daily Delta
+        continue-on-error: true
+        run: ./.venv/bin/python -m src.run_lda --mode daily
+
       - name: Run Trend Aggregation
         continue-on-error: true
         run: ./.venv/bin/python -m scripts.run_trend_aggregation
