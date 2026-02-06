@@ -1,4 +1,4 @@
-.PHONY: init test fr-ping db-init fr-delta ecfr-delta dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest lda-daily lda-summary ceo-brief ceo-brief-dry
+.PHONY: init test fr-ping db-init fr-delta ecfr-delta ecfr-delta-5 ecfr-delta-20 ecfr-delta-all dashboard report-daily report-weekly summarize fetch-transcripts embed agenda-drift bills hearings state-monitor state-monitor-morning state-monitor-evening state-monitor-dry state-digest lda-daily lda-summary ceo-brief ceo-brief-dry
 
 PORT ?= 8000
 
@@ -20,6 +20,15 @@ fr-delta:
 
 ecfr-delta:
 	./.venv/bin/python -m src.run_ecfr_delta
+
+ecfr-delta-5:
+	./.venv/bin/python -m src.run_ecfr_delta --title 5
+
+ecfr-delta-20:
+	./.venv/bin/python -m src.run_ecfr_delta --title 20
+
+ecfr-delta-all:
+	./.venv/bin/python -m src.run_ecfr_delta --all
 
 dashboard:
 	./.venv/bin/uvicorn src.dashboard_api:app --reload --port $(PORT)

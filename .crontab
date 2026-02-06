@@ -3,13 +3,13 @@
 
 # 6am runs
 0 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make fr-delta >> /tmp/va-signals-cron.log 2>&1
-5 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make ecfr-delta >> /tmp/va-signals-cron.log 2>&1
+5 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make ecfr-delta-all >> /tmp/va-signals-cron.log 2>&1
 10 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make bills >> /tmp/va-signals-cron.log 2>&1
 15 6 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make hearings >> /tmp/va-signals-cron.log 2>&1
 
 # 6pm runs
 0 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make fr-delta >> /tmp/va-signals-cron.log 2>&1
-5 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make ecfr-delta >> /tmp/va-signals-cron.log 2>&1
+5 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make ecfr-delta-all >> /tmp/va-signals-cron.log 2>&1
 10 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make bills >> /tmp/va-signals-cron.log 2>&1
 15 18 * * * . /Users/xa/Work_VC/va-signals-v2/.env.cron && cd /Users/xa/Work_VC/va-signals-v2 && make hearings >> /tmp/va-signals-cron.log 2>&1
 

@@ -33,3 +33,23 @@ approved_sources:
     endpoints:
       - "https://www.govinfo.gov/bulkdata/ECFR/title-38/ECFR-title38.xml"
     notes: "eCFR is unofficial but operationally relevant. Track incorporation of Title 38."
+
+  - id: govinfo_ecfr_title_5
+    name: "GovInfo eCFR Title 5 Bulk XML"
+    type: "authoritative/signaling"
+    domains:
+      - "www.govinfo.gov"
+      - "govinfo.gov"
+    endpoints:
+      - "https://www.govinfo.gov/bulkdata/ECFR/title-5/ECFR-title5.xml"
+    notes: "Title 5 — Administrative Personnel. OPM rules affecting federal employee veterans."
+
+  - id: govinfo_ecfr_title_20
+    name: "GovInfo eCFR Title 20 Bulk XML"
+    type: "authoritative/signaling"
+    domains:
+      - "www.govinfo.gov"
+      - "govinfo.gov"
+    endpoints:
+      - "https://www.govinfo.gov/bulkdata/ECFR/title-20/ECFR-title20.xml"
+    notes: "Title 20 — Employees' Benefits. SSA rules affecting disabled veterans."
