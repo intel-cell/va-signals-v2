@@ -8,7 +8,7 @@ Veterans affairs policy changes detected within 24-72 hours. <5 min/day human at
 | LOE | Name | Objective | Status |
 |-----|------|-----------|--------|
 | **1** | Federal Authority | 100% detection of binding VA federal actions | ✅ Operational |
-| **2** | Oversight Intel | GAO/OIG/CRS/CAFC coverage with 90-day baseline | ✅ 9/9 agents |
+| **2** | Oversight Intel | GAO/OIG/CRS/CAFC coverage with 90-day baseline | ✅ 9/9 agents + baselines |
 | **3** | State Implementation | Top-10 states monitored | ✅ 10/10 |
 | **4** | Behavioral Intel | Predict policy shifts via rhetoric analysis | ✅ Operational |
 | **5** | Command & Control | Unified ops picture, self-sustaining | ✅ Operational |
@@ -35,7 +35,7 @@ Phase IV:  SUSTAINMENT    (Ongoing)     - <5 min/day attention, continuous ops
 9. [x] CAFC agent → operational (RSS + HTML fallback, 5 VA cases)
 10. [x] Auth hardening complete (Cloud Run rev 34, 60 tests passing)
 11. [x] CI/CD pipeline updated (oversight + state monitor in daily workflow)
-12. [ ] 90-day baseline computation
+12. [x] 90-day baseline computation — 8/9 sources baselined (CRS = 0 VA events, expected)
 13. [ ] 7 consecutive days zero critical failures (tracking from 5 Feb)
 
 ## Phase II Status (Complete — 5 Feb 2026)
@@ -64,6 +64,7 @@ Phase IV:  SUSTAINMENT    (Ongoing)     - <5 min/day attention, continuous ops
 | Total oversight events | — | 240 |
 | Escalations detected | — | 6 |
 | State signals (new) | — | 103 (PA:8, OH:3, NY:41, NC:21, GA:21, VA:6, AZ:3) |
+| Baselines computed | 9 sources | 8/9 ✅ (CRS = 0 VA events) |
 
 ## Commander's Intent
 

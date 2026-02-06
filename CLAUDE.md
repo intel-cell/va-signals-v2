@@ -24,8 +24,10 @@ make hearings          # Sync committee hearings
 make agenda-drift      # Run agenda drift detection (baselines + deviations)
 
 # Oversight monitor (multi-agent)
-./.venv/bin/python -m src.run_oversight --all           # Run all agents
-./.venv/bin/python -m src.run_oversight --agent gao     # Single agent
+./.venv/bin/python -m src.run_oversight run             # Run all agents
+./.venv/bin/python -m src.run_oversight run --agent gao # Single agent
+./.venv/bin/python -m src.run_oversight baseline        # Build 90-day baselines
+./.venv/bin/python -m src.run_oversight status          # Show status + baselines
 
 # State intelligence
 make state-monitor          # Run all state sources

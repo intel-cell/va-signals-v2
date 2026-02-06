@@ -8,6 +8,8 @@ Usage:
     python -m src.run_oversight --backfill gao --start 2025-10-01 --end 2026-01-01
     python -m src.run_oversight --digest --start 2026-01-13 --end 2026-01-20
     python -m src.run_oversight --status           # Show system status
+    python -m src.run_oversight baseline           # Build 90-day baselines for all sources
+    python -m src.run_oversight baseline --source gao  # Build baseline for single source
 """
 
 import argparse
@@ -90,6 +92,50 @@ def cmd_digest(args):
         print(digest)
 
 
+def cmd_baseline(args):
+    """Build baselines for oversight sources."""
+    init_db()
+
+    from .oversight.pipeline.baseline import build_baseline, build_all_baselines
+
+    window_days = args.window_days
+
+    if args.source:
+        print(f"\nBuilding {window_days}-day baseline for {args.source}...")
+        baseline = build_baseline(
+            source_type=args.source,
+            window_days=window_days,
+            save=True,
+        )
+        if baseline:
+            print(f"  ✓ {baseline.source_type}: {baseline.event_count} events")
+            print(f"    Window: {baseline.window_start} → {baseline.window_end}")
+            print(f"    Summary: {baseline.summary}")
+            if baseline.topic_distribution:
+                topics = ", ".join(
+                    f"{k} ({v:.0%})" for k, v in baseline.topic_distribution.items()
+                )
+                print(f"    Topics: {topics}")
+        else:
+            print(f"  ○ {args.source}: no events in {window_days}-day window")
+    else:
+        print(f"\nBuilding {window_days}-day baselines for all sources...")
+        baselines = build_all_baselines(window_days=window_days, save=True)
+
+        print(f"\n=== Baseline Computation Complete ===")
+        print(f"Sources with baselines: {len(baselines)}")
+        for bl in baselines:
+            print(f"  ✓ {bl.source_type}: {bl.event_count} events ({bl.window_start} → {bl.window_end})")
+            if bl.topic_distribution:
+                topics = ", ".join(
+                    f"{k} ({v:.0%})" for k, v in bl.topic_distribution.items()
+                )
+                print(f"    Topics: {topics}")
+
+        if not baselines:
+            print("  (no events found in any source)")
+
+
 def cmd_status(args):
     """Show system status."""
     init_db()
@@ -118,6 +164,17 @@ def cmd_status(args):
     cur = con.execute("SELECT COUNT(*) FROM om_events WHERE is_escalation = 1")
     escalation_count = cur.fetchone()[0]
 
+    # Baselines
+    cur = con.execute(
+        """SELECT source_type, event_count, window_start, window_end, built_at
+           FROM om_baselines
+           WHERE id IN (
+               SELECT MAX(id) FROM om_baselines GROUP BY source_type
+           )
+           ORDER BY source_type"""
+    )
+    baselines = cur.fetchall()
+
     con.close()
 
     print("\n=== Oversight Monitor Status ===")
@@ -130,6 +187,13 @@ def cmd_status(args):
     print(f"\nRecent events:")
     for eid, title, ts in recent:
         print(f"  [{ts[:10]}] {title[:60]}")
+
+    if baselines:
+        print(f"\nBaselines ({len(baselines)} sources):")
+        for source_type, event_count_bl, w_start, w_end, built_at in baselines:
+            print(f"  {source_type}: {event_count_bl} events ({w_start} → {w_end}) built {built_at[:10]}")
+    else:
+        print(f"\nBaselines: none computed (run: python -m src.run_oversight baseline)")
 
 
 def main():
@@ -153,12 +217,21 @@ def main():
     digest_parser.add_argument("--end", required=True, help="End date (YYYY-MM-DD)")
     digest_parser.add_argument("--output", "-o", help="Output file (default: stdout)")
 
+    # Baseline command
+    baseline_parser = subparsers.add_parser("baseline", help="Build 90-day baselines")
+    baseline_parser.add_argument("--source", "-s", help="Build baseline for specific source type")
+    baseline_parser.add_argument(
+        "--window-days", type=int, default=90, help="Baseline window in days (default: 90)"
+    )
+
     # Status command
     subparsers.add_parser("status", help="Show system status")
 
     args = parser.parse_args()
 
-    if args.command == "backfill":
+    if args.command == "baseline":
+        cmd_baseline(args)
+    elif args.command == "backfill":
         cmd_backfill(args)
     elif args.command == "digest":
         cmd_digest(args)

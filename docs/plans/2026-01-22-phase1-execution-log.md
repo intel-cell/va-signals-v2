@@ -241,3 +241,33 @@ Added final 4 state intelligence sources, completing LOE 3 target of 10-state co
 ### Commit
 
 `e690981` — "Phase III state expansion: add NC, GA, VA, AZ state intelligence sources"
+
+---
+
+## Date: 2026-02-06
+
+### 90-Day Baseline Computation (Phase I Criterion #12)
+
+Added `baseline` CLI subcommand to `run_oversight.py` and computed initial baselines.
+
+**CLI**: `python -m src.run_oversight baseline` (all sources) or `--source gao` (single)
+
+**Results** (8/9 sources baselined, CRS = 0 VA events expected):
+
+| Source Type | Event Count | Window | Top Topics |
+|-------------|-------------|--------|------------|
+| cafc | 5 | Nov 2025 – Feb 2026 | — |
+| committee_press | 15 | Nov 2025 – Feb 2026 | benefits 40%, technology 25%, healthcare 15% |
+| congressional_record | 1 | Nov 2025 – Feb 2026 | — |
+| gao | 24 | Nov 2025 – Feb 2026 | fraud 52%, benefits 15%, staffing 10% |
+| investigative | 7 | Nov 2025 – Feb 2026 | benefits 33%, mental_health 33% |
+| news_wire | 169 | Nov 2025 – Feb 2026 | healthcare 25%, technology 24%, budget 19% |
+| oig | 10 | Nov 2025 – Feb 2026 | healthcare 64%, mental_health 36% |
+| trade_press | 6 | Nov 2025 – Feb 2026 | benefits 33%, mental_health 33% |
+
+**Changes**:
+- `src/run_oversight.py` — Added `cmd_baseline()` function and `baseline` subparser; enhanced `cmd_status()` with baseline display
+
+### Phase I Completion Status
+
+12 of 13 Phase I criteria now complete. Remaining: #13 (7 consecutive days zero critical failures) — passive tracking from 5 Feb first green pipeline.
