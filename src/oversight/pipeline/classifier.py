@@ -8,7 +8,7 @@ import anthropic
 
 from src.secrets import get_env_or_keychain
 
-HAIKU_MODEL = "claude-3-5-haiku-20241022"
+from src.llm_config import HAIKU_MODEL
 
 
 @dataclass

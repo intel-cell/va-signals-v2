@@ -10,7 +10,7 @@ from src.secrets import get_env_or_keychain
 from .baseline import BaselineSummary
 
 
-SONNET_MODEL = "claude-sonnet-4-20250514"
+from src.llm_config import SONNET_MODEL
 
 
 @dataclass

@@ -8,7 +8,7 @@ from typing import Optional
 
 from src.secrets import get_env_or_keychain
 
-HAIKU_MODEL = "claude-3-haiku-20240307"
+from src.llm_config import HAIKU_LEGACY_MODEL as HAIKU_MODEL
 
 
 @dataclass

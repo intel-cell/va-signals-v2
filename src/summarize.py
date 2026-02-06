@@ -26,7 +26,7 @@ from .db import connect, execute
 # Configuration
 # -----------------------------------------------------------------------------
 
-CLAUDE_MODEL = "claude-sonnet-4-20250514"
+from src.llm_config import SONNET_MODEL as CLAUDE_MODEL
 CLAUDE_MAX_TOKENS = 1024
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 

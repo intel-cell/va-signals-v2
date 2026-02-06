@@ -209,7 +209,7 @@ def detect_with_debounce(
 # -----------------------------------------------------------------------------
 
 # Claude API config (matches src/summarize.py)
-CLAUDE_MODEL = "claude-sonnet-4-20250514"
+from src.llm_config import SONNET_MODEL as CLAUDE_MODEL
 CLAUDE_MAX_TOKENS = 256
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
