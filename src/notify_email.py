@@ -84,6 +84,33 @@ def _send_email(subject: str, html: str, text: str) -> bool:
         return False
 
 
+def check_smtp_health() -> dict:
+    """
+    Test SMTP connectivity without sending an email.
+    Returns a dict with keys: configured, reachable, error.
+    """
+    result = {"configured": False, "reachable": False, "error": None}
+
+    if not is_configured():
+        result["error"] = "Email not configured (missing env vars)"
+        return result
+
+    result["configured"] = True
+    cfg = _get_config()
+
+    try:
+        context = ssl.create_default_context(cafile=certifi.where())
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=10) as server:
+            server.starttls(context=context)
+            server.login(cfg["user"], cfg["password"])
+            server.noop()
+        result["reachable"] = True
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return result
+
+
 def _base_html_template(title: str, content: str, footer: str = "") -> str:
     """Generate base HTML email template with responsive styling."""
     return f"""<!DOCTYPE html>

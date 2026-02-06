@@ -33,6 +33,7 @@ from .state.db_helpers import (
     get_latest_run,
 )
 from .oversight.db_helpers import get_oversight_stats, get_oversight_events
+from .notify_email import check_smtp_health
 from .battlefield.api import router as battlefield_router
 from .auth.api import router as auth_router
 from .auth.audit import AuditMiddleware
@@ -173,8 +174,15 @@ class SourceHealth(BaseModel):
     last_run_status: Optional[str]
 
 
+class EmailHealth(BaseModel):
+    configured: bool
+    reachable: bool
+    error: Optional[str]
+
+
 class HealthResponse(BaseModel):
     sources: list[SourceHealth]
+    email: Optional[EmailHealth] = None
     checked_at: str
 
 
@@ -357,6 +365,21 @@ class OversightStatsResponse(BaseModel):
     surfaced: int
     last_event_at: Optional[str]
     by_source: dict[str, int]
+
+
+# --- Dead-Man's Switch Models ---
+
+class PipelineStaleness(BaseModel):
+    pipeline: str
+    last_activity_at: Optional[str]
+    hours_since_activity: Optional[float]
+    status: str  # "healthy", "degraded", "critical"
+
+
+class DeadManResponse(BaseModel):
+    pipelines: list[PipelineStaleness]
+    overall_status: str  # worst status across all pipelines
+    checked_at: str
 
 # --- FastAPI App ---
 
@@ -736,7 +759,102 @@ def get_health(_: None = Depends(RoleChecker(UserRole.VIEWER))):
 
     con.close()
 
-    return HealthResponse(sources=sources, checked_at=_utc_now_iso())
+    # Check email SMTP health
+    smtp_status = check_smtp_health()
+    email_health = EmailHealth(
+        configured=smtp_status["configured"],
+        reachable=smtp_status["reachable"],
+        error=smtp_status.get("error"),
+    )
+
+    return HealthResponse(sources=sources, email=email_health, checked_at=_utc_now_iso())
+
+
+@app.get("/api/health/deadman", response_model=DeadManResponse, tags=["Health"])
+def get_deadman_switch(_: None = Depends(RoleChecker(UserRole.VIEWER))):
+    """Dead-man's switch: flag pipelines with no recent activity.
+
+    Checks MAX timestamps from key tables and classifies each pipeline as:
+    - healthy: activity within the last 24 hours
+    - degraded: activity between 24-48 hours ago
+    - critical: no activity for over 48 hours (or table missing)
+    """
+    con = connect()
+    now = datetime.now(timezone.utc)
+
+    pipeline_queries = {
+        "oversight": ("om_events", "MAX(fetched_at)"),
+        "federal_register": ("fr_seen", "MAX(first_seen_at)"),
+        "state_intelligence": ("state_signals", "MAX(fetched_at)"),
+        "pipeline_runs": ("source_runs", "MAX(ended_at)"),
+    }
+
+    pipelines: list[PipelineStaleness] = []
+
+    for pipeline_name, (tbl, agg_expr) in pipeline_queries.items():
+        if not table_exists(con, tbl):
+            pipelines.append(PipelineStaleness(
+                pipeline=pipeline_name,
+                last_activity_at=None,
+                hours_since_activity=None,
+                status="critical",
+            ))
+            continue
+
+        # For pipeline_runs, only count successful runs
+        if tbl == "source_runs":
+            cur = execute(con, f"SELECT {agg_expr} FROM {tbl} WHERE status = 'SUCCESS'")
+        else:
+            cur = execute(con, f"SELECT {agg_expr} FROM {tbl}")
+
+        row = cur.fetchone()
+        last_ts = row[0] if row else None
+
+        if not last_ts:
+            pipelines.append(PipelineStaleness(
+                pipeline=pipeline_name,
+                last_activity_at=None,
+                hours_since_activity=None,
+                status="critical",
+            ))
+            continue
+
+        try:
+            ts = last_ts.replace("Z", "+00:00")
+            last_dt = datetime.fromisoformat(ts)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            hours = round((now - last_dt).total_seconds() / 3600, 2)
+        except (ValueError, TypeError):
+            hours = None
+
+        if hours is None:
+            status = "critical"
+        elif hours < 24:
+            status = "healthy"
+        elif hours < 48:
+            status = "degraded"
+        else:
+            status = "critical"
+
+        pipelines.append(PipelineStaleness(
+            pipeline=pipeline_name,
+            last_activity_at=last_ts,
+            hours_since_activity=hours,
+            status=status,
+        ))
+
+    con.close()
+
+    # Overall status is the worst across all pipelines
+    status_priority = {"critical": 2, "degraded": 1, "healthy": 0}
+    overall = max(pipelines, key=lambda p: status_priority.get(p.status, 0))
+
+    return DeadManResponse(
+        pipelines=pipelines,
+        overall_status=overall.status,
+        checked_at=_utc_now_iso(),
+    )
 
 
 @app.get("/api/errors", response_model=ErrorsResponse)
