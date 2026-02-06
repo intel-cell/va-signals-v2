@@ -193,6 +193,8 @@ CREATE TABLE IF NOT EXISTS om_events (
   surfaced_at TEXT,
   surfaced_via TEXT,
   fetched_at TEXT NOT NULL,
+  ml_score REAL,
+  ml_risk_level TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
