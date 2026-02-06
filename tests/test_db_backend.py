@@ -1,6 +1,7 @@
 import pytest
 
 import src.db as db
+import src.db.core as db_core
 
 
 def test_schema_path_defaults_to_sqlite(monkeypatch):
@@ -49,7 +50,7 @@ def test_normalize_db_url_strips_driver_suffix(raw_url, expected):
 
 
 def test_count_inserted_rows_postgres_uses_returning(monkeypatch):
-    monkeypatch.setattr(db, "_is_postgres", lambda: True)
+    monkeypatch.setattr(db_core, "_is_postgres", lambda: True)
 
     executed_sql: list[str] = []
     results = [(1,), None, (1,)]
@@ -68,8 +69,8 @@ def test_count_inserted_rows_postgres_uses_returning(monkeypatch):
     def fake_executemany(*_args, **_kwargs):
         raise AssertionError("executemany should not be used for Postgres counts")
 
-    monkeypatch.setattr(db, "execute", fake_execute)
-    monkeypatch.setattr(db, "executemany", fake_executemany)
+    monkeypatch.setattr(db_core, "execute", fake_execute)
+    monkeypatch.setattr(db_core, "executemany", fake_executemany)
 
     params = [{"doc_id": "a"}, {"doc_id": "b"}, {"doc_id": "c"}]
     sql = "INSERT INTO fr_seen(doc_id) VALUES(:doc_id) ON CONFLICT(doc_id) DO NOTHING"
@@ -106,7 +107,7 @@ def test_prepare_query_translates_qmark_params_for_postgres(monkeypatch):
 
 def test_named_params_round_trip_sqlite(tmp_path, monkeypatch):
     test_db = tmp_path / "db-backend.sqlite"
-    monkeypatch.setattr(db, "DB_PATH", test_db)
+    monkeypatch.setattr(db_core, "DB_PATH", test_db)
     monkeypatch.delenv("DATABASE_URL", raising=False)
 
     db.init_db()
