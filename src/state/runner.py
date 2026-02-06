@@ -5,6 +5,7 @@ Orchestrates twice-daily monitoring runs for TX, CA, FL, PA, OH, NY, NC, GA, VA,
 
 import argparse
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -148,6 +149,140 @@ URL: {signal_data['url']}
         return False
 
 
+def _process_single_state(st: str, dry_run: bool = False) -> dict:
+    """
+    Process a single state: fetch from all sources, deduplicate, classify, store.
+
+    Returns a dict with local counters:
+        total_signals_found, high_severity_count, new_signals_count,
+        source_successes, source_failures, errors
+    """
+    total_signals_found = 0
+    high_severity_count = 0
+    new_signals_count = 0
+    source_successes = 0
+    source_failures = 0
+    errors = []
+
+    logger.info(f"Processing state: {st}")
+
+    # Collect all raw signals for this state
+    raw_signals: list[RawSignal] = []
+
+    # 1. Fetch from official source
+    source_class = _get_official_source(st)
+    if source_class is not None:
+        source = source_class()
+        signals, success, error = _fetch_from_source(source, f"{st} official")
+        update_source_health(source.source_id, success=success, error=error)
+        if success:
+            raw_signals.extend(signals)
+            source_successes += 1
+            logger.info(f"  {st} official: {len(signals)} signals")
+        else:
+            source_failures += 1
+            errors.append(f"{st} official: {error}")
+
+    # 2. Fetch from NewsAPI
+    try:
+        newsapi_source = NewsAPISource(st)
+        signals, success, error = _fetch_from_source(newsapi_source, f"{st} NewsAPI")
+        update_source_health(newsapi_source.source_id, success=success, error=error)
+        if success:
+            raw_signals.extend(signals)
+            source_successes += 1
+            logger.info(f"  {st} NewsAPI: {len(signals)} signals")
+        else:
+            source_failures += 1
+            errors.append(f"{st} NewsAPI: {error}")
+    except ValueError as e:
+        logger.warning(f"Could not initialize NewsAPI for {st}: {e}")
+        source_failures += 1
+        errors.append(f"{st} NewsAPI init: {str(e)}")
+
+    # 3. Fetch from RSS feeds
+    try:
+        rss_source = RSSSource(st)
+        signals, success, error = _fetch_from_source(rss_source, f"{st} RSS")
+        update_source_health(rss_source.source_id, success=success, error=error)
+        if success:
+            raw_signals.extend(signals)
+            source_successes += 1
+            logger.info(f"  {st} RSS: {len(signals)} signals")
+        else:
+            source_failures += 1
+            errors.append(f"{st} RSS: {error}")
+    except ValueError as e:
+        logger.warning(f"Could not initialize RSS for {st}: {e}")
+        source_failures += 1
+        errors.append(f"{st} RSS init: {str(e)}")
+
+    # 4. Deduplicate signals by signal_id (URL hash)
+    seen_ids: set[str] = set()
+    unique_signals: list[RawSignal] = []
+    for sig in raw_signals:
+        sig_id = generate_signal_id(sig.url)
+        if sig_id not in seen_ids:
+            seen_ids.add(sig_id)
+            unique_signals.append(sig)
+
+    total_signals_found += len(unique_signals)
+    logger.info(f"  {st} total unique signals: {len(unique_signals)}")
+
+    # 5. Process each signal
+    for sig in unique_signals:
+        sig_id = generate_signal_id(sig.url)
+
+        # Skip if already in database
+        if signal_exists(sig_id):
+            continue
+
+        new_signals_count += 1
+
+        # Detect program
+        text = f"{sig.title} {sig.content or ''}"
+        program = detect_program(text)
+
+        # Store signal
+        insert_state_signal({
+            "signal_id": sig_id,
+            "state": sig.state,
+            "source_id": sig.source_id,
+            "program": program,
+            "title": sig.title,
+            "content": sig.content,
+            "url": sig.url,
+            "pub_date": sig.pub_date,
+            "event_date": sig.event_date,
+        })
+
+        # Classify signal
+        classification = _classify_signal(sig)
+
+        # Store classification
+        insert_state_classification({
+            "signal_id": sig_id,
+            "severity": classification.severity,
+            "classification_method": classification.method,
+            "keywords_matched": ",".join(classification.keywords_matched) if classification.keywords_matched else None,
+            "llm_reasoning": classification.llm_reasoning,
+        })
+
+        # Track high severity
+        if classification.severity == "high":
+            high_severity_count += 1
+            logger.info(f"  HIGH SEVERITY: {sig.title[:60]}...")
+
+    return {
+        "total_signals_found": total_signals_found,
+        "high_severity_count": high_severity_count,
+        "new_signals_count": new_signals_count,
+        "source_successes": source_successes,
+        "source_failures": source_failures,
+        "errors": errors,
+    }
+
+
 def run_state_monitor(
     run_type: str,
     state: Optional[str] = None,
@@ -171,7 +306,7 @@ def run_state_monitor(
     run_id = start_state_run(run_type=run_type, state=state)
     logger.info(f"Started state monitor run {run_id} (type={run_type}, state={state or 'all'}, dry_run={dry_run})")
 
-    # Tracking
+    # Process states: parallel for multi-state, direct call for single state
     total_signals_found = 0
     high_severity_count = 0
     new_signals_count = 0
@@ -179,117 +314,30 @@ def run_state_monitor(
     source_failures = 0
     errors = []
 
-    for st in states_to_process:
-        logger.info(f"Processing state: {st}")
+    if len(states_to_process) == 1:
+        # Single state: call directly, no thread overhead
+        state_results = [_process_single_state(states_to_process[0], dry_run)]
+    else:
+        # Multi-state: parallel via ThreadPoolExecutor, cap at 6 workers
+        max_workers = min(len(states_to_process), 6)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                st: executor.submit(_process_single_state, st, dry_run)
+                for st in states_to_process
+            }
+            # Collect results in deterministic (MONITORED_STATES) order
+            state_results = [futures[st].result() for st in states_to_process]
 
-        # Collect all raw signals for this state
-        raw_signals: list[RawSignal] = []
+    # Aggregate results (single-threaded, no lock needed)
+    for result in state_results:
+        total_signals_found += result["total_signals_found"]
+        high_severity_count += result["high_severity_count"]
+        new_signals_count += result["new_signals_count"]
+        source_successes += result["source_successes"]
+        source_failures += result["source_failures"]
+        errors.extend(result["errors"])
 
-        # 1. Fetch from official source
-        source_class = _get_official_source(st)
-        if source_class is not None:
-            source = source_class()
-            signals, success, error = _fetch_from_source(source, f"{st} official")
-            update_source_health(source.source_id, success=success, error=error)
-            if success:
-                raw_signals.extend(signals)
-                source_successes += 1
-                logger.info(f"  {st} official: {len(signals)} signals")
-            else:
-                source_failures += 1
-                errors.append(f"{st} official: {error}")
-
-        # 2. Fetch from NewsAPI
-        try:
-            newsapi_source = NewsAPISource(st)
-            signals, success, error = _fetch_from_source(newsapi_source, f"{st} NewsAPI")
-            update_source_health(newsapi_source.source_id, success=success, error=error)
-            if success:
-                raw_signals.extend(signals)
-                source_successes += 1
-                logger.info(f"  {st} NewsAPI: {len(signals)} signals")
-            else:
-                source_failures += 1
-                errors.append(f"{st} NewsAPI: {error}")
-        except ValueError as e:
-            logger.warning(f"Could not initialize NewsAPI for {st}: {e}")
-            source_failures += 1
-            errors.append(f"{st} NewsAPI init: {str(e)}")
-
-        # 3. Fetch from RSS feeds
-        try:
-            rss_source = RSSSource(st)
-            signals, success, error = _fetch_from_source(rss_source, f"{st} RSS")
-            update_source_health(rss_source.source_id, success=success, error=error)
-            if success:
-                raw_signals.extend(signals)
-                source_successes += 1
-                logger.info(f"  {st} RSS: {len(signals)} signals")
-            else:
-                source_failures += 1
-                errors.append(f"{st} RSS: {error}")
-        except ValueError as e:
-            logger.warning(f"Could not initialize RSS for {st}: {e}")
-            source_failures += 1
-            errors.append(f"{st} RSS init: {str(e)}")
-
-        # 4. Deduplicate signals by signal_id (URL hash)
-        seen_ids: set[str] = set()
-        unique_signals: list[RawSignal] = []
-        for sig in raw_signals:
-            sig_id = generate_signal_id(sig.url)
-            if sig_id not in seen_ids:
-                seen_ids.add(sig_id)
-                unique_signals.append(sig)
-
-        total_signals_found += len(unique_signals)
-        logger.info(f"  {st} total unique signals: {len(unique_signals)}")
-
-        # 5. Process each signal
-        for sig in unique_signals:
-            sig_id = generate_signal_id(sig.url)
-
-            # Skip if already in database
-            if signal_exists(sig_id):
-                continue
-
-            new_signals_count += 1
-
-            # Detect program
-            text = f"{sig.title} {sig.content or ''}"
-            program = detect_program(text)
-
-            # Store signal
-            insert_state_signal({
-                "signal_id": sig_id,
-                "state": sig.state,
-                "source_id": sig.source_id,
-                "program": program,
-                "title": sig.title,
-                "content": sig.content,
-                "url": sig.url,
-                "pub_date": sig.pub_date,
-                "event_date": sig.event_date,
-            })
-
-            # Classify signal
-            classification = _classify_signal(sig)
-
-            # Store classification
-            insert_state_classification({
-                "signal_id": sig_id,
-                "severity": classification.severity,
-                "classification_method": classification.method,
-                "keywords_matched": ",".join(classification.keywords_matched) if classification.keywords_matched else None,
-                "llm_reasoning": classification.llm_reasoning,
-            })
-
-            # Track high severity
-            if classification.severity == "high":
-                high_severity_count += 1
-                logger.info(f"  HIGH SEVERITY: {sig.title[:60]}...")
-
-    # 6. Route notifications
+    # 6. Route notifications (sequential, after all states complete)
     if not dry_run:
         # Get unnotified high-severity signals and send immediate Slack
         high_severity_signals = get_unnotified_signals(severity="high")

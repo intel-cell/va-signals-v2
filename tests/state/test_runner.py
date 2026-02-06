@@ -10,6 +10,7 @@ from src.state.runner import (
     _is_official_source,
     _classify_signal,
     _get_run_type_from_hour,
+    _process_single_state,
     MONITORED_STATES,
 )
 
@@ -520,3 +521,215 @@ class TestRunnerIntegration:
             classification = db_helpers.get_state_classification(sig_id)
             assert classification is not None
             assert classification["severity"] in ["high", "medium", "low", "noise"]
+
+
+class TestProcessSingleState:
+    """Tests for _process_single_state helper (extracted per-state logic)."""
+
+    def test_returns_result_dict_with_expected_keys(self):
+        """_process_single_state returns a dict with all counter keys."""
+        tx_instance = Mock()
+        tx_instance.source_id = "tx_tvc_news"
+        tx_instance.fetch.return_value = [
+            RawSignal(
+                url="https://tx.gov/pss-test-1",
+                title="PSS test signal",
+                source_id="tx_tvc_news",
+                state="TX",
+            )
+        ]
+
+        newsapi_instance = Mock()
+        newsapi_instance.source_id = "newsapi_tx"
+        newsapi_instance.fetch.return_value = []
+
+        rss_instance = Mock()
+        rss_instance.source_id = "rss_tx"
+        rss_instance.fetch.return_value = []
+
+        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
+             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
+             patch("src.state.runner.RSSSource", return_value=rss_instance):
+
+            result = _process_single_state("TX", dry_run=True)
+
+            expected_keys = {
+                "total_signals_found", "high_severity_count", "new_signals_count",
+                "source_successes", "source_failures", "errors",
+            }
+            assert set(result.keys()) == expected_keys
+            assert isinstance(result["errors"], list)
+            assert result["source_successes"] >= 1
+
+    def test_source_failure_counted_locally(self):
+        """Source failures are counted in the local result dict."""
+        tx_instance = Mock()
+        tx_instance.source_id = "tx_tvc_news"
+        tx_instance.fetch.side_effect = Exception("Connection failed")
+
+        newsapi_instance = Mock()
+        newsapi_instance.source_id = "newsapi_tx"
+        newsapi_instance.fetch.return_value = []
+
+        rss_instance = Mock()
+        rss_instance.source_id = "rss_tx"
+        rss_instance.fetch.return_value = []
+
+        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
+             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
+             patch("src.state.runner.RSSSource", return_value=rss_instance):
+
+            result = _process_single_state("TX", dry_run=True)
+
+            assert result["source_failures"] >= 1
+            assert len(result["errors"]) >= 1
+
+    def test_high_severity_counted_locally(self):
+        """High severity signals are counted in the local result dict."""
+        tx_instance = Mock()
+        tx_instance.source_id = "tx_tvc_news"
+        tx_instance.fetch.return_value = [
+            RawSignal(
+                url="https://tx.gov/pss-high-sev",
+                title="Program suspended immediately",
+                source_id="tx_tvc_news",
+                state="TX",
+                content="The program has been suspended.",
+            )
+        ]
+
+        newsapi_instance = Mock()
+        newsapi_instance.source_id = "newsapi_tx"
+        newsapi_instance.fetch.return_value = []
+
+        rss_instance = Mock()
+        rss_instance.source_id = "rss_tx"
+        rss_instance.fetch.return_value = []
+
+        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
+             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
+             patch("src.state.runner.RSSSource", return_value=rss_instance):
+
+            result = _process_single_state("TX", dry_run=True)
+
+            assert result["high_severity_count"] >= 1
+            assert result["new_signals_count"] >= 1
+
+
+class TestParallelExecution:
+    """Tests that run_state_monitor uses ThreadPoolExecutor for multi-state runs."""
+
+    def test_threadpool_used_for_multiple_states(self):
+        """ThreadPoolExecutor is used when processing multiple states."""
+        newsapi_instance = Mock()
+        newsapi_instance.source_id = "newsapi_tx"
+        newsapi_instance.fetch.return_value = []
+
+        rss_instance = Mock()
+        rss_instance.source_id = "rss_tx"
+        rss_instance.fetch.return_value = []
+
+        with patch("src.state.runner._get_official_source", return_value=None), \
+             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
+             patch("src.state.runner.RSSSource", return_value=rss_instance), \
+             patch("src.state.runner.ThreadPoolExecutor") as mock_executor_cls:
+
+            # Set up the mock executor context manager
+            mock_executor = MagicMock()
+            mock_executor_cls.return_value.__enter__ = Mock(return_value=mock_executor)
+            mock_executor_cls.return_value.__exit__ = Mock(return_value=False)
+
+            # Make executor.submit return futures with proper results
+            mock_future = Mock()
+            mock_future.result.return_value = {
+                "total_signals_found": 0,
+                "high_severity_count": 0,
+                "new_signals_count": 0,
+                "source_successes": 1,
+                "source_failures": 0,
+                "errors": [],
+            }
+            mock_executor.submit.return_value = mock_future
+
+            from src.state.runner import run_state_monitor
+            summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
+
+            # ThreadPoolExecutor should have been created with max_workers capped at 6
+            mock_executor_cls.assert_called_once()
+            call_kwargs = mock_executor_cls.call_args
+            max_workers = call_kwargs[1].get("max_workers") or call_kwargs[0][0]
+            assert max_workers == 6  # 10 states capped at 6
+
+    def test_single_state_does_not_use_threadpool(self):
+        """Single-state run should NOT use ThreadPoolExecutor (no overhead)."""
+        tx_instance = Mock()
+        tx_instance.source_id = "tx_tvc_news"
+        tx_instance.fetch.return_value = []
+
+        newsapi_instance = Mock()
+        newsapi_instance.source_id = "newsapi_tx"
+        newsapi_instance.fetch.return_value = []
+
+        rss_instance = Mock()
+        rss_instance.source_id = "rss_tx"
+        rss_instance.fetch.return_value = []
+
+        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
+             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
+             patch("src.state.runner.RSSSource", return_value=rss_instance), \
+             patch("src.state.runner.ThreadPoolExecutor") as mock_executor_cls:
+
+            from src.state.runner import run_state_monitor
+            summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
+
+            # ThreadPoolExecutor should NOT be used for a single state
+            mock_executor_cls.assert_not_called()
+
+    def test_results_aggregated_correctly_across_states(self):
+        """Results from parallel state processing are aggregated correctly."""
+        call_count = {"n": 0}
+
+        def mock_process(st, dry_run=False):
+            call_count["n"] += 1
+            return {
+                "total_signals_found": 2,
+                "high_severity_count": 1,
+                "new_signals_count": 1,
+                "source_successes": 3,
+                "source_failures": 0,
+                "errors": [],
+            }
+
+        with patch("src.state.runner._process_single_state", side_effect=mock_process):
+            from src.state.runner import run_state_monitor
+            summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
+
+            # All 10 states should have been processed
+            assert call_count["n"] == 10
+            # Aggregated: 10 states * 2 signals each = 20
+            assert summary["total_signals_found"] == 20
+            assert summary["new_signals"] == 10
+            assert summary["high_severity_count"] == 10
+            assert summary["source_successes"] == 30
+
+    def test_results_deterministic_order(self):
+        """Results should be aggregated in deterministic state order."""
+        errors_collected = []
+
+        def mock_process(st, dry_run=False):
+            return {
+                "total_signals_found": 1,
+                "high_severity_count": 0,
+                "new_signals_count": 0,
+                "source_successes": 1,
+                "source_failures": 0,
+                "errors": [f"error-from-{st}"],
+            }
+
+        with patch("src.state.runner._process_single_state", side_effect=mock_process):
+            from src.state.runner import run_state_monitor
+            summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
+
+            # Errors should be in MONITORED_STATES order (deterministic)
+            expected_errors = [f"error-from-{st}" for st in MONITORED_STATES]
+            assert summary["errors"] == expected_errors
