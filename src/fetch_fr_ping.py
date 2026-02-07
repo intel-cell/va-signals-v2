@@ -9,6 +9,7 @@ from jsonschema import validate
 
 from .provenance import utc_now_iso
 from .resilience.circuit_breaker import federal_register_cb
+from .resilience.retry import retry_api_call
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ def run_fr_ping() -> dict[str, Any]:
     status = "NO_DATA"
     records_fetched = 0
 
+    @retry_api_call
     @with_timeout(45, name="federal_register")
     @circuit_breaker_sync(federal_register_cb)
     def _ping_fr(url):

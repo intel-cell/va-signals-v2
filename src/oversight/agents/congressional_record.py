@@ -10,6 +10,7 @@ import requests
 
 from src.resilience.circuit_breaker import congress_api_cb
 from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.retry import retry_api_call
 from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
 from ...secrets import get_env_or_keychain
@@ -30,6 +31,7 @@ class CongressionalRecordAgent(OversightAgent):
         self.search_terms = ["veterans", r"\bVA\b", "Department of Veterans"]
         self.api_key = get_env_or_keychain("CONGRESS_API_KEY", "congress-api")
 
+    @retry_api_call
     @with_timeout(30, name="congress_html")
     @circuit_breaker_sync(congress_api_cb)
     def _fetch_html(self, url: str) -> str | None:
@@ -45,6 +47,7 @@ class CongressionalRecordAgent(OversightAgent):
             logger.error("Error fetching HTML from %s: %s", url, e)
             return None
 
+    @retry_api_call
     @with_timeout(45, name="congress_api")
     @circuit_breaker_sync(congress_api_cb)
     def _fetch_json(self, url: str) -> dict[str, Any]:

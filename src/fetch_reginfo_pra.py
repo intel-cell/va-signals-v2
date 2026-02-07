@@ -18,6 +18,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .resilience.circuit_breaker import reginfo_cb
+from .resilience.retry import retry_api_call
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 
 logger = logging.getLogger(__name__)
@@ -117,6 +118,7 @@ def fetch_va_pra_submissions(
         "sortOrder": "DESC",  # Most recent first
     }
 
+    @retry_api_call
     @with_timeout(45, name="reginfo")
     @circuit_breaker_sync(reginfo_cb)
     def _get_reginfo_page(url):

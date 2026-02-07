@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 import certifi
 
 from .resilience.circuit_breaker import lda_gov_cb
+from .resilience.retry import retry_api_call
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ def _rate_limit():
     _last_request_time = time.time()
 
 
+@retry_api_call
 @with_timeout(45, name="lda_gov")
 @circuit_breaker_sync(lda_gov_cb)
 def _fetch_json(url: str, params: dict | None = None) -> dict:

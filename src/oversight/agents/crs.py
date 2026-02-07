@@ -7,6 +7,7 @@ import feedparser
 
 from src.resilience.circuit_breaker import oversight_cb
 from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.retry import retry_api_call
 from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
 from .base import OversightAgent, RawEvent, TimestampResult
@@ -36,6 +37,7 @@ class CRSAgent(OversightAgent):
         self.rss_url = rss_url
         self.va_keywords = VA_KEYWORDS
 
+    @retry_api_call
     @with_timeout(45, name="crs_rss")
     @circuit_breaker_sync(oversight_cb)
     def _fetch_feed(self):

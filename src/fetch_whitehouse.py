@@ -17,6 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .resilience.circuit_breaker import whitehouse_cb
+from .resilience.retry import retry_api_call
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,7 @@ def _parse_date(date_str: str) -> str | None:
     return None
 
 
+@retry_api_call
 @with_timeout(45, name="whitehouse")
 @circuit_breaker_sync(whitehouse_cb)
 def _fetch_whitehouse_page(url: str) -> requests.Response:

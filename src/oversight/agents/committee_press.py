@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 
 from src.resilience.circuit_breaker import oversight_cb
 from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.retry import retry_api_call
 from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
 from .base import OversightAgent, RawEvent, TimestampResult
@@ -36,6 +37,7 @@ class CommitteePressAgent(OversightAgent):
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
         }
 
+    @retry_api_call
     @with_timeout(45, name="committee_press")
     @circuit_breaker_sync(oversight_cb)
     def _fetch_page(self, url: str) -> requests.Response:

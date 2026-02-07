@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 
 from src.resilience.circuit_breaker import oversight_cb
 from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.retry import retry_api_call
 from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
 from .base import OversightAgent, RawEvent, TimestampResult
@@ -51,12 +52,14 @@ class CAFCAgent(OversightAgent):
         # CAVC = Court of Appeals for Veterans Claims - always VA related
         self.va_origins = ["CAVC"]
 
+    @retry_api_call
     @with_timeout(45, name="cafc_rss")
     @circuit_breaker_sync(oversight_cb)
     def _fetch_feed(self, url: str):
         """Fetch and parse an RSS feed with resilience protection."""
         return feedparser.parse(url)
 
+    @retry_api_call
     @with_timeout(45, name="cafc_html")
     @circuit_breaker_sync(oversight_cb)
     def _fetch_page(self, url: str) -> requests.Response:

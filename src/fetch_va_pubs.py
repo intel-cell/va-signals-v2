@@ -16,6 +16,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from .resilience.circuit_breaker import va_pubs_cb
+from .resilience.retry import retry_api_call
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
@@ -145,6 +146,7 @@ def fetch_va_pubs_docs(
     """
     docs = []
 
+    @retry_api_call
     @with_timeout(45, name="va_pubs")
     @circuit_breaker_sync(va_pubs_cb)
     def _get_va_pubs_page(url):

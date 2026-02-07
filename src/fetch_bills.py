@@ -24,6 +24,7 @@ import certifi
 
 from . import db
 from .resilience.circuit_breaker import congress_api_cb
+from .resilience.retry import retry_api_call
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 from .secrets import get_env_or_keychain
 
@@ -43,6 +44,7 @@ def get_api_key() -> str:
     return get_env_or_keychain("CONGRESS_API_KEY", "congress-api")
 
 
+@retry_api_call
 @with_timeout(45, name="congress_api")
 @circuit_breaker_sync(congress_api_cb)
 def _fetch_json(url: str, api_key: str) -> dict:

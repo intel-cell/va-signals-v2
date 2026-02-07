@@ -8,6 +8,7 @@ import httpx
 
 from src.resilience.circuit_breaker import newsapi_cb
 from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.retry import retry_api_call
 from src.resilience.wiring import circuit_breaker_sync, with_timeout
 from src.secrets import get_env_or_keychain
 
@@ -44,6 +45,7 @@ class NewsWireAgent(OversightAgent):
         self.search_terms = VA_SEARCH_TERMS
         self.lookback_days = lookback_days
 
+    @retry_api_call
     @with_timeout(45, name="newsapi")
     @circuit_breaker_sync(newsapi_cb)
     def _fetch_newsapi(self, params: dict, api_key: str) -> httpx.Response:

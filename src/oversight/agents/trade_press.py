@@ -6,6 +6,7 @@ import feedparser
 
 from src.resilience.circuit_breaker import oversight_cb
 from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.retry import retry_api_call
 from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
 from .base import OversightAgent, RawEvent, TimestampResult
@@ -28,6 +29,7 @@ class TradePressAgent(OversightAgent):
         self.feeds = feeds or TRADE_FEEDS
         self.va_keywords = ["veterans affairs", "VA ", "DVA"]
 
+    @retry_api_call
     @with_timeout(45, name="trade_press_rss")
     @circuit_breaker_sync(oversight_cb)
     def _fetch_feed(self, feed_url: str):
