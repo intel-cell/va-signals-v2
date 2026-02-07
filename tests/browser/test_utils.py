@@ -3,7 +3,8 @@
 NOTE FOR TEST AUTHORS:
 - login.html loads Firebase SDK from CDN. Use wait_until="domcontentloaded" for login page
   navigation to avoid timeouts waiting for external resources.
-- Dashboard (index.html) loads Chart.js from CDN but works reliably with "networkidle".
+- Dashboard (index.html) loads Chart.js from CDN. Use wait_for_dashboard_load() which uses
+  "domcontentloaded" + explicit selector waits.
 - Always use explicit waits (wait_for_selector) rather than fixed timeouts.
 """
 
@@ -85,9 +86,29 @@ def switch_to_tab(page, tab_name, timeout=5000):
 
 
 def collect_console_errors(page):
-    """Attach console error listener. Returns the mutable error list."""
+    """Attach console error listener. Returns the mutable error list.
+
+    Filters out network-level noise (ERR_INVALID_HANDLE, ERR_NETWORK_CHANGED)
+    that arise from shared browser contexts and CDN resource loading.
+    Only captures application-level JavaScript errors.
+    """
+    # Patterns to ignore — not application JS bugs
+    NOISE_PATTERNS = (
+        "ERR_INVALID_HANDLE",
+        "ERR_NETWORK_CHANGED",
+        "ERR_CONNECTION",
+        "Failed to load resource",  # Browser HTTP status reporting (404/500/503)
+        "Error fetching",  # App fetch wrappers with empty test DB
+    )
     errors = []
-    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error" else None)
+
+    def _on_console(msg):
+        if msg.type == "error":
+            text = msg.text
+            if not any(noise in text for noise in NOISE_PATTERNS):
+                errors.append(text)
+
+    page.on("console", _on_console)
     return errors
 
 

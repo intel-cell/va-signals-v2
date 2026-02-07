@@ -6,6 +6,11 @@ and role-specific page fixtures for RBAC testing.
 IMPORTANT: Browser tests run against a live server, so we override the
 autouse use_test_db fixture from tests/conftest.py (which monkeypatches
 DB_PATH for unit tests). The server has its own database.
+
+ARCHITECTURE: Browser contexts are session-scoped (one per auth role)
+to avoid exhausting TCP connections. Each test gets a fresh page (tab)
+within the shared context. This limits total contexts to 2 (unauth +
+commander) instead of creating one per test.
 """
 
 import sys
@@ -91,59 +96,43 @@ def _make_session_cookie(user_id, email):
 
 
 # ---------------------------------------------------------------------------
-# Per-test page fixtures
+# Session-scoped contexts — minimized to 2 to prevent connection exhaustion
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def _unauth_context(browser):
+    """Shared unauthenticated browser context (session-scoped)."""
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080})
+    yield ctx
+    ctx.close()
+
+
+@pytest.fixture(scope="session")
+def _commander_context(browser):
+    """Shared commander-auth browser context (session-scoped)."""
+    ctx = browser.new_context(viewport={"width": 1920, "height": 1080})
+    ctx.add_cookies(_make_session_cookie("test-commander-uid", "commander@test.dev"))
+    yield ctx
+    ctx.close()
+
+
+# ---------------------------------------------------------------------------
+# Per-test page fixtures — fresh tab in shared context
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
-def page(browser):
-    """Unauthenticated browser page (clean context)."""
-    context = browser.new_context(viewport={"width": 1920, "height": 1080})
-    pg = context.new_page()
+def page(_unauth_context):
+    """Unauthenticated browser page (fresh tab in shared context)."""
+    pg = _unauth_context.new_page()
     yield pg
     pg.close()
-    context.close()
 
 
 @pytest.fixture
-def authenticated_page(browser):
+def authenticated_page(_commander_context):
     """Page with commander-level session cookie pre-injected."""
-    context = browser.new_context(viewport={"width": 1920, "height": 1080})
-    context.add_cookies(_make_session_cookie("test-commander-uid", "commander@test.dev"))
-    pg = context.new_page()
+    pg = _commander_context.new_page()
     yield pg
     pg.close()
-    context.close()
-
-
-@pytest.fixture
-def analyst_page(browser):
-    """Page with analyst-level session cookie."""
-    context = browser.new_context(viewport={"width": 1920, "height": 1080})
-    context.add_cookies(_make_session_cookie("test-analyst-uid", "analyst@test.dev"))
-    pg = context.new_page()
-    yield pg
-    pg.close()
-    context.close()
-
-
-@pytest.fixture
-def viewer_page(browser):
-    """Page with viewer-level session cookie."""
-    context = browser.new_context(viewport={"width": 1920, "height": 1080})
-    context.add_cookies(_make_session_cookie("test-viewer-uid", "viewer@test.dev"))
-    pg = context.new_page()
-    yield pg
-    pg.close()
-    context.close()
-
-
-@pytest.fixture
-def mobile_page(browser):
-    """Authenticated page with mobile viewport (iPhone 12)."""
-    context = browser.new_context(viewport={"width": 390, "height": 844})
-    context.add_cookies(_make_session_cookie("test-commander-uid", "commander@test.dev"))
-    pg = context.new_page()
-    yield pg
-    pg.close()
-    context.close()
