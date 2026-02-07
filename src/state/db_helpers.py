@@ -655,54 +655,34 @@ def get_latest_run() -> dict | None:
 
 def update_source_health(source_id: str, success: bool, error: str = None) -> None:
     """
-    Update health tracking for a source.
+    Update health tracking for a source using atomic UPSERT.
     On success: reset consecutive_failures, update last_success.
     On failure: increment consecutive_failures, update last_failure and last_error.
     """
     con = connect()
     now = _utc_now_iso()
 
-    # Check if record exists
-    cur = execute(
-        con,
-        "SELECT source_id FROM state_source_health WHERE source_id = :source_id",
-        {"source_id": source_id},
-    )
-    exists = cur.fetchone() is not None
-
     if success:
-        if exists:
-            execute(
-                con,
-                """UPDATE state_source_health
-                   SET consecutive_failures=0, last_success=:last_success
-                   WHERE source_id=:source_id""",
-                {"last_success": now, "source_id": source_id},
-            )
-        else:
-            execute(
-                con,
-                """INSERT INTO state_source_health(source_id, consecutive_failures, last_success)
-                   VALUES(:source_id, :consecutive_failures, :last_success)""",
-                {"source_id": source_id, "consecutive_failures": 0, "last_success": now},
-            )
+        execute(
+            con,
+            """INSERT INTO state_source_health(source_id, consecutive_failures, last_success)
+               VALUES(:source_id, 0, :now)
+               ON CONFLICT(source_id) DO UPDATE SET
+                   consecutive_failures = 0,
+                   last_success = :now""",
+            {"source_id": source_id, "now": now},
+        )
     else:
-        if exists:
-            execute(
-                con,
-                """UPDATE state_source_health
-                   SET consecutive_failures = consecutive_failures + 1,
-                       last_failure=:last_failure, last_error=:last_error
-                   WHERE source_id=:source_id""",
-                {"last_failure": now, "last_error": error, "source_id": source_id},
-            )
-        else:
-            execute(
-                con,
-                """INSERT INTO state_source_health(source_id, consecutive_failures, last_failure, last_error)
-                   VALUES(:source_id, :consecutive_failures, :last_failure, :last_error)""",
-                {"source_id": source_id, "consecutive_failures": 1, "last_failure": now, "last_error": error},
-            )
+        execute(
+            con,
+            """INSERT INTO state_source_health(source_id, consecutive_failures, last_failure, last_error)
+               VALUES(:source_id, 1, :now, :error)
+               ON CONFLICT(source_id) DO UPDATE SET
+                   consecutive_failures = state_source_health.consecutive_failures + 1,
+                   last_failure = :now,
+                   last_error = :error""",
+            {"source_id": source_id, "now": now, "error": error},
+        )
 
     con.commit()
     con.close()

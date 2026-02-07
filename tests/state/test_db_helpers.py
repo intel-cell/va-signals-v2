@@ -307,6 +307,64 @@ class TestSourceHealth:
         assert health["last_success"] is not None
 
 
+class TestSourceHealthConcurrency:
+    """Tests for concurrent source health updates (SQLite locking)."""
+
+    def test_concurrent_source_health_updates_no_locking(self):
+        """
+        Simulate the multi-state runner: 6 threads writing source health
+        for 30 different source_ids concurrently. Must not raise
+        sqlite3.OperationalError: database is locked.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        source_ids = [f"concurrent_test_{i}" for i in range(30)]
+        errors = []
+
+        def update_health(source_id):
+            try:
+                db_helpers.update_source_health(source_id, success=True)
+            except Exception as e:
+                errors.append((source_id, str(e)))
+
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            list(executor.map(update_health, source_ids))
+
+        assert errors == [], f"Concurrent updates failed: {errors}"
+
+        # Verify all 30 records were written
+        from src.db import connect, execute
+        con = connect()
+        cur = execute(con, "SELECT COUNT(*) FROM state_source_health", {})
+        count = cur.fetchone()[0]
+        con.close()
+        assert count == 30
+
+    def test_concurrent_mixed_success_failure_no_locking(self):
+        """
+        Mixed success/failure concurrent updates must not lock.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        calls = [(f"mixed_{i}", i % 2 == 0) for i in range(20)]
+        errors = []
+
+        def update_health(args):
+            source_id, success = args
+            try:
+                db_helpers.update_source_health(
+                    source_id, success=success,
+                    error=None if success else "test error"
+                )
+            except Exception as e:
+                errors.append((source_id, str(e)))
+
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            list(executor.map(update_health, calls))
+
+        assert errors == [], f"Concurrent mixed updates failed: {errors}"
+
+
 class TestSeedDefaultSources:
     """Tests for seeding default sources."""
 
