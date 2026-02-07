@@ -174,6 +174,46 @@ class TestComputeErrorRate:
                 con.close()
         assert result.score == 100.0
 
+    def test_no_data_not_counted_as_failure(self):
+        """NO_DATA is a normal outcome and should NOT penalize health score."""
+        expectations = [
+            SourceExpectation("federal_register", "daily", 6, 24, True),
+        ]
+        # All NO_DATA runs — source checked, nothing new each time
+        _insert_run("federal_register", "NO_DATA", minutes_ago=5)
+        _insert_run("federal_register", "NO_DATA", minutes_ago=60)
+        _insert_run("federal_register", "NO_DATA", minutes_ago=120)
+
+        with patch("src.resilience.health_score.load_expectations", return_value=expectations):
+            con = connect()
+            try:
+                result = _compute_error_rate(con)
+            finally:
+                con.close()
+        assert result.score == 100.0
+        assert result.details["high_failure_sources"] == []
+
+    def test_mixed_no_data_and_error(self):
+        """Only ERROR counts as failure; NO_DATA and SUCCESS are healthy."""
+        expectations = [
+            SourceExpectation("federal_register", "daily", 6, 24, True),
+        ]
+        # 2 NO_DATA + 1 SUCCESS + 1 ERROR = 1/4 failure rate = 25%
+        _insert_run("federal_register", "NO_DATA", minutes_ago=5)
+        _insert_run("federal_register", "NO_DATA", minutes_ago=10)
+        _insert_run("federal_register", "SUCCESS", minutes_ago=15)
+        _insert_run("federal_register", "ERROR", minutes_ago=20)
+
+        with patch("src.resilience.health_score.load_expectations", return_value=expectations):
+            con = connect()
+            try:
+                result = _compute_error_rate(con)
+            finally:
+                con.close()
+        # Base: 3/4 success = 75%, no penalty (failure rate 25% < 50%)
+        assert result.score == 75.0
+        assert result.details["high_failure_sources"] == []
+
 
 class TestComputeCircuitBreakerHealth:
     def test_all_closed_returns_100(self):

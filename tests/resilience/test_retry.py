@@ -338,3 +338,99 @@ class TestPreConfiguredDecorators:
         with patch("src.resilience.retry.asyncio.sleep", new_callable=AsyncMock):
             result = _run(db_op())
         assert result == "committed"
+
+
+# ---------------------------------------------------------------------------
+# Sync wrapper (time.sleep path)
+# ---------------------------------------------------------------------------
+
+
+class TestSyncRetryWrapper:
+    def test_sync_immediate_success(self):
+        """Sync function succeeds on first attempt."""
+
+        @retry_api_call
+        def fetch():
+            return "data"
+
+        assert fetch() == "data"
+
+    def test_sync_retries_then_succeeds(self):
+        """Sync function retries on ConnectionError then succeeds."""
+        call_count = 0
+
+        @retry(max_attempts=3, base_delay=0.001)
+        def flaky():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:
+                raise ConnectionError("transient")
+            return "recovered"
+
+        with patch("src.resilience.retry.time_mod.sleep"):
+            result = flaky()
+        assert result == "recovered"
+        assert call_count == 3
+
+    def test_sync_exhausts_retries(self):
+        """Sync function raises after all attempts exhausted."""
+
+        @retry(max_attempts=3, base_delay=0.001)
+        def always_fail():
+            raise ConnectionError("persistent")
+
+        with patch("src.resilience.retry.time_mod.sleep"):
+            with pytest.raises(ConnectionError, match="persistent"):
+                always_fail()
+
+    def test_sync_no_retry_on_non_matching_exception(self):
+        """Sync function does NOT retry exceptions not in retry_exceptions."""
+        call_count = 0
+
+        @retry(
+            max_attempts=5,
+            base_delay=0.001,
+            retry_exceptions=(ConnectionError,),
+        )
+        def bad_input():
+            nonlocal call_count
+            call_count += 1
+            raise ValueError("invalid")
+
+        with pytest.raises(ValueError, match="invalid"):
+            bad_input()
+        assert call_count == 1  # No retry
+
+    def test_sync_uses_time_sleep_not_asyncio(self):
+        """Verify sync wrapper uses time.sleep, not asyncio."""
+        call_count = 0
+
+        @retry(max_attempts=2, base_delay=0.01)
+        def flaky():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise OSError("network")
+            return "ok"
+
+        with patch("src.resilience.retry.time_mod.sleep") as mock_sleep:
+            result = flaky()
+        assert result == "ok"
+        assert mock_sleep.call_count == 1  # Slept once between attempts
+
+    def test_retry_api_call_sync_retries_oserror(self):
+        """retry_api_call retries OSError (covers urllib.error.URLError)."""
+        call_count = 0
+
+        @retry_api_call
+        def fetch_url():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise OSError("Connection refused")
+            return "response"
+
+        with patch("src.resilience.retry.time_mod.sleep"):
+            result = fetch_url()
+        assert result == "response"
+        assert call_count == 2

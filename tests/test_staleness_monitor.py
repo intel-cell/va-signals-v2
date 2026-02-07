@@ -277,6 +277,21 @@ class TestGetConsecutiveFailures:
         assert get_consecutive_failures("federal_register", con=con) == 2
         con.close()
 
+    def test_no_data_breaks_consecutive_streak(self):
+        """NO_DATA is normal and should break a consecutive failure streak."""
+        con = _make_db_with_runs(
+            [
+                ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(30), "SUCCESS"),
+                ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(20), "ERROR"),
+                ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(15), "ERROR"),
+                ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(10), "NO_DATA"),
+                ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(5), "ERROR"),
+            ]
+        )
+        # Only the most recent ERROR counts; NO_DATA at 10min ago breaks the streak
+        assert get_consecutive_failures("federal_register", con=con) == 1
+        con.close()
+
 
 # ---------------------------------------------------------------------------
 # _parse_timestamp
@@ -776,11 +791,11 @@ class TestGetFailureRate:
         assert total == 3
         con.close()
 
-    def test_all_failures(self):
-        """All ERROR/NO_DATA runs => 100% failure rate."""
+    def test_all_errors(self):
+        """All ERROR runs => 100% failure rate."""
         runs = [
             ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(2), "ERROR"),
-            ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(6), "NO_DATA"),
+            ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(6), "ERROR"),
             ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(12), "ERROR"),
         ]
         con = _make_db_with_runs(runs)
@@ -789,8 +804,21 @@ class TestGetFailureRate:
         assert total == 3
         con.close()
 
+    def test_no_data_not_counted_as_failure(self):
+        """NO_DATA is a normal outcome (source checked, nothing new) and should not be a failure."""
+        runs = [
+            ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(2), "NO_DATA"),
+            ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(6), "NO_DATA"),
+            ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(12), "NO_DATA"),
+        ]
+        con = _make_db_with_runs(runs)
+        rate, total = get_failure_rate("federal_register", window_hours=24.0, con=con)
+        assert rate == 0.0
+        assert total == 3
+        con.close()
+
     def test_mixed_runs(self):
-        """Mix of SUCCESS and ERROR => correct ratio."""
+        """Mix of SUCCESS, NO_DATA, and ERROR => only ERROR counts as failure."""
         runs = [
             ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(2), "SUCCESS"),
             ("federal_register_bulk", "2026-01-01T00:00:00Z", _hours_ago(6), "ERROR"),
@@ -799,7 +827,7 @@ class TestGetFailureRate:
         ]
         con = _make_db_with_runs(runs)
         rate, total = get_failure_rate("federal_register", window_hours=24.0, con=con)
-        assert rate == 0.5  # 2 failures out of 4
+        assert rate == 0.25  # 1 ERROR out of 4
         assert total == 4
         con.close()
 
@@ -829,16 +857,16 @@ class TestGetFailureRate:
         con.close()
 
     def test_over_50_percent_threshold(self):
-        """Verify >50% failure rate detection."""
+        """Verify >50% failure rate detection (only ERROR counts)."""
         runs = [
             ("oversight_gao", "2026-01-01T00:00:00Z", _hours_ago(2), "ERROR"),
-            ("oversight_gao", "2026-01-01T00:00:00Z", _hours_ago(6), "NO_DATA"),
+            ("oversight_gao", "2026-01-01T00:00:00Z", _hours_ago(6), "ERROR"),
             ("oversight_gao", "2026-01-01T00:00:00Z", _hours_ago(12), "ERROR"),
             ("oversight_gao", "2026-01-01T00:00:00Z", _hours_ago(18), "SUCCESS"),
         ]
         con = _make_db_with_runs(runs)
         rate, total = get_failure_rate("oversight", window_hours=24.0, con=con)
-        assert rate > 0.5
+        assert rate > 0.5  # 3 errors out of 4 = 75%
         assert total == 4
         con.close()
 
@@ -952,10 +980,11 @@ class TestCheckAllSourcesFailureRateElevation:
 
         # 20h overdue with tolerance=6 => 14h overdue => normally "warning"
         # But 75% failure rate in 24h => should elevate to "critical"
+        # Note: only ERROR counts as failure; NO_DATA is normal
         runs = [
             ("bad_source_bulk", "2026-01-01T00:00:00Z", _hours_ago(20), "SUCCESS"),
             ("bad_source_bulk", "2026-01-01T00:00:00Z", _hours_ago(15), "ERROR"),
-            ("bad_source_bulk", "2026-01-01T00:00:00Z", _hours_ago(10), "NO_DATA"),
+            ("bad_source_bulk", "2026-01-01T00:00:00Z", _hours_ago(10), "ERROR"),
             ("bad_source_bulk", "2026-01-01T00:00:00Z", _hours_ago(5), "ERROR"),
         ]
         con = _make_db_with_runs(runs)

@@ -54,3 +54,17 @@ def test_quality_gate_fails_with_unknown_precision_no_timestamp():
     result = check_quality_gate(timestamps, url="https://example.com")
 
     assert result.passed is False
+
+
+def test_quality_gate_fails_with_unknown_precision_and_timestamp():
+    """Reject events where timestamp exists but precision is unknown."""
+    timestamps = TimestampResult(
+        pub_timestamp="2026-01-20",
+        pub_precision="unknown",
+        pub_source="inferred",
+    )
+
+    result = check_quality_gate(timestamps, url="https://example.com")
+
+    assert result.passed is False
+    assert result.rejection_reason == "temporal_incomplete"
