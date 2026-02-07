@@ -17,7 +17,7 @@ addopts = [
     "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html:htmlcov",
-    "--cov-fail-under=35",  # Ratchet up as coverage improves; was 70 pre-expansion
+    "--cov-fail-under=45",  # Ratcheted from 35→45 for Sprint 6 STABILIZE
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",
