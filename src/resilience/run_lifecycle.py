@@ -135,7 +135,7 @@ def post_run_check(ctx: RunContext, run_record: dict | None = None) -> RunContex
 
     # Check 3: Check staleness via staleness_monitor
     try:
-        from src.resilience.staleness_monitor import check_source, load_expectations
+        from src.resilience.staleness_monitor import check_source, load_expectations, persist_alert
 
         expectations = load_expectations()
         for exp in expectations:
@@ -149,6 +149,7 @@ def post_run_check(ctx: RunContext, run_record: dict | None = None) -> RunContex
                         "POST_RUN_STALE",
                         extra={"source_id": ctx.source_id, "severity": alert.severity},
                     )
+                    persist_alert(alert)
                 break
     except Exception:
         pass  # staleness monitor may not have this source configured
