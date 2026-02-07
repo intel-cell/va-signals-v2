@@ -10,15 +10,15 @@ Extracts: Directives, Handbooks, Notices, Circulars.
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import requests
 from bs4 import BeautifulSoup
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-}
+from .resilience.circuit_breaker import va_pubs_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
+
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
 VA_PUBS_URL = "https://www.va.gov/vapubs/"
 
@@ -47,15 +47,15 @@ def _generate_doc_id(pub_number: str, url: str) -> str:
     return f"va-pub-{url_hash}"
 
 
-def _extract_pub_number(text: str, url: str) -> Optional[str]:
+def _extract_pub_number(text: str, url: str) -> str | None:
     """Extract publication number from text or URL."""
     # Try various patterns
     patterns = [
         r"(\d+-\d+(?:\.\d+)?)",  # 5021-1.2
         r"(Directive\s+\d+(?:-\d+)?)",  # Directive 5021
-        r"(Handbook\s+\d+(?:-\d+)?)",   # Handbook 5021
-        r"(MP-\d+)",                     # MP-1
-        r"(VHA\s*\d+)",                  # VHA1401
+        r"(Handbook\s+\d+(?:-\d+)?)",  # Handbook 5021
+        r"(MP-\d+)",  # MP-1
+        r"(VHA\s*\d+)",  # VHA1401
     ]
 
     for pattern in patterns:
@@ -92,24 +92,24 @@ def _classify_pub_type(title: str, pub_number: str = "") -> str:
         return "publication"
 
 
-def _parse_date(date_str: str) -> Optional[str]:
+def _parse_date(date_str: str) -> str | None:
     """Parse date string to ISO format."""
     if not date_str:
         return None
 
     date_str = date_str.strip()
     formats = [
-        "%B %d, %Y",      # January 29, 2026
-        "%b %d, %Y",      # Jan 29, 2026
-        "%Y-%m-%d",       # 2026-01-29
-        "%m/%d/%Y",       # 01/29/2026
-        "%m/%d/%y",       # 01/29/26
+        "%B %d, %Y",  # January 29, 2026
+        "%b %d, %Y",  # Jan 29, 2026
+        "%Y-%m-%d",  # 2026-01-29
+        "%m/%d/%Y",  # 01/29/2026
+        "%m/%d/%y",  # 01/29/26
     ]
 
     for fmt in formats:
         try:
             dt = datetime.strptime(date_str, fmt)
-            return dt.replace(tzinfo=timezone.utc).isoformat()
+            return dt.replace(tzinfo=UTC).isoformat()
         except ValueError:
             continue
 
@@ -145,9 +145,15 @@ def fetch_va_pubs_docs(
     """
     docs = []
 
-    try:
-        resp = requests.get(VA_PUBS_URL, headers=HEADERS, timeout=30)
+    @with_timeout(45, name="va_pubs")
+    @circuit_breaker_sync(va_pubs_cb)
+    def _get_va_pubs_page(url):
+        resp = requests.get(url, headers=HEADERS, timeout=30)
         resp.raise_for_status()
+        return resp
+
+    try:
+        resp = _get_va_pubs_page(VA_PUBS_URL)
     except requests.RequestException as e:
         print(f"Error fetching VA Publications page: {e}")
         return docs
@@ -170,12 +176,12 @@ def fetch_va_pubs_docs(
 
         # Check if this looks like a publication link
         is_pub = (
-            ".pdf" in href.lower() or
-            "directive" in text.lower() or
-            "handbook" in text.lower() or
-            "notice" in text.lower() or
-            any(pattern.search(text) for pattern in PUB_TYPE_PATTERNS.values()) or
-            any(pattern.search(href) for pattern in PUB_TYPE_PATTERNS.values())
+            ".pdf" in href.lower()
+            or "directive" in text.lower()
+            or "handbook" in text.lower()
+            or "notice" in text.lower()
+            or any(pattern.search(text) for pattern in PUB_TYPE_PATTERNS.values())
+            or any(pattern.search(href) for pattern in PUB_TYPE_PATTERNS.values())
         )
 
         if not is_pub:
@@ -211,7 +217,7 @@ def fetch_va_pubs_docs(
                         r"((January|February|March|April|May|June|July|August|"
                         r"September|October|November|December)\s+\d{1,2},?\s+\d{4})",
                         sib_text,
-                        re.IGNORECASE
+                        re.IGNORECASE,
                     )
                     if date_match:
                         date_str = date_match.group(0)
@@ -226,11 +232,13 @@ def fetch_va_pubs_docs(
             "source_url": href,
             "body_text": None,  # PDFs need separate extraction
             "content_hash": _compute_hash(href),
-            "metadata_json": json.dumps({
-                "pub_number": pub_number,
-                "administrations": _extract_administrations(text),
-                "is_pdf": ".pdf" in href.lower(),
-            }),
+            "metadata_json": json.dumps(
+                {
+                    "pub_number": pub_number,
+                    "administrations": _extract_administrations(text),
+                    "is_pdf": ".pdf" in href.lower(),
+                }
+            ),
         }
         docs.append(doc)
 
@@ -286,10 +294,12 @@ def fetch_va_pubs_search(
                     "source_url": href,
                     "body_text": None,
                     "content_hash": _compute_hash(href),
-                    "metadata_json": json.dumps({
-                        "pub_number": pub_number,
-                        "search_query": query,
-                    }),
+                    "metadata_json": json.dumps(
+                        {
+                            "pub_number": pub_number,
+                            "search_query": query,
+                        }
+                    ),
                 }
                 all_docs.append(doc)
 

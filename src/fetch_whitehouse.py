@@ -10,17 +10,16 @@ Extracts: bill signings, executive orders, memoranda, proclamations.
 
 import hashlib
 import json
-import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import requests
 from bs4 import BeautifulSoup
 
+from .resilience.circuit_breaker import whitehouse_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
+
 # User agent to avoid blocks
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
 # Source pages to scrape
 WHITEHOUSE_SOURCES = {
@@ -76,35 +75,57 @@ def _is_va_relevant(title: str, body: str = "") -> bool:
     """Check if document is potentially VA-relevant."""
     text = f"{title} {body}".lower()
     va_keywords = [
-        "veteran", "veterans", "va ", "department of veterans affairs",
-        "military", "service member", "servicemember", "armed forces",
-        "gi bill", "vha", "vba", "nca", "pact act", "burn pit",
-        "toxic exposure", "disability compensation", "benefits",
+        "veteran",
+        "veterans",
+        "va ",
+        "department of veterans affairs",
+        "military",
+        "service member",
+        "servicemember",
+        "armed forces",
+        "gi bill",
+        "vha",
+        "vba",
+        "nca",
+        "pact act",
+        "burn pit",
+        "toxic exposure",
+        "disability compensation",
+        "benefits",
     ]
     return any(kw in text for kw in va_keywords)
 
 
-def _parse_date(date_str: str) -> Optional[str]:
+def _parse_date(date_str: str) -> str | None:
     """Parse date string to ISO format."""
     if not date_str:
         return None
 
     date_str = date_str.strip()
     formats = [
-        "%B %d, %Y",      # January 29, 2026
-        "%b %d, %Y",      # Jan 29, 2026
-        "%Y-%m-%d",       # 2026-01-29
-        "%m/%d/%Y",       # 01/29/2026
+        "%B %d, %Y",  # January 29, 2026
+        "%b %d, %Y",  # Jan 29, 2026
+        "%Y-%m-%d",  # 2026-01-29
+        "%m/%d/%Y",  # 01/29/2026
     ]
 
     for fmt in formats:
         try:
             dt = datetime.strptime(date_str, fmt)
-            return dt.replace(tzinfo=timezone.utc).isoformat()
+            return dt.replace(tzinfo=UTC).isoformat()
         except ValueError:
             continue
 
     return None
+
+
+@with_timeout(45, name="whitehouse")
+@circuit_breaker_sync(whitehouse_cb)
+def _fetch_whitehouse_page(url: str) -> requests.Response:
+    """Fetch a White House page with resilience protection."""
+    resp = requests.get(url, headers=HEADERS, timeout=30)
+    resp.raise_for_status()
+    return resp
 
 
 def _scrape_listing_page(url: str, source_key: str) -> list[dict]:
@@ -112,8 +133,7 @@ def _scrape_listing_page(url: str, source_key: str) -> list[dict]:
     docs = []
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
+        resp = _fetch_whitehouse_page(url)
     except requests.RequestException as e:
         print(f"Error fetching {url}: {e}")
         return docs
@@ -157,13 +177,15 @@ def _scrape_listing_page(url: str, source_key: str) -> list[dict]:
             # Classify type
             doc_type = _classify_type(title, source_key)
 
-            docs.append({
-                "url": link,
-                "title": title,
-                "published_at": _parse_date(date_str),
-                "authority_type": doc_type,
-                "source_key": source_key,
-            })
+            docs.append(
+                {
+                    "url": link,
+                    "title": title,
+                    "published_at": _parse_date(date_str),
+                    "authority_type": doc_type,
+                    "source_key": source_key,
+                }
+            )
 
         except Exception:
             continue
@@ -174,8 +196,7 @@ def _scrape_listing_page(url: str, source_key: str) -> list[dict]:
 def _fetch_document_body(url: str) -> tuple[str, str]:
     """Fetch full document body text. Returns (body_text, content_hash)."""
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
+        resp = _fetch_whitehouse_page(url)
     except requests.RequestException as e:
         print(f"Error fetching document {url}: {e}")
         return "", ""
@@ -252,9 +273,11 @@ def fetch_whitehouse_docs(
                 "source_url": doc["url"],
                 "body_text": body_text,
                 "content_hash": content_hash,
-                "metadata_json": json.dumps({
-                    "source_key": doc["source_key"],
-                }),
+                "metadata_json": json.dumps(
+                    {
+                        "source_key": doc["source_key"],
+                    }
+                ),
             }
             all_docs.append(authority_doc)
 

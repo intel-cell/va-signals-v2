@@ -10,15 +10,15 @@ Extracts: memo IDs (M-26-01), titles, dates, PDF links.
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import requests
 from bs4 import BeautifulSoup
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-}
+from .resilience.circuit_breaker import omb_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
+
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
 OMB_MEMORANDA_URL = "https://www.whitehouse.gov/omb/information-regulatory-affairs/memoranda/"
 
@@ -40,7 +40,7 @@ def _generate_doc_id(memo_id: str, url: str) -> str:
     return f"omb-{url_hash}"
 
 
-def _extract_memo_id(title: str, url: str) -> Optional[str]:
+def _extract_memo_id(title: str, url: str) -> str | None:
     """Extract memo ID from title or URL."""
     # Try title first
     match = MEMO_ID_PATTERN.search(title)
@@ -55,24 +55,24 @@ def _extract_memo_id(title: str, url: str) -> Optional[str]:
     return None
 
 
-def _parse_date(date_str: str) -> Optional[str]:
+def _parse_date(date_str: str) -> str | None:
     """Parse date string to ISO format."""
     if not date_str:
         return None
 
     date_str = date_str.strip()
     formats = [
-        "%B %d, %Y",      # January 29, 2026
-        "%B %Y",          # January 2026
-        "%b %d, %Y",      # Jan 29, 2026
-        "%Y-%m-%d",       # 2026-01-29
-        "%m/%d/%Y",       # 01/29/2026
+        "%B %d, %Y",  # January 29, 2026
+        "%B %Y",  # January 2026
+        "%b %d, %Y",  # Jan 29, 2026
+        "%Y-%m-%d",  # 2026-01-29
+        "%m/%d/%Y",  # 01/29/2026
     ]
 
     for fmt in formats:
         try:
             dt = datetime.strptime(date_str, fmt)
-            return dt.replace(tzinfo=timezone.utc).isoformat()
+            return dt.replace(tzinfo=UTC).isoformat()
         except ValueError:
             continue
 
@@ -88,10 +88,25 @@ def _is_va_relevant(title: str) -> bool:
     """Check if memo is potentially VA-relevant based on title."""
     text = title.lower()
     va_keywords = [
-        "veteran", "va ", "benefits", "healthcare", "health care",
-        "appropriation", "budget", "agency", "federal", "personnel",
-        "hiring", "workforce", "regulatory", "rulemaking", "grants",
-        "information collection", "pra", "paperwork", "oira",
+        "veteran",
+        "va ",
+        "benefits",
+        "healthcare",
+        "health care",
+        "appropriation",
+        "budget",
+        "agency",
+        "federal",
+        "personnel",
+        "hiring",
+        "workforce",
+        "regulatory",
+        "rulemaking",
+        "grants",
+        "information collection",
+        "pra",
+        "paperwork",
+        "oira",
     ]
     return any(kw in text for kw in va_keywords)
 
@@ -112,9 +127,15 @@ def fetch_omb_guidance_docs(
     """
     docs = []
 
-    try:
-        resp = requests.get(OMB_MEMORANDA_URL, headers=HEADERS, timeout=30)
+    @with_timeout(45, name="omb")
+    @circuit_breaker_sync(omb_cb)
+    def _get_omb_page(url):
+        resp = requests.get(url, headers=HEADERS, timeout=30)
         resp.raise_for_status()
+        return resp
+
+    try:
+        resp = _get_omb_page(OMB_MEMORANDA_URL)
     except requests.RequestException as e:
         print(f"Error fetching OMB memoranda page: {e}")
         return docs
@@ -139,11 +160,11 @@ def fetch_omb_guidance_docs(
 
         # Check if this looks like a memo link (PDF or page with M-XX-XX)
         is_memo = (
-            ".pdf" in href.lower() or
-            MEMO_ID_PATTERN.search(text) or
-            MEMO_ID_PATTERN.search(href) or
-            "memorand" in text.lower() or
-            "circular" in text.lower()
+            ".pdf" in href.lower()
+            or MEMO_ID_PATTERN.search(text)
+            or MEMO_ID_PATTERN.search(href)
+            or "memorand" in text.lower()
+            or "circular" in text.lower()
         )
 
         if not is_memo:
@@ -180,7 +201,7 @@ def fetch_omb_guidance_docs(
                     r"(January|February|March|April|May|June|July|August|"
                     r"September|October|November|December)\s+\d{1,2},?\s+\d{4}",
                     parent_text,
-                    re.IGNORECASE
+                    re.IGNORECASE,
                 )
                 if date_match:
                     date_str = date_match.group(0)
@@ -208,10 +229,12 @@ def fetch_omb_guidance_docs(
             "source_url": href,
             "body_text": None,  # PDFs need separate extraction
             "content_hash": _compute_hash(href),  # Use URL as proxy for now
-            "metadata_json": json.dumps({
-                "memo_id": memo_id,
-                "is_pdf": ".pdf" in href.lower(),
-            }),
+            "metadata_json": json.dumps(
+                {
+                    "memo_id": memo_id,
+                    "is_pdf": ".pdf" in href.lower(),
+                }
+            ),
         }
         docs.append(doc)
 

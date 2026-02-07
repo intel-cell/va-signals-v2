@@ -1,13 +1,15 @@
 """VA Office of Inspector General (OIG) source agent."""
 
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import feedparser
 
-from .base import OversightAgent, RawEvent, TimestampResult
+from src.resilience.circuit_breaker import oversight_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
+from .base import OversightAgent, RawEvent, TimestampResult
 
 OIG_RSS_URL = "https://www.vaoig.gov/rss.xml"
 OIG_REPORT_PATTERN = re.compile(r"(\d{2})-(\d{5})-(\d+)", re.IGNORECASE)
@@ -21,20 +23,27 @@ class OIGAgent(OversightAgent):
     def __init__(self, rss_url: str = OIG_RSS_URL):
         self.rss_url = rss_url
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    @with_timeout(45, name="oig_rss")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_feed(self):
+        """Fetch and parse the OIG RSS feed with resilience protection."""
+        return feedparser.parse(self.rss_url)
+
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """Fetch new OIG reports from RSS feed."""
-        feed = feedparser.parse(self.rss_url)
+        external_api_limiter.allow()
+        feed = self._fetch_feed()
         events = []
 
         for entry in feed.entries:
             pub_date = None
             if hasattr(entry, "published_parsed") and entry.published_parsed:
-                pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+                pub_date = datetime(*entry.published_parsed[:6], tzinfo=UTC)
 
             if since and pub_date and pub_date < since:
                 continue
 
-            fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             events.append(
                 RawEvent(
@@ -42,7 +51,9 @@ class OIGAgent(OversightAgent):
                     title=entry.title,
                     raw_html=getattr(entry, "summary", ""),
                     fetched_at=fetched_at,
-                    excerpt=getattr(entry, "summary", "")[:500] if hasattr(entry, "summary") else None,
+                    excerpt=getattr(entry, "summary", "")[:500]
+                    if hasattr(entry, "summary")
+                    else None,
                     metadata={
                         "published": getattr(entry, "published", None),
                     },
@@ -77,6 +88,7 @@ class OIGAgent(OversightAgent):
             try:
                 # Try parsing RSS date format
                 from email.utils import parsedate_to_datetime
+
                 dt = parsedate_to_datetime(published)
                 pub_timestamp = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                 pub_precision = "datetime"

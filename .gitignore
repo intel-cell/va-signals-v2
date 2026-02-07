@@ -24,6 +24,7 @@ credentials.json
 # Test/coverage artifacts
 .coverage
 htmlcov/
+tests/browser/screenshots/
 
 # IDE and tool configs
 .claude/

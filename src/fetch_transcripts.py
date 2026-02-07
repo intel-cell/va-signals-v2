@@ -13,16 +13,17 @@ import argparse
 import hashlib
 import json
 import re
-import sys
 import ssl
-from datetime import datetime, timezone
-from typing import Optional
-import urllib.request
+import sys
 import urllib.error
+import urllib.request
+from datetime import UTC, datetime
 
 import certifi
 
 from . import db
+from .resilience.circuit_breaker import congress_api_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
 from .secrets import get_env_or_keychain
 
 # VA-related committee system codes
@@ -48,14 +49,19 @@ def get_api_key() -> str:
     return get_env_or_keychain("CONGRESS_API_KEY", "congress-api")
 
 
+@with_timeout(45, name="congress_api")
+@circuit_breaker_sync(congress_api_cb)
 def fetch_json(url: str, api_key: str) -> dict:
     """Fetch JSON from Congress.gov API."""
     sep = "&" if "?" in url else "?"
     full_url = f"{url}{sep}api_key={api_key}&format=json"
-    req = urllib.request.Request(full_url, headers={
-        "Accept": "application/json",
-        "User-Agent": "VA-Signals/1.0",
-    })
+    req = urllib.request.Request(
+        full_url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "VA-Signals/1.0",
+        },
+    )
     context = ssl.create_default_context(cafile=certifi.where())
     with urllib.request.urlopen(req, timeout=30, context=context) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -93,12 +99,14 @@ def list_hearings(api_key: str, congress: int = 118, limit: int = 100) -> list[d
             break
 
         for h in batch:
-            hearings.append({
-                "chamber": h.get("chamber"),
-                "congress": h.get("congress"),
-                "jacket_number": h.get("jacketNumber"),
-                "url": h.get("url"),
-            })
+            hearings.append(
+                {
+                    "chamber": h.get("chamber"),
+                    "congress": h.get("congress"),
+                    "jacket_number": h.get("jacketNumber"),
+                    "url": h.get("url"),
+                }
+            )
 
         offset += 100
         if not data.get("pagination", {}).get("next"):
@@ -107,7 +115,9 @@ def list_hearings(api_key: str, congress: int = 118, limit: int = 100) -> list[d
     return hearings[:limit]
 
 
-def get_hearing_detail(api_key: str, congress: int, chamber: str, jacket_number: int) -> Optional[dict]:
+def get_hearing_detail(
+    api_key: str, congress: int, chamber: str, jacket_number: int
+) -> dict | None:
     """Fetch detailed hearing info including committee and transcript URLs."""
     url = f"{BASE_API_URL}/hearing/{congress}/{chamber.lower()}/{jacket_number}"
     try:
@@ -170,7 +180,7 @@ def parse_transcript_speakers(html_content: str) -> list[dict]:
     # Common patterns in congressional transcripts
     speaker_pattern = re.compile(
         r"^\s{4,}((?:Mr\.|Ms\.|Mrs\.|Dr\.|The (?:CHAIRMAN|CHAIRWOMAN|CHAIR)|Chairman|Chairwoman|Senator|Representative)\s+[A-Z][a-zA-Z\-]+\.?)\s+(.+?)(?=\n\s{4,}(?:Mr\.|Ms\.|Mrs\.|Dr\.|The (?:CHAIRMAN|CHAIRWOMAN|CHAIR)|Chairman|Chairwoman|Senator|Representative)\s+[A-Z]|\Z)",
-        re.MULTILINE | re.DOTALL
+        re.MULTILINE | re.DOTALL,
     )
 
     utterances = []
@@ -190,14 +200,18 @@ def parse_transcript_speakers(html_content: str) -> list[dict]:
 
         # Normalize speaker name
         speaker = re.sub(r"^(Mr\.|Ms\.|Mrs\.|Dr\.)\s+", "", speaker)
-        speaker = re.sub(r"^The\s+(CHAIRMAN|CHAIRWOMAN|CHAIR)\s*", "Chair ", speaker, flags=re.IGNORECASE)
+        speaker = re.sub(
+            r"^The\s+(CHAIRMAN|CHAIRWOMAN|CHAIR)\s*", "Chair ", speaker, flags=re.IGNORECASE
+        )
         speaker = speaker.strip()
 
-        utterances.append({
-            "speaker_name": speaker,
-            "content": content,
-            "chunk_ix": chunk_ix,
-        })
+        utterances.append(
+            {
+                "speaker_name": speaker,
+                "content": content,
+                "chunk_ix": chunk_ix,
+            }
+        )
         chunk_ix += 1
 
     return utterances
@@ -215,7 +229,7 @@ def extract_members_from_transcript(html_content: str) -> dict[str, dict]:
     committee_section = re.search(
         r"COMMITTEE ON [A-Z\s]+\n\s*[-=]+\n(.+?)(?:\n\s*[-=]+|\n\s*SUBCOMMITTEE|\n\s*C\s*O\s*N\s*T\s*E\s*N\s*T\s*S)",
         html_content,
-        re.DOTALL
+        re.DOTALL,
     )
 
     if not committee_section:
@@ -226,8 +240,7 @@ def extract_members_from_transcript(html_content: str) -> dict[str, dict]:
     # Pattern for member lines: NAME, State
     # e.g., "JIM JORDAN, Ohio, Chair" or "JAMIE RASKIN, Maryland, Ranking Member"
     member_pattern = re.compile(
-        r"([A-Z][A-Z\s\.\-\']+),\s+([A-Za-z\s]+?)(?:,\s+(?:Chair|Ranking|Member))?$",
-        re.MULTILINE
+        r"([A-Z][A-Z\s\.\-\']+),\s+([A-Za-z\s]+?)(?:,\s+(?:Chair|Ranking|Member))?$", re.MULTILINE
     )
 
     for match in member_pattern.finditer(section_text):
@@ -316,7 +329,9 @@ def process_hearing(api_key: str, hearing_meta: dict, dry_run: bool = False) -> 
         return stats
 
     # Determine hearing date
-    hearing_date = detail["dates"][0] if detail.get("dates") else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    hearing_date = (
+        detail["dates"][0] if detail.get("dates") else datetime.now(UTC).strftime("%Y-%m-%d")
+    )
 
     # Prepare data for DB
     db_utterances = []
@@ -349,14 +364,18 @@ def process_hearing(api_key: str, hearing_meta: dict, dry_run: bool = False) -> 
             member_ids_seen.add(member_id)
 
         # Prepare utterance record
-        db_utterances.append({
-            "utterance_id": generate_utterance_id(detail["hearing_id"], display_name, utt["chunk_ix"]),
-            "member_id": member_id,
-            "hearing_id": detail["hearing_id"],
-            "chunk_ix": utt["chunk_ix"],
-            "content": utt["content"][:10000],  # Truncate very long utterances
-            "spoken_at": hearing_date,
-        })
+        db_utterances.append(
+            {
+                "utterance_id": generate_utterance_id(
+                    detail["hearing_id"], display_name, utt["chunk_ix"]
+                ),
+                "member_id": member_id,
+                "hearing_id": detail["hearing_id"],
+                "chunk_ix": utt["chunk_ix"],
+                "content": utt["content"][:10000],  # Truncate very long utterances
+                "spoken_at": hearing_date,
+            }
+        )
 
     # Bulk insert utterances
     if not dry_run and db_utterances:
@@ -368,7 +387,9 @@ def process_hearing(api_key: str, hearing_meta: dict, dry_run: bool = False) -> 
     return stats
 
 
-def fetch_va_hearings(api_key: str, congress: int = 118, limit: int = 50, dry_run: bool = False) -> dict:
+def fetch_va_hearings(
+    api_key: str, congress: int = 118, limit: int = 50, dry_run: bool = False
+) -> dict:
     """
     Main entry point: fetch and process VA-related hearings.
 
@@ -377,7 +398,9 @@ def fetch_va_hearings(api_key: str, congress: int = 118, limit: int = 50, dry_ru
     print(f"Fetching hearings for Congress {congress}...")
 
     # List all hearings
-    all_hearings = list_hearings(api_key, congress=congress, limit=limit * 5)  # Fetch more to filter
+    all_hearings = list_hearings(
+        api_key, congress=congress, limit=limit * 5
+    )  # Fetch more to filter
     print(f"Found {len(all_hearings)} total hearings")
 
     # Process hearings and filter for VA
@@ -416,11 +439,15 @@ def fetch_va_hearings(api_key: str, congress: int = 118, limit: int = 50, dry_ru
         print(f"\nProcessing VA hearing: {detail['title'][:60]}...")
         print(f"  Committees: {', '.join(detail.get('committee_names', []))}")
 
-        stats = process_hearing(api_key, {
-            "congress": hearing["congress"],
-            "chamber": hearing["chamber"],
-            "jacket_number": hearing["jacket_number"],
-        }, dry_run=dry_run)
+        stats = process_hearing(
+            api_key,
+            {
+                "congress": hearing["congress"],
+                "chamber": hearing["chamber"],
+                "jacket_number": hearing["jacket_number"],
+            },
+            dry_run=dry_run,
+        )
 
         total_stats["members_added"] += stats["members_added"]
         total_stats["utterances_added"] += stats["utterances_added"]
@@ -429,7 +456,9 @@ def fetch_va_hearings(api_key: str, congress: int = 118, limit: int = 50, dry_ru
             total_stats["errors"].extend(stats["errors"])
             print(f"  Errors: {stats['errors']}")
         else:
-            print(f"  Added: {stats['members_added']} members, {stats['utterances_added']} utterances")
+            print(
+                f"  Added: {stats['members_added']} members, {stats['utterances_added']} utterances"
+            )
 
     return total_stats
 
@@ -437,7 +466,9 @@ def fetch_va_hearings(api_key: str, congress: int = 118, limit: int = 50, dry_ru
 def main():
     parser = argparse.ArgumentParser(description="Fetch hearing transcripts from Congress.gov")
     parser.add_argument("--congress", type=int, default=118, help="Congress number (default: 118)")
-    parser.add_argument("--limit", type=int, default=10, help="Max VA hearings to process (default: 10)")
+    parser.add_argument(
+        "--limit", type=int, default=10, help="Max VA hearings to process (default: 10)"
+    )
     parser.add_argument("--dry-run", action="store_true", help="Parse but don't store in DB")
     args = parser.parse_args()
 

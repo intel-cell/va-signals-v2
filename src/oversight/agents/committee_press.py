@@ -1,14 +1,16 @@
 """Committee Press Release source agent - HTML scraping version."""
 
 import re
-import requests
-from datetime import datetime, timezone
-from typing import Optional, List
+from datetime import UTC, datetime
 
+import requests
 from bs4 import BeautifulSoup
 
-from .base import OversightAgent, RawEvent, TimestampResult
+from src.resilience.circuit_breaker import oversight_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
+from .base import OversightAgent, RawEvent, TimestampResult
 
 # VA-related committee news pages (HTML)
 COMMITTEE_SOURCES = {
@@ -34,7 +36,16 @@ class CommitteePressAgent(OversightAgent):
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
         }
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    @with_timeout(45, name="committee_press")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_page(self, url: str) -> requests.Response:
+        """Fetch a committee page with resilience protection."""
+        external_api_limiter.allow()
+        resp = requests.get(url, headers=self.headers, timeout=30)
+        resp.raise_for_status()
+        return resp
+
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """Fetch new press releases from committee pages."""
         events = []
 
@@ -46,39 +57,40 @@ class CommitteePressAgent(OversightAgent):
                     committee_events = self._scrape_svac(source["url"])
                 else:
                     continue
-                    
+
                 # Filter by since if provided
                 for event in committee_events:
                     if since:
                         ts = self.extract_timestamps(event)
                         if ts.pub_timestamp:
                             try:
-                                pub_dt = datetime.fromisoformat(ts.pub_timestamp.replace("Z", "+00:00"))
+                                pub_dt = datetime.fromisoformat(
+                                    ts.pub_timestamp.replace("Z", "+00:00")
+                                )
                                 if pub_dt < since:
                                     continue
                             except ValueError:
                                 pass
                     events.append(event)
-                    
+
             except Exception as e:
                 print(f"Error scraping {committee}: {e}")
                 continue
 
         return events
 
-    def _scrape_hvac(self, url: str) -> List[RawEvent]:
+    def _scrape_hvac(self, url: str) -> list[RawEvent]:
         """Scrape House Veterans' Affairs Committee news page."""
         events = []
-        
+
         try:
-            resp = requests.get(url, headers=self.headers, timeout=30)
-            resp.raise_for_status()
+            resp = self._fetch_page(url)
         except Exception as e:
             print(f"Error fetching HVAC page: {e}")
             return events
-            
+
         soup = BeautifulSoup(resp.text, "html.parser")
-        
+
         # Find news items - they're in article.newsblocker elements
         for item in soup.select("article.newsblocker"):
             try:
@@ -86,65 +98,66 @@ class CommitteePressAgent(OversightAgent):
                 title_link = item.select_one("h2.newsie-titler a")
                 if not title_link:
                     continue
-                    
+
                 title = title_link.get_text(strip=True)
                 link = title_link.get("href", "")
-                
+
                 # Build full URL
                 if not link.startswith("http"):
                     if link.startswith("/"):
                         link = f"https://veterans.house.gov{link}"
                     else:
                         link = f"https://veterans.house.gov/news/{link}"
-                
+
                 # Find date from time element with datetime attribute
                 date_elem = item.select_one("time[datetime]")
                 date_str = None
                 if date_elem:
                     # Prefer datetime attribute (YYYY-MM-DD format)
                     date_str = date_elem.get("datetime") or date_elem.get_text(strip=True)
-                
+
                 # Find summary/excerpt
                 summary_elem = item.select_one("div.newsbody p")
                 summary = summary_elem.get_text(strip=True)[:500] if summary_elem else ""
-                
-                events.append(RawEvent(
-                    url=link,
-                    title=title,
-                    raw_html=str(item),
-                    fetched_at=datetime.now(timezone.utc).isoformat(),
-                    excerpt=summary,
-                    metadata={
-                        "published": date_str,
-                        "committee": "hvac",
-                    },
-                ))
-            except Exception as e:
+
+                events.append(
+                    RawEvent(
+                        url=link,
+                        title=title,
+                        raw_html=str(item),
+                        fetched_at=datetime.now(UTC).isoformat(),
+                        excerpt=summary,
+                        metadata={
+                            "published": date_str,
+                            "committee": "hvac",
+                        },
+                    )
+                )
+            except Exception:
                 continue
-                
+
         return events
 
-    def _scrape_svac(self, url: str) -> List[RawEvent]:
+    def _scrape_svac(self, url: str) -> list[RawEvent]:
         """Scrape Senate Veterans' Affairs Committee homepage for news."""
         events = []
-        
+
         try:
-            resp = requests.get(url, headers=self.headers, timeout=30)
-            resp.raise_for_status()
+            resp = self._fetch_page(url)
         except Exception as e:
             print(f"Error fetching SVAC page: {e}")
             return events
-            
+
         soup = BeautifulSoup(resp.text, "html.parser")
-        
+
         # Senate page has news in different sections - look for news links
         # Based on the browser snapshot, there are links like "Chairman Moran..." etc.
         seen_urls = set()
-        
+
         for link in soup.select("a[href]"):
             href = link.get("href", "")
             title = link.get_text(strip=True)
-            
+
             # Filter to likely press release links
             if not href or not title:
                 continue
@@ -155,33 +168,37 @@ class CommitteePressAgent(OversightAgent):
                 continue
             if "Read more" in title:
                 continue
-                
+
             # Check if it looks like a news item (contains news-related keywords or is a press release path)
-            is_news = any(kw in href.lower() for kw in ["/press/", "/newsroom/", "/news/"]) or \
-                      any(kw in title.lower() for kw in ["introduces", "statement", "applauds", "urges", "leads", "announces"])
-            
+            is_news = any(kw in href.lower() for kw in ["/press/", "/newsroom/", "/news/"]) or any(
+                kw in title.lower()
+                for kw in ["introduces", "statement", "applauds", "urges", "leads", "announces"]
+            )
+
             if not is_news:
                 continue
-                
+
             if not href.startswith("http"):
                 href = f"https://www.veterans.senate.gov{href}"
-                
+
             if href in seen_urls:
                 continue
             seen_urls.add(href)
-            
-            events.append(RawEvent(
-                url=href,
-                title=title,
-                raw_html="",
-                fetched_at=datetime.now(timezone.utc).isoformat(),
-                excerpt="",
-                metadata={
-                    "published": None,
-                    "committee": "svac",
-                },
-            ))
-                
+
+            events.append(
+                RawEvent(
+                    url=href,
+                    title=title,
+                    raw_html="",
+                    fetched_at=datetime.now(UTC).isoformat(),
+                    excerpt="",
+                    metadata={
+                        "published": None,
+                        "committee": "svac",
+                    },
+                )
+            )
+
         return events
 
     def backfill(self, start: datetime, end: datetime) -> list[RawEvent]:
@@ -210,15 +227,15 @@ class CommitteePressAgent(OversightAgent):
             published = published.strip()
             # Try common date formats
             formats = [
-                "%Y-%m-%d",   # 2026-01-29 (from datetime attr)
+                "%Y-%m-%d",  # 2026-01-29 (from datetime attr)
                 "%B %d, %Y",  # January 29, 2026
                 "%b %d, %Y",  # Jan 29, 2026
-                "%m/%d/%Y",   # 01/29/2026
+                "%m/%d/%Y",  # 01/29/2026
             ]
             for fmt in formats:
                 try:
                     dt = datetime.strptime(published, fmt)
-                    dt = dt.replace(tzinfo=timezone.utc)
+                    dt = dt.replace(tzinfo=UTC)
                     pub_timestamp = dt.isoformat()
                     pub_precision = "date"
                     pub_source = "extracted"
@@ -230,13 +247,13 @@ class CommitteePressAgent(OversightAgent):
         # Senate URLs have format: /2026/1/title-slug
         if not pub_timestamp:
             url = raw.url
-            url_date_match = re.search(r'/(\d{4})/(\d{1,2})/', url)
+            url_date_match = re.search(r"/(\d{4})/(\d{1,2})/", url)
             if url_date_match:
                 year = int(url_date_match.group(1))
                 month = int(url_date_match.group(2))
                 if 2000 <= year <= 2100 and 1 <= month <= 12:
                     # Use first day of month as approximation
-                    dt = datetime(year, month, 1, tzinfo=timezone.utc)
+                    dt = datetime(year, month, 1, tzinfo=UTC)
                     pub_timestamp = dt.isoformat()
                     pub_precision = "month"
                     pub_source = "inferred_from_url"

@@ -12,17 +12,18 @@ Usage:
 import argparse
 import json
 import re
-import sys
 import ssl
+import sys
 import time
-import urllib.request
 import urllib.error
-from datetime import datetime, timezone
-from typing import Optional
+import urllib.request
+from datetime import UTC, datetime
 
 import certifi
 
 from . import db
+from .resilience.circuit_breaker import congress_api_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
 from .secrets import get_env_or_keychain
 
 # VA-related committee codes
@@ -39,14 +40,19 @@ def get_api_key() -> str:
     return get_env_or_keychain("CONGRESS_API_KEY", "congress-api")
 
 
+@with_timeout(45, name="congress_api")
+@circuit_breaker_sync(congress_api_cb)
 def _fetch_json(url: str, api_key: str) -> dict:
     """Fetch JSON from Congress.gov API."""
     sep = "&" if "?" in url else "?"
     full_url = f"{url}{sep}api_key={api_key}&format=json"
-    req = urllib.request.Request(full_url, headers={
-        "Accept": "application/json",
-        "User-Agent": "VA-Signals/1.0",
-    })
+    req = urllib.request.Request(
+        full_url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "VA-Signals/1.0",
+        },
+    )
     context = ssl.create_default_context(cafile=certifi.where())
     with urllib.request.urlopen(req, timeout=30, context=context) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -54,7 +60,7 @@ def _fetch_json(url: str, api_key: str) -> dict:
 
 def _utc_now_iso() -> str:
     """Return current UTC time in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def parse_bill_id(url_or_bill: str) -> tuple[int, str, int]:
@@ -76,12 +82,12 @@ def parse_bill_id(url_or_bill: str) -> tuple[int, str, int]:
         (119, 'hr', 1234)
     """
     # Try URL pattern: /bill/{congress}/{type}/{number}
-    url_match = re.search(r'/bill/(\d+)/([a-z]+)/(\d+)', url_or_bill.lower())
+    url_match = re.search(r"/bill/(\d+)/([a-z]+)/(\d+)", url_or_bill.lower())
     if url_match:
         return int(url_match.group(1)), url_match.group(2), int(url_match.group(3))
 
     # Try bill_id pattern: {type}-{congress}-{number}
-    bill_id_match = re.match(r'^([a-z]+)-(\d+)-(\d+)$', url_or_bill.lower())
+    bill_id_match = re.match(r"^([a-z]+)-(\d+)-(\d+)$", url_or_bill.lower())
     if bill_id_match:
         return int(bill_id_match.group(2)), bill_id_match.group(1), int(bill_id_match.group(3))
 
@@ -144,13 +150,15 @@ def fetch_committee_bills(committee_code: str, congress: int = 119, limit: int =
             if congress_num != congress:
                 continue
 
-            bills.append({
-                "congress": congress_num,
-                "bill_type": bill_type,
-                "number": number,
-                "title": b.get("title", ""),
-                "url": bill_url,
-            })
+            bills.append(
+                {
+                    "congress": congress_num,
+                    "bill_type": bill_type,
+                    "number": number,
+                    "title": b.get("title", ""),
+                    "url": bill_url,
+                }
+            )
 
         offset += 100
         if not data.get("pagination", {}).get("next"):
@@ -159,7 +167,7 @@ def fetch_committee_bills(committee_code: str, congress: int = 119, limit: int =
     return bills[:limit]
 
 
-def fetch_bill_details(congress: int, bill_type: str, number: int) -> Optional[dict]:
+def fetch_bill_details(congress: int, bill_type: str, number: int) -> dict | None:
     """
     Fetch detailed information for a specific bill.
 
@@ -210,11 +218,13 @@ def fetch_bill_details(congress: int, bill_type: str, number: int) -> Optional[d
     committees_data = bill.get("committees", {})
     if isinstance(committees_data, dict):
         for c in committees_data.get("item", []):
-            committees.append({
-                "name": c.get("name"),
-                "chamber": c.get("chamber"),
-                "systemCode": c.get("systemCode"),
-            })
+            committees.append(
+                {
+                    "name": c.get("name"),
+                    "chamber": c.get("chamber"),
+                    "systemCode": c.get("systemCode"),
+                }
+            )
 
     # Extract cosponsors count
     cosponsors_data = bill.get("cosponsors", {})
@@ -270,11 +280,13 @@ def fetch_bill_actions(congress: int, bill_type: str, number: int) -> list[dict]
             break
 
         for a in batch:
-            actions.append({
-                "action_date": a.get("actionDate"),
-                "action_text": a.get("text", ""),
-                "action_type": a.get("type"),
-            })
+            actions.append(
+                {
+                    "action_date": a.get("actionDate"),
+                    "action_text": a.get("text", ""),
+                    "action_type": a.get("type"),
+                }
+            )
 
         offset += 100
         if not data.get("pagination", {}).get("next"):
@@ -309,11 +321,13 @@ def fetch_bill_committees(congress: int, bill_type: str, bill_number: int) -> li
 
     committees = []
     for c in data.get("committees", []):
-        committees.append({
-            "name": c.get("name"),
-            "chamber": c.get("chamber"),
-            "type": c.get("type"),
-        })
+        committees.append(
+            {
+                "name": c.get("name"),
+                "chamber": c.get("chamber"),
+                "type": c.get("type"),
+            }
+        )
     return committees
 
 
@@ -367,8 +381,6 @@ def sync_va_bills(congress: int = 119, limit: int = 250, dry_run: bool = False) 
 
     print(f"\nProcessing {len(unique_bills)} unique bills...")
 
-    now = _utc_now_iso()
-
     for i, bill_meta in enumerate(unique_bills, 1):
         congress_num = bill_meta["congress"]
         bill_type = bill_meta["bill_type"]
@@ -416,9 +428,11 @@ def sync_va_bills(congress: int = 119, limit: int = 250, dry_run: bool = False) 
                 stats["new_bills"] += 1
             elif existing:
                 # Check if anything changed
-                if (existing.get("latest_action_date") != details.get("latest_action_date") or
-                    existing.get("latest_action_text") != details.get("latest_action_text") or
-                    existing.get("cosponsors_count") != details.get("cosponsors_count", 0)):
+                if (
+                    existing.get("latest_action_date") != details.get("latest_action_date")
+                    or existing.get("latest_action_text") != details.get("latest_action_text")
+                    or existing.get("cosponsors_count") != details.get("cosponsors_count", 0)
+                ):
                     stats["updated_bills"] += 1
         else:
             stats["new_bills"] += 1  # Assume all are new in dry-run
@@ -432,11 +446,14 @@ def sync_va_bills(congress: int = 119, limit: int = 250, dry_run: bool = False) 
 
         if actions and not dry_run:
             for action in actions:
-                is_new_action = db.insert_bill_action(bill_id, {
-                    "action_date": action["action_date"],
-                    "action_text": action["action_text"],
-                    "action_type": action.get("action_type"),
-                })
+                is_new_action = db.insert_bill_action(
+                    bill_id,
+                    {
+                        "action_date": action["action_date"],
+                        "action_text": action["action_text"],
+                        "action_type": action.get("action_type"),
+                    },
+                )
                 if is_new_action:
                     stats["new_actions"] += 1
         elif actions and dry_run:
@@ -459,7 +476,9 @@ def sync_va_bills(congress: int = 119, limit: int = 250, dry_run: bool = False) 
 def main():
     parser = argparse.ArgumentParser(description="Fetch VA bills from Congress.gov")
     parser.add_argument("--congress", type=int, default=119, help="Congress number (default: 119)")
-    parser.add_argument("--limit", type=int, default=250, help="Max bills per committee (default: 250)")
+    parser.add_argument(
+        "--limit", type=int, default=250, help="Max bills per committee (default: 250)"
+    )
     parser.add_argument("--dry-run", action="store_true", help="Fetch but don't store in DB")
     args = parser.parse_args()
 

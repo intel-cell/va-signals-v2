@@ -1,16 +1,18 @@
 """Court of Appeals for the Federal Circuit (CAFC) source agent."""
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Optional
 
 import feedparser
 import requests
 from bs4 import BeautifulSoup
 
-from .base import OversightAgent, RawEvent, TimestampResult
+from src.resilience.circuit_breaker import oversight_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
+from .base import OversightAgent, RawEvent, TimestampResult
 
 # RSS feed for opinions and orders
 CAFC_RSS_URL = "https://www.cafc.uscourts.gov/category/opinion-order/feed/"
@@ -49,7 +51,21 @@ class CAFCAgent(OversightAgent):
         # CAVC = Court of Appeals for Veterans Claims - always VA related
         self.va_origins = ["CAVC"]
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    @with_timeout(45, name="cafc_rss")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_feed(self, url: str):
+        """Fetch and parse an RSS feed with resilience protection."""
+        return feedparser.parse(url)
+
+    @with_timeout(45, name="cafc_html")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_page(self, url: str) -> requests.Response:
+        """Fetch an HTML page with resilience protection."""
+        resp = requests.get(url, headers=self.headers, timeout=30)
+        resp.raise_for_status()
+        return resp
+
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """
         Fetch new CAFC decisions related to VA.
 
@@ -75,9 +91,10 @@ class CAFCAgent(OversightAgent):
 
         return events
 
-    def _fetch_from_rss(self, since: Optional[datetime]) -> list[RawEvent]:
+    def _fetch_from_rss(self, since: datetime | None) -> list[RawEvent]:
         """Fetch opinions from RSS feed."""
-        feed = feedparser.parse(self.rss_url)
+        external_api_limiter.allow()
+        feed = self._fetch_feed(self.rss_url)
         events = []
 
         if feed.bozo and not feed.entries:
@@ -117,7 +134,7 @@ class CAFCAgent(OversightAgent):
             # Check if precedential
             metadata["precedential"] = "precedential" in title.lower()
 
-            fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             events.append(
                 RawEvent(
@@ -132,15 +149,15 @@ class CAFCAgent(OversightAgent):
 
         return events
 
-    def _fetch_from_html(self, since: Optional[datetime]) -> list[RawEvent]:
+    def _fetch_from_html(self, since: datetime | None) -> list[RawEvent]:
         """Scrape opinions from HTML page."""
         events = []
 
         try:
-            resp = requests.get(self.opinions_url, headers=self.headers, timeout=30)
-            resp.raise_for_status()
+            external_api_limiter.allow()
+            resp = self._fetch_page(self.opinions_url)
         except Exception as e:
-            raise ValueError(f"Failed to fetch opinions page: {e}")
+            raise ValueError(f"Failed to fetch opinions page: {e}") from e
 
         soup = BeautifulSoup(resp.text, "html.parser")
 
@@ -197,7 +214,7 @@ class CAFCAgent(OversightAgent):
                     "precedential": status.lower() == "precedential",
                 }
 
-                fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
                 events.append(
                     RawEvent(
@@ -215,7 +232,7 @@ class CAFCAgent(OversightAgent):
 
         return events
 
-    def _scrape_opinion_links(self, soup: BeautifulSoup, since: Optional[datetime]) -> list[RawEvent]:
+    def _scrape_opinion_links(self, soup: BeautifulSoup, since: datetime | None) -> list[RawEvent]:
         """Fallback: scrape opinion links from page."""
         events = []
         seen_urls = set()
@@ -250,8 +267,12 @@ class CAFCAgent(OversightAgent):
             pub_str = None
             if date_match:
                 try:
-                    month, day, year = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
-                    pub_date = datetime(year, month, day, tzinfo=timezone.utc)
+                    month, day, year = (
+                        int(date_match.group(1)),
+                        int(date_match.group(2)),
+                        int(date_match.group(3)),
+                    )
+                    pub_date = datetime(year, month, day, tzinfo=UTC)
                     pub_str = pub_date.strftime("%m/%d/%Y")
                 except ValueError:
                     pass
@@ -268,7 +289,7 @@ class CAFCAgent(OversightAgent):
                 "case_number": case_number,
             }
 
-            fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             events.append(
                 RawEvent(
@@ -298,7 +319,7 @@ class CAFCAgent(OversightAgent):
 
         return False
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
+    def _parse_date(self, date_str: str) -> datetime | None:
         """Parse date string to datetime."""
         if not date_str:
             return None
@@ -313,7 +334,7 @@ class CAFCAgent(OversightAgent):
         for fmt in formats:
             try:
                 dt = datetime.strptime(date_str.strip(), fmt)
-                return dt.replace(tzinfo=timezone.utc)
+                return dt.replace(tzinfo=UTC)
             except ValueError:
                 continue
 
@@ -365,8 +386,12 @@ class CAFCAgent(OversightAgent):
             date_match = CAFC_DATE_PATTERN.search(raw.url)
             if date_match:
                 try:
-                    month, day, year = int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3))
-                    pub_dt = datetime(year, month, day, tzinfo=timezone.utc)
+                    month, day, year = (
+                        int(date_match.group(1)),
+                        int(date_match.group(2)),
+                        int(date_match.group(3)),
+                    )
+                    pub_dt = datetime(year, month, day, tzinfo=UTC)
                     pub_timestamp = pub_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     pub_precision = "date"
                     pub_source = "inferred_from_url"

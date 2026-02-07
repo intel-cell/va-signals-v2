@@ -10,16 +10,16 @@ Tracks information collection requests that VA submits to OMB for approval.
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 import requests
 from bs4 import BeautifulSoup
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-}
+from .resilience.circuit_breaker import reginfo_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
+
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
 # RegInfo PRA Search endpoint
 REGINFO_SEARCH_URL = "https://www.reginfo.gov/public/do/PRASearch"
@@ -47,23 +47,23 @@ def _generate_doc_id(icr_ref: str, omb_control: str) -> str:
     return f"pra-{hashlib.sha256(str(datetime.now()).encode()).hexdigest()[:12]}"
 
 
-def _parse_date(date_str: str) -> Optional[str]:
+def _parse_date(date_str: str) -> str | None:
     """Parse date string to ISO format."""
     if not date_str:
         return None
 
     date_str = date_str.strip()
     formats = [
-        "%m/%d/%Y",       # 01/29/2026
-        "%Y-%m-%d",       # 2026-01-29
-        "%B %d, %Y",      # January 29, 2026
-        "%b %d, %Y",      # Jan 29, 2026
+        "%m/%d/%Y",  # 01/29/2026
+        "%Y-%m-%d",  # 2026-01-29
+        "%B %d, %Y",  # January 29, 2026
+        "%b %d, %Y",  # Jan 29, 2026
     ]
 
     for fmt in formats:
         try:
             dt = datetime.strptime(date_str, fmt)
-            return dt.replace(tzinfo=timezone.utc).isoformat()
+            return dt.replace(tzinfo=UTC).isoformat()
         except ValueError:
             continue
 
@@ -114,11 +114,17 @@ def fetch_va_pra_submissions(
         "sortOrder": "DESC",  # Most recent first
     }
 
+    @with_timeout(45, name="reginfo")
+    @circuit_breaker_sync(reginfo_cb)
+    def _get_reginfo_page(url):
+        resp = requests.get(url, headers=HEADERS, timeout=30)
+        resp.raise_for_status()
+        return resp
+
     try:
         # RegInfo uses a session-based form, try direct URL with params
         search_url = f"{REGINFO_SEARCH_URL}?{urlencode(params)}"
-        resp = requests.get(search_url, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
+        resp = _get_reginfo_page(search_url)
     except requests.RequestException as e:
         print(f"Error fetching RegInfo PRA page: {e}")
         return docs
@@ -150,7 +156,7 @@ def fetch_va_pra_submissions(
                 status = ""
                 received_date = ""
 
-                for i, cell in enumerate(cells):
+                for _i, cell in enumerate(cells):
                     cell_text = cell.get_text(strip=True)
 
                     # Try to identify column by content pattern
@@ -194,12 +200,14 @@ def fetch_va_pra_submissions(
                     "source_url": source_url,
                     "body_text": None,
                     "content_hash": _compute_hash(f"{icr_ref}{omb_control}{title}"),
-                    "metadata_json": json.dumps({
-                        "icr_reference": icr_ref,
-                        "omb_control_number": omb_control,
-                        "status": status,
-                        "agency": "Department of Veterans Affairs",
-                    }),
+                    "metadata_json": json.dumps(
+                        {
+                            "icr_reference": icr_ref,
+                            "omb_control_number": omb_control,
+                            "status": status,
+                            "agency": "Department of Veterans Affairs",
+                        }
+                    ),
                 }
                 docs.append(doc)
 
@@ -249,10 +257,12 @@ def _extract_from_links(soup: BeautifulSoup, max_items: int) -> list[dict]:
             "source_url": href,
             "body_text": None,
             "content_hash": _compute_hash(href),
-            "metadata_json": json.dumps({
-                "icr_reference": icr_ref,
-                "agency": "Department of Veterans Affairs",
-            }),
+            "metadata_json": json.dumps(
+                {
+                    "icr_reference": icr_ref,
+                    "agency": "Department of Veterans Affairs",
+                }
+            ),
         }
         docs.append(doc)
 

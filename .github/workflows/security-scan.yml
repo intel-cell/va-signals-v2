@@ -48,7 +48,7 @@ jobs:
           cmd_options: '-a -j'
           allow_issue_writing: true
           issue_title: 'ZAP Baseline Scan Report'
-          fail_action: false
+          fail_action: true
           artifact_name: 'zap-baseline-report'
 
       - name: OWASP ZAP Full Scan
@@ -60,7 +60,7 @@ jobs:
           cmd_options: '-a -j'
           allow_issue_writing: true
           issue_title: 'ZAP Full Scan Report'
-          fail_action: false
+          fail_action: true
           artifact_name: 'zap-full-report'
 
       - name: OWASP ZAP API Scan
@@ -72,7 +72,7 @@ jobs:
           cmd_options: '-a -j'
           allow_issue_writing: true
           issue_title: 'ZAP API Scan Report'
-          fail_action: false
+          fail_action: true
           artifact_name: 'zap-api-report'
 
       - name: Upload ZAP Report
@@ -118,12 +118,10 @@ jobs:
         run: |
           pip install -r requirements.txt -r requirements.dashboard.txt
           safety check --full-report --output json > safety-report.json || true
-        continue-on-error: true
 
       - name: Run pip-audit
         run: |
           pip-audit --format json --output pip-audit-report.json || true
-        continue-on-error: true
 
       - name: Upload dependency reports
         uses: actions/upload-artifact@v4
@@ -152,18 +150,19 @@ jobs:
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
           extra_args: --only-verified
-        continue-on-error: true
 
       - name: Gitleaks Scan
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
 
   summarize:
     needs: [zap-scan, dependency-check, secrets-scan]
     runs-on: ubuntu-latest
     if: always()
+    permissions:
+      contents: read
+      issues: write
 
     steps:
       - name: Summary
@@ -176,4 +175,27 @@ jobs:
           echo "| Dependency Check | ${{ needs.dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Secrets Scan | ${{ needs.secrets-scan.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📊 View detailed reports in the Artifacts section" >> $GITHUB_STEP_SUMMARY
+          echo "View detailed reports in the Artifacts section" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify failure
+        if: contains(needs.*.result, 'failure')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const results = {
+              'OWASP ZAP': '${{ needs.zap-scan.result }}',
+              'Dependency Check': '${{ needs.dependency-check.result }}',
+              'Secrets Scan': '${{ needs.secrets-scan.result }}'
+            };
+            const failed = Object.entries(results)
+              .filter(([_, v]) => v === 'failure')
+              .map(([k]) => `- ${k}`)
+              .join('\n');
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Security] Scan failure - ${new Date().toISOString().split('T')[0]}`,
+              body: `## Security Scan Failure\n\n**Run:** ${runUrl}\n\n### Failed scans:\n${failed}\n\nReview the scan results and address findings.`,
+              labels: ['security', 'ci-failure']
+            });

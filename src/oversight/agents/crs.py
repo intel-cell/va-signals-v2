@@ -1,13 +1,15 @@
 """Congressional Research Service (CRS) source agent."""
 
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import feedparser
 
-from .base import OversightAgent, RawEvent, TimestampResult
+from src.resilience.circuit_breaker import oversight_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
+from .base import OversightAgent, RawEvent, TimestampResult
 
 CRS_RSS_URL = "https://www.everycrsreport.com/rss.xml"
 CRS_REPORT_PATTERN = re.compile(r"(R\d{5}|RL\d{5}|RS\d{5}|IF\d{5})", re.IGNORECASE)
@@ -34,14 +36,21 @@ class CRSAgent(OversightAgent):
         self.rss_url = rss_url
         self.va_keywords = VA_KEYWORDS
 
+    @with_timeout(45, name="crs_rss")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_feed(self):
+        """Fetch and parse the CRS RSS feed with resilience protection."""
+        return feedparser.parse(self.rss_url)
+
     def _is_va_related(self, title: str) -> bool:
         """Check if report title is VA-related."""
         title_lower = title.lower()
         return any(kw.lower() in title_lower for kw in self.va_keywords)
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """Fetch new CRS reports from RSS feed."""
-        feed = feedparser.parse(self.rss_url)
+        external_api_limiter.allow()
+        feed = self._fetch_feed()
         events = []
 
         for entry in feed.entries:
@@ -53,12 +62,12 @@ class CRSAgent(OversightAgent):
 
             pub_date = None
             if hasattr(entry, "published_parsed") and entry.published_parsed:
-                pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+                pub_date = datetime(*entry.published_parsed[:6], tzinfo=UTC)
 
             if since and pub_date and pub_date < since:
                 continue
 
-            fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             events.append(
                 RawEvent(
@@ -90,6 +99,7 @@ class CRSAgent(OversightAgent):
         if published:
             try:
                 from email.utils import parsedate_to_datetime
+
                 dt = parsedate_to_datetime(published)
                 pub_timestamp = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                 pub_precision = "date"

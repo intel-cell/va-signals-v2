@@ -6,17 +6,24 @@ Provides:
 - Automatic retry with exponential backoff
 - Rate limiting
 - Bulkhead isolation
+- Sync-friendly wiring helpers for fetch modules
 """
 
-from .circuit_breaker import CircuitBreaker, CircuitState, CircuitBreakerOpen
-from .retry import retry_with_backoff, RetryConfig
+from .circuit_breaker import CircuitBreaker, CircuitBreakerOpen, CircuitState
 from .rate_limiter import RateLimiter, RateLimitExceeded
+from .retry import RetryConfig, retry_with_backoff
 from .staleness_monitor import (
-    StaleSourceAlert,
     SourceExpectation,
+    StaleSourceAlert,
     check_all_sources,
     check_source,
     load_expectations,
+)
+from .wiring import (
+    GLOBAL_HTTP_TIMEOUT,
+    FetchTimeout,
+    circuit_breaker_sync,
+    with_timeout,
 )
 
 __all__ = [
@@ -32,4 +39,8 @@ __all__ = [
     "check_all_sources",
     "check_source",
     "load_expectations",
+    "circuit_breaker_sync",
+    "with_timeout",
+    "FetchTimeout",
+    "GLOBAL_HTTP_TIMEOUT",
 ]

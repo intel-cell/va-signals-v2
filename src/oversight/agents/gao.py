@@ -1,14 +1,16 @@
 """GAO (Government Accountability Office) source agent."""
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
-from typing import Optional
 
 import feedparser
 
-from .base import OversightAgent, RawEvent, TimestampResult
+from src.resilience.circuit_breaker import oversight_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
+from .base import OversightAgent, RawEvent, TimestampResult
 
 GAO_RSS_URL = "https://www.gao.gov/rss/reports.xml"
 GAO_REPORT_PATTERN = re.compile(r"gao-(\d{2})-(\d+)", re.IGNORECASE)
@@ -22,9 +24,16 @@ class GAOAgent(OversightAgent):
     def __init__(self, rss_url: str = GAO_RSS_URL):
         self.rss_url = rss_url
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    @with_timeout(45, name="gao_rss")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_feed(self):
+        """Fetch and parse the GAO RSS feed with resilience protection."""
+        return feedparser.parse(self.rss_url)
+
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """Fetch new GAO reports from RSS feed."""
-        feed = feedparser.parse(self.rss_url)
+        external_api_limiter.allow()
+        feed = self._fetch_feed()
         events = []
 
         for entry in feed.entries:
@@ -40,7 +49,7 @@ class GAOAgent(OversightAgent):
             if since and pub_date and pub_date < since:
                 continue
 
-            fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             events.append(
                 RawEvent(
@@ -48,7 +57,9 @@ class GAOAgent(OversightAgent):
                     title=entry.title,
                     raw_html=getattr(entry, "summary", ""),
                     fetched_at=fetched_at,
-                    excerpt=getattr(entry, "summary", "")[:500] if hasattr(entry, "summary") else None,
+                    excerpt=getattr(entry, "summary", "")[:500]
+                    if hasattr(entry, "summary")
+                    else None,
                     metadata={
                         "published": getattr(entry, "published", None),
                     },

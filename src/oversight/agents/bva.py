@@ -5,14 +5,16 @@ and parses individual decision text files from va.gov/vetapp/.
 """
 
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import requests
 from bs4 import BeautifulSoup
 
-from .base import OversightAgent, RawEvent, TimestampResult
+from src.resilience.circuit_breaker import oversight_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
+from .base import OversightAgent, RawEvent, TimestampResult
 
 # search.usa.gov BVA decisions affiliate
 BVA_SEARCH_URL = "https://search.usa.gov/search"
@@ -22,19 +24,13 @@ BVA_AFFILIATE = "bvadecisions"
 BVA_CITATION_PATTERN = re.compile(r"([A-Z]?\d{8,9})")
 
 # Pattern for extracting decision date from text file header
-BVA_DATE_PATTERN = re.compile(
-    r"Decision\s+Date:\s*(\d{2}/\d{2}/\d{2})", re.IGNORECASE
-)
+BVA_DATE_PATTERN = re.compile(r"Decision\s+Date:\s*(\d{2}/\d{2}/\d{2})", re.IGNORECASE)
 
 # Pattern for docket number
-BVA_DOCKET_PATTERN = re.compile(
-    r"DOCKET\s+NO\.\s*([\d\-]+)", re.IGNORECASE
-)
+BVA_DOCKET_PATTERN = re.compile(r"DOCKET\s+NO\.\s*([\d\-]+)", re.IGNORECASE)
 
 # Pattern for full date in body (e.g., "September 30, 2025")
-BVA_FULL_DATE_PATTERN = re.compile(
-    r"DATE:\s+(\w+ \d{1,2},\s*\d{4})", re.IGNORECASE
-)
+BVA_FULL_DATE_PATTERN = re.compile(r"DATE:\s+(\w+ \d{1,2},\s*\d{4})", re.IGNORECASE)
 
 # Outcome keywords for classification
 BVA_OUTCOMES = {
@@ -58,11 +54,18 @@ class BVAAgent(OversightAgent):
         self.search_url = search_url
         self.affiliate = affiliate
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
         }
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    @with_timeout(45, name="bva_search")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_page(self, url: str, params: dict = None) -> requests.Response:
+        """Fetch a page with resilience protection."""
+        resp = requests.get(url, params=params, headers=self.headers, timeout=30)
+        resp.raise_for_status()
+        return resp
+
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """
         Fetch recent BVA decisions via search.usa.gov.
 
@@ -90,24 +93,22 @@ class BVAAgent(OversightAgent):
     def _search_decisions(
         self,
         query: str,
-        since: Optional[datetime],
+        since: datetime | None,
     ) -> list[RawEvent]:
         """Search for BVA decisions via search.usa.gov."""
         events = []
 
         try:
-            resp = requests.get(
+            external_api_limiter.allow()
+            resp = self._fetch_page(
                 self.search_url,
                 params={
                     "affiliate": self.affiliate,
                     "query": query,
                 },
-                headers=self.headers,
-                timeout=30,
             )
-            resp.raise_for_status()
         except Exception as e:
-            raise ValueError(f"BVA search failed: {e}")
+            raise ValueError(f"BVA search failed: {e}") from e
 
         soup = BeautifulSoup(resp.text, "html.parser")
         results = soup.select(".content-block-item.result")
@@ -152,9 +153,7 @@ class BVAAgent(OversightAgent):
                 except ValueError:
                     pass
 
-            fetched_at = datetime.now(timezone.utc).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
+            fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
             events.append(
                 RawEvent(
@@ -182,9 +181,7 @@ class BVAAgent(OversightAgent):
             ts = self.extract_timestamps(event)
             if ts.pub_timestamp:
                 try:
-                    pub_dt = datetime.fromisoformat(
-                        ts.pub_timestamp.replace("Z", "+00:00")
-                    )
+                    pub_dt = datetime.fromisoformat(ts.pub_timestamp.replace("Z", "+00:00"))
                     if start <= pub_dt <= end:
                         filtered.append(event)
                 except (ValueError, TypeError):
@@ -196,7 +193,7 @@ class BVAAgent(OversightAgent):
 
         return filtered
 
-    def fetch_decision_detail(self, url: str) -> Optional[dict]:
+    def fetch_decision_detail(self, url: str) -> dict | None:
         """
         Fetch and parse a BVA decision text file for detailed metadata.
 
@@ -204,8 +201,8 @@ class BVAAgent(OversightAgent):
         decision_type, issues, full_text
         """
         try:
-            resp = requests.get(url, headers=self.headers, timeout=30)
-            resp.raise_for_status()
+            external_api_limiter.allow()
+            resp = self._fetch_page(url)
         except Exception:
             return None
 
@@ -213,9 +210,7 @@ class BVAAgent(OversightAgent):
         detail = {}
 
         # Extract citation number
-        cit_match = re.search(
-            r"Citation\s+Nr:\s*([A-Z]?\d+)", text, re.IGNORECASE
-        )
+        cit_match = re.search(r"Citation\s+Nr:\s*([A-Z]?\d+)", text, re.IGNORECASE)
         if cit_match:
             detail["citation_nr"] = cit_match.group(1)
 
@@ -280,7 +275,7 @@ class BVAAgent(OversightAgent):
             year = raw.metadata.get("year")
             if year:
                 try:
-                    pub_dt = datetime(int(year), 1, 1, tzinfo=timezone.utc)
+                    pub_dt = datetime(int(year), 1, 1, tzinfo=UTC)
                     pub_timestamp = pub_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                     pub_precision = "month"
                     pub_source = "inferred"
@@ -312,7 +307,7 @@ class BVAAgent(OversightAgent):
 
         return refs
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
+    def _parse_date(self, date_str: str) -> datetime | None:
         """Parse various BVA date formats to datetime."""
         if not date_str:
             return None
@@ -328,7 +323,7 @@ class BVAAgent(OversightAgent):
         for fmt in formats:
             try:
                 dt = datetime.strptime(date_str.strip(), fmt)
-                return dt.replace(tzinfo=timezone.utc)
+                return dt.replace(tzinfo=UTC)
             except ValueError:
                 continue
 

@@ -5,43 +5,45 @@ FastAPI backend providing endpoints for monitoring source runs,
 document tracking, and system health.
 """
 
-import os
 import asyncio
-import time
 import logging
+import os
 import sys
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.base import BaseHTTPMiddleware
 from pythonjsonlogger import jsonlogger
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from .battlefield.api import router as battlefield_router
 from .auth.api import router as auth_router
 from .auth.audit import AuditMiddleware
-from .evidence.dashboard_routes import router as evidence_router
+from .auth.middleware import AuthMiddleware
+from .battlefield.api import router as battlefield_router
 from .ceo_brief.api import router as ceo_brief_router
+from .evidence.dashboard_routes import router as evidence_router
 from .ml.api import router as ml_router
-from .trends.api import router as trends_router
-from .websocket import websocket_router, ws_manager
+from .routers.agenda_drift import router as agenda_drift_router
+from .routers.compound import router as compound_router
+from .routers.health import DeadManResponse, PipelineStaleness  # noqa: F401 - re-exported for tests
 
 # New sub-routers extracted from this file
 from .routers.health import router as health_router
-from .routers.health import PipelineStaleness, DeadManResponse  # noqa: F401 - re-exported for tests
-from .routers.pipeline import router as pipeline_router
-from .routers.summaries import router as summaries_router
-from .routers.reports import router as reports_router
-from .routers.agenda_drift import router as agenda_drift_router
 from .routers.legislative import router as legislative_router
-from .routers.state import router as state_router
 from .routers.oversight import router as oversight_router
-from .routers.compound import router as compound_router
+from .routers.pipeline import router as pipeline_router
+from .routers.reports import router as reports_router
+from .routers.state import router as state_router
+from .routers.summaries import router as summaries_router
+from .trends.api import router as trends_router
+from .websocket import websocket_router
 
 # Prometheus metrics (optional - graceful fallback if not installed)
 try:
     from prometheus_fastapi_instrumentator import Instrumentator
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -54,8 +56,10 @@ STATIC_DIR = ROOT / "src" / "dashboard" / "static"
 
 # CORS: environment-driven allowed origins (comma-separated)
 ALLOWED_ORIGINS = [
-    o.strip() for o in
-    os.environ.get("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080").split(",")
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:8080").split(
+        ","
+    )
     if o.strip()
 ]
 
@@ -64,13 +68,14 @@ logger = logging.getLogger()
 logHandler = logging.StreamHandler(sys.stdout)
 formatter = jsonlogger.JsonFormatter(
     "%(asctime)s %(levelname)s %(name)s %(message)s",
-    rename_fields={"asctime": "timestamp", "levelname": "severity"}
+    rename_fields={"asctime": "timestamp", "levelname": "severity"},
 )
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 logger.setLevel(logging.INFO)
 
 # --- Middleware ---
+
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -94,6 +99,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         logger.info("request_processed", extra=log_data)
         return response
+
 
 # --- FastAPI App ---
 
@@ -154,7 +160,6 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(AuditMiddleware)
 
 # 2. Firebase/Session Auth (Reads cookies + Bearer tokens, sets request.state.auth_context)
-from .auth.middleware import AuthMiddleware
 app.add_middleware(AuthMiddleware, require_auth=False)
 
 # 1. CORS (Innermost - handles preflight)
@@ -162,8 +167,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
 )
 
 # --- Include External Routers ---
@@ -217,12 +222,13 @@ if STATIC_DIR.exists():
 
 # --- Background Tasks ---
 
+
 async def log_metrics_snapshot():
     """Periodically log system metrics for value tracking."""
+    from .routers._helpers import utc_now_iso
+    from .routers.oversight import get_oversight_stats_endpoint
     from .routers.pipeline import get_runs_stats
     from .routers.state import get_state_stats_endpoint
-    from .routers.oversight import get_oversight_stats_endpoint
-    from .routers._helpers import utc_now_iso
 
     while True:
         try:
@@ -249,7 +255,7 @@ async def log_metrics_snapshot():
                     "total_events": oversight_stats.total_events,
                     "escalations": oversight_stats.escalations,
                     "deviations": oversight_stats.deviations,
-                }
+                },
             }
 
             logger.info("metrics_snapshot", extra=metrics_data)
@@ -258,6 +264,7 @@ async def log_metrics_snapshot():
             logger.error(f"Error in metrics snapshot: {str(e)}")
 
         await asyncio.sleep(3600)
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -268,4 +275,5 @@ async def startup_event():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

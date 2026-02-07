@@ -12,16 +12,17 @@ Usage:
 
 import json
 import logging
-import re
 import ssl
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import certifi
+
+from .resilience.circuit_breaker import lda_gov_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +42,26 @@ MONTHLY_TYPES = ["MM", "MT", "MA"]
 
 # VA keywords for relevance scoring
 VA_KEYWORDS = [
-    "veterans affairs", "department of veterans affairs", "va ",
-    "vba", "vha", "nca", "veterans benefits",
-    "veterans health", "title 38", "gi bill",
-    "pact act", "veteran", "service-connected",
+    "veterans affairs",
+    "department of veterans affairs",
+    "va ",
+    "vba",
+    "vha",
+    "nca",
+    "veterans benefits",
+    "veterans health",
+    "title 38",
+    "gi bill",
+    "pact act",
+    "veteran",
+    "service-connected",
 ]
 
 VA_COVERED_POSITION_KEYWORDS = [
-    "veterans affairs", "va ", "vba", "vha",
+    "veterans affairs",
+    "va ",
+    "vba",
+    "vha",
     "veterans benefits administration",
     "veterans health administration",
     "national cemetery administration",
@@ -64,7 +77,9 @@ def _rate_limit():
     _last_request_time = time.time()
 
 
-def _fetch_json(url: str, params: Optional[dict] = None) -> dict:
+@with_timeout(45, name="lda_gov")
+@circuit_breaker_sync(lda_gov_cb)
+def _fetch_json(url: str, params: dict | None = None) -> dict:
     """
     Fetch JSON from LDA.gov API with rate limiting and pagination support.
 
@@ -85,10 +100,13 @@ def _fetch_json(url: str, params: Optional[dict] = None) -> dict:
 
     _rate_limit()
 
-    req = urllib.request.Request(url, headers={
-        "Accept": "application/json",
-        "User-Agent": "VA-Signals/2.0 (veterans-policy-monitor)",
-    })
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "VA-Signals/2.0 (veterans-policy-monitor)",
+        },
+    )
     context = ssl.create_default_context(cafile=certifi.where())
 
     try:
@@ -140,7 +158,7 @@ def _fetch_all_pages(url: str, params: dict, max_results: int = 500) -> list[dic
 
 def fetch_filings_since(
     since_date: str,
-    filing_types: Optional[list[str]] = None,
+    filing_types: list[str] | None = None,
     govt_entity_id: int = VA_ENTITY_ID,
     max_results: int = 500,
 ) -> list[dict]:
@@ -225,7 +243,7 @@ def _normalize_filing(raw: dict) -> dict:
         if specific:
             specific_issues.append(specific)
 
-        for entity in (activity.get("government_entities", []) or []):
+        for entity in activity.get("government_entities", []) or []:
             entity_name = entity.get("name", "")
             if entity_name:
                 govt_entities.append(entity_name)
@@ -234,7 +252,7 @@ def _normalize_filing(raw: dict) -> dict:
     lobbyists = []
     covered_positions = []
     for activity in lobbying_activities:
-        for lob in (activity.get("lobbyists", []) or []):
+        for lob in activity.get("lobbyists", []) or []:
             lobbyist_info = {
                 "name": f"{lob.get('first_name', '')} {lob.get('last_name', '')}".strip(),
                 "covered_position": lob.get("covered_official_position", ""),
@@ -258,7 +276,7 @@ def _normalize_filing(raw: dict) -> dict:
     # Determine when posted
     dt_posted = raw.get("dt_posted", "") or raw.get("filing_date", "")
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     filing = {
         "filing_uuid": filing_uuid,
@@ -333,8 +351,7 @@ def _compute_va_relevance(
 
     # Check for direct VA entity targeting (HIGH)
     va_entity_match = any(
-        "veterans" in e.lower() or "va " in e.lower() + " "
-        for e in govt_entities
+        "veterans" in e.lower() or "va " in e.lower() + " " for e in govt_entities
     )
     if va_entity_match:
         reasons.append("va_entity_targeted")
@@ -372,70 +389,87 @@ def evaluate_alerts(filing: dict) -> list[dict]:
         List of alert dicts ready for insert_lda_alert()
     """
     alerts = []
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     filing_type = filing.get("filing_type", "")
     relevance = filing.get("va_relevance_score", "LOW")
 
     # New registration targeting VA
     if filing_type in REGISTRATION_TYPES and relevance in ("HIGH", "CRITICAL"):
-        alerts.append({
-            "filing_uuid": filing["filing_uuid"],
-            "alert_type": "new_registration",
-            "severity": "HIGH",
-            "summary": f"New lobbyist registration: {filing['registrant_name']} for {filing['client_name']}",
-            "details_json": json.dumps({
-                "registrant": filing["registrant_name"],
-                "client": filing["client_name"],
-                "relevance": relevance,
-            }),
-            "created_at": now_iso,
-        })
+        alerts.append(
+            {
+                "filing_uuid": filing["filing_uuid"],
+                "alert_type": "new_registration",
+                "severity": "HIGH",
+                "summary": f"New lobbyist registration: {filing['registrant_name']} for {filing['client_name']}",
+                "details_json": json.dumps(
+                    {
+                        "registrant": filing["registrant_name"],
+                        "client": filing["client_name"],
+                        "relevance": relevance,
+                    }
+                ),
+                "created_at": now_iso,
+            }
+        )
 
     # Foreign entity + VA
     if filing.get("foreign_entity_listed") and relevance in ("HIGH", "CRITICAL"):
-        alerts.append({
-            "filing_uuid": filing["filing_uuid"],
-            "alert_type": "foreign_entity",
-            "severity": "HIGH",
-            "summary": f"Foreign entity lobbying VA: {filing['registrant_name']} for {filing['client_name']}",
-            "details_json": json.dumps({
-                "foreign_entities": filing.get("foreign_entities_json"),
-                "registrant": filing["registrant_name"],
-            }),
-            "created_at": now_iso,
-        })
+        alerts.append(
+            {
+                "filing_uuid": filing["filing_uuid"],
+                "alert_type": "foreign_entity",
+                "severity": "HIGH",
+                "summary": f"Foreign entity lobbying VA: {filing['registrant_name']} for {filing['client_name']}",
+                "details_json": json.dumps(
+                    {
+                        "foreign_entities": filing.get("foreign_entities_json"),
+                        "registrant": filing["registrant_name"],
+                    }
+                ),
+                "created_at": now_iso,
+            }
+        )
 
     # Revolving door (covered position at VA)
     if filing.get("covered_positions_json"):
         positions = json.loads(filing["covered_positions_json"])
         va_positions = [
-            p for p in positions
-            if any(kw in (p.get("covered_position", "").lower()) for kw in VA_COVERED_POSITION_KEYWORDS)
+            p
+            for p in positions
+            if any(
+                kw in (p.get("covered_position", "").lower()) for kw in VA_COVERED_POSITION_KEYWORDS
+            )
         ]
         if va_positions:
-            alerts.append({
-                "filing_uuid": filing["filing_uuid"],
-                "alert_type": "revolving_door",
-                "severity": "HIGH",
-                "summary": f"Former VA official lobbying: {va_positions[0].get('name', 'unknown')}",
-                "details_json": json.dumps({"va_positions": va_positions}),
-                "created_at": now_iso,
-            })
+            alerts.append(
+                {
+                    "filing_uuid": filing["filing_uuid"],
+                    "alert_type": "revolving_door",
+                    "severity": "HIGH",
+                    "summary": f"Former VA official lobbying: {va_positions[0].get('name', 'unknown')}",
+                    "details_json": json.dumps({"va_positions": va_positions}),
+                    "created_at": now_iso,
+                }
+            )
 
     # Amendment on tracked filing
     if filing_type in AMENDMENT_TYPES and relevance in ("MEDIUM", "HIGH", "CRITICAL"):
-        alerts.append({
-            "filing_uuid": filing["filing_uuid"],
-            "alert_type": "amendment",
-            "severity": "MEDIUM",
-            "summary": f"Amendment filed: {filing['registrant_name']} ({filing_type})",
-            "details_json": json.dumps({
-                "filing_type": filing_type,
-                "registrant": filing["registrant_name"],
-                "client": filing["client_name"],
-            }),
-            "created_at": now_iso,
-        })
+        alerts.append(
+            {
+                "filing_uuid": filing["filing_uuid"],
+                "alert_type": "amendment",
+                "severity": "MEDIUM",
+                "summary": f"Amendment filed: {filing['registrant_name']} ({filing_type})",
+                "details_json": json.dumps(
+                    {
+                        "filing_type": filing_type,
+                        "registrant": filing["registrant_name"],
+                        "client": filing["client_name"],
+                    }
+                ),
+                "created_at": now_iso,
+            }
+        )
 
     return alerts

@@ -13,16 +13,17 @@ Usage:
 
 import argparse
 import json
-import sys
 import ssl
-import urllib.request
+import sys
 import urllib.error
-from datetime import datetime, timezone
-from typing import Optional
+import urllib.request
+from datetime import UTC, datetime
 
 import certifi
 
 from . import db
+from .resilience.circuit_breaker import congress_api_cb
+from .resilience.wiring import circuit_breaker_sync, with_timeout
 from .secrets import get_env_or_keychain
 
 # Congress.gov API base URL
@@ -68,14 +69,19 @@ def get_api_key() -> str:
     return get_env_or_keychain("CONGRESS_API_KEY", "congress-api")
 
 
+@with_timeout(45, name="congress_api")
+@circuit_breaker_sync(congress_api_cb)
 def _fetch_json(url: str, api_key: str) -> dict:
     """Fetch JSON from Congress.gov API."""
     sep = "&" if "?" in url else "?"
     full_url = f"{url}{sep}api_key={api_key}&format=json"
-    req = urllib.request.Request(full_url, headers={
-        "Accept": "application/json",
-        "User-Agent": "VA-Signals/1.0",
-    })
+    req = urllib.request.Request(
+        full_url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "VA-Signals/1.0",
+        },
+    )
     context = ssl.create_default_context(cafile=certifi.where())
     with urllib.request.urlopen(req, timeout=30, context=context) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -83,10 +89,12 @@ def _fetch_json(url: str, api_key: str) -> dict:
 
 def _utc_now_iso() -> str:
     """Return current UTC time in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
-def fetch_committee_meetings(chamber: str, congress: int = CURRENT_CONGRESS, limit: int = 100) -> list[dict]:
+def fetch_committee_meetings(
+    chamber: str, congress: int = CURRENT_CONGRESS, limit: int = 100
+) -> list[dict]:
     """
     Fetch committee meetings for a chamber.
 
@@ -128,7 +136,7 @@ def fetch_committee_meetings(chamber: str, congress: int = CURRENT_CONGRESS, lim
     return meetings[:limit]
 
 
-def fetch_meeting_details(congress: int, chamber: str, event_id: str) -> Optional[dict]:
+def fetch_meeting_details(congress: int, chamber: str, event_id: str) -> dict | None:
     """
     Fetch full meeting details including witnesses.
 
@@ -156,7 +164,7 @@ def fetch_meeting_details(congress: int, chamber: str, event_id: str) -> Optiona
     return data.get("committeeMeeting")
 
 
-def is_va_committee_meeting(meeting: dict) -> tuple[bool, Optional[str]]:
+def is_va_committee_meeting(meeting: dict) -> tuple[bool, str | None]:
     """
     Check if meeting involves a VA committee.
 
@@ -174,7 +182,9 @@ def is_va_committee_meeting(meeting: dict) -> tuple[bool, Optional[str]]:
     return False, None
 
 
-def sync_va_hearings(congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run: bool = False) -> dict:
+def sync_va_hearings(
+    congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run: bool = False
+) -> dict:
     """
     Main sync function for VA committee hearings.
 
@@ -198,8 +208,6 @@ def sync_va_hearings(congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run
         "errors": [],
     }
 
-    now = _utc_now_iso()
-
     # Fetch meetings from both chambers and filter to VA committees
     # Note: List endpoint doesn't include committee info, so we fetch details for each
     all_va_meetings = []
@@ -220,7 +228,7 @@ def sync_va_hearings(congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run
                 # Fetch full details to get committee info
                 try:
                     details = fetch_meeting_details(congress, chamber, event_id)
-                except Exception as e:
+                except Exception:
                     continue
 
                 if not details:
@@ -262,11 +270,13 @@ def sync_va_hearings(congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run
         witnesses = []
         if "witnesses" in details:
             for w in details.get("witnesses", []):
-                witnesses.append({
-                    "name": w.get("name"),
-                    "position": w.get("position"),
-                    "organization": w.get("organization"),
-                })
+                witnesses.append(
+                    {
+                        "name": w.get("name"),
+                        "position": w.get("position"),
+                        "organization": w.get("organization"),
+                    }
+                )
 
         # Extract committee info
         committees = details.get("committees", [])
@@ -309,7 +319,9 @@ def sync_va_hearings(congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run
             "meeting_type": details.get("type"),
             "status": details.get("meetingStatus", "unknown"),
             "location": location,
-            "url": f"https://www.congress.gov/event/{congress}th-congress/house-committee/{event_id}" if chamber == "house" else f"https://www.congress.gov/event/{congress}th-congress/senate-committee/{event_id}",
+            "url": f"https://www.congress.gov/event/{congress}th-congress/house-committee/{event_id}"
+            if chamber == "house"
+            else f"https://www.congress.gov/event/{congress}th-congress/senate-committee/{event_id}",
             "witnesses_json": json.dumps(witnesses) if witnesses else None,
         }
 
@@ -321,12 +333,14 @@ def sync_va_hearings(congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run
             elif changes:
                 stats["updated_hearings"] += 1
                 for change in changes:
-                    stats["changes"].append({
-                        "event_id": event_id,
-                        "field": change["field_changed"],
-                        "old_value": change["old_value"],
-                        "new_value": change["new_value"],
-                    })
+                    stats["changes"].append(
+                        {
+                            "event_id": event_id,
+                            "field": change["field_changed"],
+                            "old_value": change["old_value"],
+                            "new_value": change["new_value"],
+                        }
+                    )
         else:
             stats["new_hearings"] += 1  # Assume all are new in dry-run
 
@@ -335,8 +349,15 @@ def sync_va_hearings(congress: int = CURRENT_CONGRESS, limit: int = 100, dry_run
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch VA committee hearings from Congress.gov")
-    parser.add_argument("--congress", type=int, default=CURRENT_CONGRESS, help=f"Congress number (default: {CURRENT_CONGRESS})")
-    parser.add_argument("--limit", type=int, default=100, help="Max meetings per chamber (default: 100)")
+    parser.add_argument(
+        "--congress",
+        type=int,
+        default=CURRENT_CONGRESS,
+        help=f"Congress number (default: {CURRENT_CONGRESS})",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=100, help="Max meetings per chamber (default: 100)"
+    )
     parser.add_argument("--dry-run", action="store_true", help="Fetch but don't store in DB")
     args = parser.parse_args()
 

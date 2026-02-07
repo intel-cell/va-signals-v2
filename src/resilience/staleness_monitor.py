@@ -5,9 +5,8 @@ to detect when periodic signals fail to arrive on schedule.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -19,7 +18,7 @@ CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "source_expectati
 @dataclass
 class SourceExpectation:
     source_id: str
-    frequency: str          # "daily", "weekly"
+    frequency: str  # "daily", "weekly"
     tolerance_hours: float  # hours past expected before warning
     alert_after_hours: float  # hours past expected before alert/critical
     is_critical: bool
@@ -28,8 +27,8 @@ class SourceExpectation:
 @dataclass
 class StaleSourceAlert:
     source_id: str
-    last_success_at: Optional[str]
-    hours_overdue: Optional[float]
+    last_success_at: str | None
+    hours_overdue: float | None
     consecutive_failures: int
     severity: str  # "warning", "alert", "critical"
     is_critical_source: bool
@@ -46,17 +45,19 @@ def load_expectations(config_path: Path = CONFIG_PATH) -> list[SourceExpectation
         return []
     expectations = []
     for source_id, cfg in data["sources"].items():
-        expectations.append(SourceExpectation(
-            source_id=source_id,
-            frequency=cfg.get("frequency", "daily"),
-            tolerance_hours=float(cfg.get("tolerance_hours", 6)),
-            alert_after_hours=float(cfg.get("alert_after_hours", 24)),
-            is_critical=bool(cfg.get("is_critical", False)),
-        ))
+        expectations.append(
+            SourceExpectation(
+                source_id=source_id,
+                frequency=cfg.get("frequency", "daily"),
+                tolerance_hours=float(cfg.get("tolerance_hours", 6)),
+                alert_after_hours=float(cfg.get("alert_after_hours", 24)),
+                is_critical=bool(cfg.get("is_critical", False)),
+            )
+        )
     return expectations
 
 
-def get_last_success(source_id: str, con=None) -> Optional[str]:
+def get_last_success(source_id: str, con=None) -> str | None:
     """Get the most recent successful run timestamp for a source."""
     close = False
     if con is None:
@@ -106,7 +107,7 @@ def get_consecutive_failures(source_id: str, con=None) -> int:
             con.close()
 
 
-def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
+def _parse_timestamp(ts: str | None) -> datetime | None:
     """Parse an ISO timestamp string to a timezone-aware datetime."""
     if ts is None:
         return None
@@ -114,18 +115,18 @@ def _parse_timestamp(ts: Optional[str]) -> Optional[datetime]:
         ts = ts.replace("Z", "+00:00")
         dt = datetime.fromisoformat(ts)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=UTC)
         return dt
     except (ValueError, TypeError):
         return None
 
 
-def check_source(expectation: SourceExpectation, con=None) -> Optional[StaleSourceAlert]:
+def check_source(expectation: SourceExpectation, con=None) -> StaleSourceAlert | None:
     """Check a single source against its expectation. Returns alert if stale, None if healthy."""
     last_success = get_last_success(expectation.source_id, con=con)
     consecutive_failures = get_consecutive_failures(expectation.source_id, con=con)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     hours_overdue = None
 
     if last_success:
@@ -179,8 +180,80 @@ def check_source(expectation: SourceExpectation, con=None) -> Optional[StaleSour
     )
 
 
-def check_all_sources(config_path: Path = CONFIG_PATH) -> list[StaleSourceAlert]:
-    """Check all configured sources and return alerts for stale ones."""
+def get_failure_rate(source_id: str, window_hours: float = 24.0, con=None) -> tuple[float, int]:
+    """Get the failure rate (NO_DATA + ERROR / total) within a time window.
+
+    Returns:
+        (failure_rate, total_runs) — rate between 0.0 and 1.0
+    """
+    close = False
+    if con is None:
+        con = connect()
+        close = True
+    try:
+        cutoff = (datetime.now(UTC) - timedelta(hours=window_hours)).isoformat()
+        cur = execute(
+            con,
+            """
+            SELECT status FROM source_runs
+            WHERE source_id LIKE :pattern AND ended_at >= :cutoff
+            """,
+            {"pattern": f"%{source_id}%", "cutoff": cutoff},
+        )
+        rows = cur.fetchall()
+        total = len(rows)
+        if total == 0:
+            return 0.0, 0
+        failures = sum(1 for r in rows if r[0] in ("NO_DATA", "ERROR"))
+        return round(failures / total, 4), total
+    finally:
+        if close:
+            con.close()
+
+
+def persist_alert(alert: StaleSourceAlert, con=None) -> None:
+    """Write a staleness alert to the staleness_alerts table."""
+    close = False
+    if con is None:
+        con = connect()
+        close = True
+    try:
+        now = datetime.now(UTC).isoformat()
+        execute(
+            con,
+            """
+            INSERT INTO staleness_alerts
+                (source_id, alert_type, last_success_at, hours_overdue,
+                 consecutive_failures, severity, created_at)
+            VALUES
+                (:source_id, :alert_type, :last_success_at, :hours_overdue,
+                 :consecutive_failures, :severity, :created_at)
+            """,
+            {
+                "source_id": alert.source_id,
+                "alert_type": "missing",
+                "last_success_at": alert.last_success_at,
+                "hours_overdue": alert.hours_overdue,
+                "consecutive_failures": alert.consecutive_failures,
+                "severity": alert.severity,
+                "created_at": now,
+            },
+        )
+        con.commit()
+    finally:
+        if close:
+            con.close()
+
+
+def check_all_sources(
+    config_path: Path = CONFIG_PATH, persist: bool = False
+) -> list[StaleSourceAlert]:
+    """Check all configured sources and return alerts for stale ones.
+
+    Args:
+        config_path: Path to YAML config file.
+        persist: If True, write alerts to staleness_alerts table.
+    """
     expectations = load_expectations(config_path)
     con = connect()
     alerts = []
@@ -188,6 +261,22 @@ def check_all_sources(config_path: Path = CONFIG_PATH) -> list[StaleSourceAlert]
         for exp in expectations:
             alert = check_source(exp, con=con)
             if alert is not None:
+                # Elevate to critical if >50% failure rate in 24h window
+                failure_rate, total_runs = get_failure_rate(
+                    exp.source_id, window_hours=24.0, con=con
+                )
+                if total_runs > 0 and failure_rate > 0.5 and alert.severity != "critical":
+                    alert = StaleSourceAlert(
+                        source_id=alert.source_id,
+                        last_success_at=alert.last_success_at,
+                        hours_overdue=alert.hours_overdue,
+                        consecutive_failures=alert.consecutive_failures,
+                        severity="critical",
+                        is_critical_source=alert.is_critical_source,
+                        message=f"{alert.source_id}: {int(failure_rate * 100)}% failure rate in 24h ({alert.message})",
+                    )
+                if persist:
+                    persist_alert(alert, con=con)
                 alerts.append(alert)
     finally:
         con.close()

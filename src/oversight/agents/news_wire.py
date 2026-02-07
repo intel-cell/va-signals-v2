@@ -2,11 +2,13 @@
 
 import logging
 import re
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
+from src.resilience.circuit_breaker import newsapi_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 from src.secrets import get_env_or_keychain
 
 from .base import OversightAgent, RawEvent, TimestampResult
@@ -42,7 +44,18 @@ class NewsWireAgent(OversightAgent):
         self.search_terms = VA_SEARCH_TERMS
         self.lookback_days = lookback_days
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    @with_timeout(45, name="newsapi")
+    @circuit_breaker_sync(newsapi_cb)
+    def _fetch_newsapi(self, params: dict, api_key: str) -> httpx.Response:
+        """Fetch from NewsAPI with resilience protection."""
+        return httpx.get(
+            NEWSAPI_BASE_URL,
+            params=params,
+            headers={"X-Api-Key": api_key},
+            timeout=30.0,
+        )
+
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """
         Fetch new news wire stories from NewsAPI.
 
@@ -62,9 +75,9 @@ class NewsWireAgent(OversightAgent):
         if since:
             from_date = since.strftime("%Y-%m-%dT%H:%M:%SZ")
         else:
-            from_date = (
-                datetime.now(timezone.utc) - timedelta(days=self.lookback_days)
-            ).strftime("%Y-%m-%dT%H:%M:%SZ")
+            from_date = (datetime.now(UTC) - timedelta(days=self.lookback_days)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
 
         all_events = []
         seen_urls: set[str] = set()
@@ -124,9 +137,7 @@ class NewsWireAgent(OversightAgent):
             ts = self.extract_timestamps(event)
             if ts.pub_timestamp:
                 try:
-                    pub_dt = datetime.fromisoformat(
-                        ts.pub_timestamp.replace("Z", "+00:00")
-                    )
+                    pub_dt = datetime.fromisoformat(ts.pub_timestamp.replace("Z", "+00:00"))
                     if start <= pub_dt <= end:
                         filtered_events.append(event)
                 except (ValueError, TypeError):
@@ -144,7 +155,7 @@ class NewsWireAgent(OversightAgent):
         api_key: str,
         query: str,
         from_date: str,
-        to_date: Optional[str] = None,
+        to_date: str | None = None,
     ) -> list[RawEvent]:
         """
         Execute a single search query against NewsAPI.
@@ -168,12 +179,8 @@ class NewsWireAgent(OversightAgent):
         if to_date:
             params["to"] = to_date
 
-        response = httpx.get(
-            NEWSAPI_BASE_URL,
-            params=params,
-            headers={"X-Api-Key": api_key},
-            timeout=30.0,
-        )
+        external_api_limiter.allow()
+        response = self._fetch_newsapi(params, api_key)
         response.raise_for_status()
 
         data = response.json()
@@ -181,7 +188,7 @@ class NewsWireAgent(OversightAgent):
             raise ValueError(f"NewsAPI error: {data.get('message', 'Unknown error')}")
 
         events = []
-        fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         for article in data.get("articles", []):
             try:

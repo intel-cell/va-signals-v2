@@ -1,12 +1,14 @@
 """Investigative journalism source agent."""
 
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import feedparser
 
-from .base import OversightAgent, RawEvent, TimestampResult
+from src.resilience.circuit_breaker import oversight_cb
+from src.resilience.rate_limiter import external_api_limiter
+from src.resilience.wiring import circuit_breaker_sync, with_timeout
 
+from .base import OversightAgent, RawEvent, TimestampResult
 
 # Investigative outlets with VA coverage
 INVESTIGATIVE_FEEDS = {
@@ -29,18 +31,25 @@ class InvestigativeAgent(OversightAgent):
             "military health",
         ]
 
+    @with_timeout(45, name="investigative_rss")
+    @circuit_breaker_sync(oversight_cb)
+    def _fetch_feed(self, feed_url: str):
+        """Fetch and parse an RSS feed with resilience protection."""
+        return feedparser.parse(feed_url)
+
     def _is_va_related(self, title: str, content: str) -> bool:
         """Check if content is VA-related."""
         combined = f"{title} {content}".lower()
         return any(kw.lower() in combined for kw in self.va_keywords)
 
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """Fetch new investigative stories."""
         events = []
 
         for source, feed_url in self.feeds.items():
             try:
-                feed = feedparser.parse(feed_url)
+                external_api_limiter.allow()
+                feed = self._fetch_feed(feed_url)
 
                 for entry in feed.entries:
                     title = entry.title
@@ -52,12 +61,12 @@ class InvestigativeAgent(OversightAgent):
 
                     pub_date = None
                     if hasattr(entry, "published_parsed") and entry.published_parsed:
-                        pub_date = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
+                        pub_date = datetime(*entry.published_parsed[:6], tzinfo=UTC)
 
                     if since and pub_date and pub_date < since:
                         continue
 
-                    fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
                     events.append(
                         RawEvent(
@@ -91,6 +100,7 @@ class InvestigativeAgent(OversightAgent):
         if published:
             try:
                 from email.utils import parsedate_to_datetime
+
                 dt = parsedate_to_datetime(published)
                 pub_timestamp = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
                 pub_precision = "datetime"

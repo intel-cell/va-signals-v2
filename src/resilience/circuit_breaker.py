@@ -18,11 +18,12 @@ Transitions:
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import StrEnum
 from functools import wraps
-from typing import Callable, Optional, Any, TypeVar, ParamSpec
+from typing import Any, Optional, ParamSpec, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,9 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 
-class CircuitState(str, Enum):
+class CircuitState(StrEnum):
     """Circuit breaker states."""
+
     CLOSED = "closed"
     OPEN = "open"
     HALF_OPEN = "half_open"
@@ -39,6 +41,7 @@ class CircuitState(str, Enum):
 
 class CircuitBreakerOpen(Exception):
     """Raised when circuit is open and request is rejected."""
+
     def __init__(self, name: str, until: datetime):
         self.name = name
         self.until = until
@@ -48,25 +51,27 @@ class CircuitBreakerOpen(Exception):
 @dataclass
 class CircuitBreakerConfig:
     """Configuration for circuit breaker."""
-    failure_threshold: int = 5          # Failures before opening
-    success_threshold: int = 2          # Successes to close from half-open
-    timeout_seconds: float = 60.0       # Time in open state before half-open
-    half_open_max_calls: int = 3        # Max calls allowed in half-open
-    exclude_exceptions: tuple = ()       # Exceptions that don't count as failures
+
+    failure_threshold: int = 5  # Failures before opening
+    success_threshold: int = 2  # Successes to close from half-open
+    timeout_seconds: float = 60.0  # Time in open state before half-open
+    half_open_max_calls: int = 3  # Max calls allowed in half-open
+    exclude_exceptions: tuple = ()  # Exceptions that don't count as failures
     include_exceptions: tuple = (Exception,)  # Only these count as failures
 
 
 @dataclass
 class CircuitMetrics:
     """Metrics for a circuit breaker."""
+
     total_calls: int = 0
     successful_calls: int = 0
     failed_calls: int = 0
     rejected_calls: int = 0
     state_changes: int = 0
-    last_failure_time: Optional[float] = None
-    last_success_time: Optional[float] = None
-    last_state_change: Optional[float] = None
+    last_failure_time: float | None = None
+    last_success_time: float | None = None
+    last_state_change: float | None = None
     consecutive_failures: int = 0
     consecutive_successes: int = 0
 
@@ -104,7 +109,7 @@ class CircuitBreaker:
         self.config = config or CircuitBreakerConfig()
         self._state = CircuitState.CLOSED
         self._metrics = CircuitMetrics()
-        self._opened_at: Optional[float] = None
+        self._opened_at: float | None = None
         self._half_open_calls = 0
         self._lock = asyncio.Lock()
 
@@ -219,15 +224,14 @@ class CircuitBreaker:
             if self._state == CircuitState.OPEN:
                 self._metrics.rejected_calls += 1
                 until = datetime.fromtimestamp(
-                    self._opened_at + self.config.timeout_seconds,
-                    tz=timezone.utc
+                    self._opened_at + self.config.timeout_seconds, tz=UTC
                 )
                 raise CircuitBreakerOpen(self.name, until)
 
             if self._state == CircuitState.HALF_OPEN:
                 if self._half_open_calls >= self.config.half_open_max_calls:
                     self._metrics.rejected_calls += 1
-                    until = datetime.now(timezone.utc)
+                    until = datetime.now(UTC)
                     raise CircuitBreakerOpen(self.name, until)
                 self._half_open_calls += 1
 
@@ -252,16 +256,18 @@ class CircuitBreaker:
     def __call__(self, func: Callable[P, T]) -> Callable[P, T]:
         """Use as decorator."""
         if asyncio.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
                 return await self.call(func, *args, **kwargs)
+
             return async_wrapper
         else:
+
             @wraps(func)
             def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-                return asyncio.get_event_loop().run_until_complete(
-                    self.call(func, *args, **kwargs)
-                )
+                return asyncio.get_event_loop().run_until_complete(self.call(func, *args, **kwargs))
+
             return sync_wrapper
 
     def reset(self) -> None:
@@ -292,9 +298,9 @@ class CircuitBreaker:
                 "success_threshold": self.config.success_threshold,
                 "timeout_seconds": self.config.timeout_seconds,
             },
-            "opened_at": datetime.fromtimestamp(
-                self._opened_at, tz=timezone.utc
-            ).isoformat() if self._opened_at else None,
+            "opened_at": datetime.fromtimestamp(self._opened_at, tz=UTC).isoformat()
+            if self._opened_at
+            else None,
         }
 
 
@@ -304,7 +310,7 @@ federal_register_cb = CircuitBreaker(
     CircuitBreakerConfig(
         failure_threshold=3,
         timeout_seconds=300,  # 5 minutes
-    )
+    ),
 )
 
 congress_api_cb = CircuitBreaker(
@@ -312,7 +318,7 @@ congress_api_cb = CircuitBreaker(
     CircuitBreakerConfig(
         failure_threshold=3,
         timeout_seconds=300,
-    )
+    ),
 )
 
 database_cb = CircuitBreaker(
@@ -320,5 +326,61 @@ database_cb = CircuitBreaker(
     CircuitBreakerConfig(
         failure_threshold=5,
         timeout_seconds=30,
-    )
+    ),
+)
+
+lda_gov_cb = CircuitBreaker(
+    "lda_gov",
+    CircuitBreakerConfig(
+        failure_threshold=3,
+        timeout_seconds=300,
+    ),
+)
+
+whitehouse_cb = CircuitBreaker(
+    "whitehouse",
+    CircuitBreakerConfig(
+        failure_threshold=3,
+        timeout_seconds=300,
+    ),
+)
+
+omb_cb = CircuitBreaker(
+    "omb",
+    CircuitBreakerConfig(
+        failure_threshold=3,
+        timeout_seconds=300,
+    ),
+)
+
+va_pubs_cb = CircuitBreaker(
+    "va_pubs",
+    CircuitBreakerConfig(
+        failure_threshold=3,
+        timeout_seconds=300,
+    ),
+)
+
+reginfo_cb = CircuitBreaker(
+    "reginfo",
+    CircuitBreakerConfig(
+        failure_threshold=3,
+        timeout_seconds=300,
+    ),
+)
+
+oversight_cb = CircuitBreaker(
+    "oversight",
+    CircuitBreakerConfig(
+        failure_threshold=5,
+        timeout_seconds=300,
+    ),
+)
+
+newsapi_cb = CircuitBreaker(
+    "newsapi",
+    CircuitBreakerConfig(
+        failure_threshold=3,
+        timeout_seconds=300,
+    ),
 )

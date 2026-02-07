@@ -27,6 +27,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "e2e: marks tests as end-to-end tests",
+    "playwright: marks tests as browser-based Playwright tests (requires running server)",
 ]
 
 [tool.coverage.run]
@@ -88,6 +89,15 @@ exclude = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "htmlcov",
+    "outputs",
+]
+
+[tool.ruff.lint]
 select = [
     "E",   # pycodestyle errors
     "W",   # pycodestyle warnings
@@ -100,13 +110,6 @@ select = [
 ignore = [
     "E501",  # line too long (handled by black)
     "B008",  # do not perform function calls in argument defaults
-]
-exclude = [
-    ".git",
-    ".venv",
-    "__pycache__",
-    "htmlcov",
-    "outputs",
 ]
 
 [build-system]
