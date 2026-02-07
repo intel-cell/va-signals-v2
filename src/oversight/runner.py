@@ -25,7 +25,9 @@ from .db_helpers import (
     update_canonical_refs,
 )
 from .output.formatters import format_weekly_digest
+from .pipeline.baseline import BaselineSummary, get_latest_baseline
 from .pipeline.deduplicator import deduplicate_event, extract_entities
+from .pipeline.deviation import check_deviation_simple
 from .pipeline.escalation import check_escalation
 from .pipeline.quality_gate import check_quality_gate
 
@@ -144,6 +146,33 @@ def _process_raw_event(
     # Check for escalation signals
     esc_result = check_escalation(raw.title, raw.raw_html)
 
+    # Heuristic deviation pre-filter (cheap, no LLM call)
+    is_deviation = 0
+    deviation_reason = None
+    try:
+        baseline_row = get_latest_baseline(source_type)
+        if baseline_row:
+            import json as _json
+
+            topic_dist = baseline_row.get("topic_distribution", "{}")
+            if isinstance(topic_dist, str):
+                topic_dist = _json.loads(topic_dist)
+            baseline_obj = BaselineSummary(
+                source_type=baseline_row["source_type"],
+                theme=baseline_row.get("theme"),
+                window_start=baseline_row["window_start"],
+                window_end=baseline_row["window_end"],
+                event_count=baseline_row["event_count"],
+                summary=baseline_row["summary"],
+                topic_distribution=topic_dist,
+            )
+            dev_result = check_deviation_simple(raw.title, raw.raw_html or "", baseline_obj)
+            if dev_result.is_deviation:
+                is_deviation = 1
+                deviation_reason = dev_result.explanation
+    except Exception as e:
+        logger.debug("Deviation pre-filter skipped: %s", e)
+
     # Generate event ID
     event_id = _generate_event_id(source_type, raw.url)
 
@@ -167,8 +196,8 @@ def _process_raw_event(
         "escalation_signals": esc_result.matched_signals if esc_result.is_escalation else None,
         "ml_score": esc_result.ml_score,
         "ml_risk_level": esc_result.ml_risk_level,
-        "is_deviation": 0,  # Will be set by deviation classifier
-        "deviation_reason": None,
+        "is_deviation": is_deviation,
+        "deviation_reason": deviation_reason,
         "canonical_refs": entities if entities else None,
         "fetched_at": raw.fetched_at,
     }

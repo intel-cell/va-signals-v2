@@ -991,3 +991,28 @@ CREATE TABLE IF NOT EXISTS compound_signals (
 CREATE INDEX IF NOT EXISTS idx_compound_signals_rule ON compound_signals(rule_id);
 CREATE INDEX IF NOT EXISTS idx_compound_signals_created ON compound_signals(created_at);
 CREATE INDEX IF NOT EXISTS idx_compound_signals_severity ON compound_signals(severity_score);
+
+-- ============================================================
+-- PERFORMANCE INDICES (Core tables — added 2026-02-07)
+-- Full-Spectrum Advancement P1: high-traffic tables lacked indices
+-- ============================================================
+
+-- source_runs: health score, lifecycle, pipeline stats query by source_id + time
+CREATE INDEX IF NOT EXISTS idx_source_runs_source ON source_runs(source_id, ended_at);
+CREATE INDEX IF NOT EXISTS idx_source_runs_status ON source_runs(status);
+
+-- fr_seen: bridge sync queries by first_seen_at, API queries by published_date
+CREATE INDEX IF NOT EXISTS idx_fr_seen_first_seen ON fr_seen(first_seen_at);
+CREATE INDEX IF NOT EXISTS idx_fr_seen_published ON fr_seen(published_date);
+
+-- bills: bridge sync + API queries by updated_at and congress
+CREATE INDEX IF NOT EXISTS idx_bills_updated ON bills(updated_at);
+CREATE INDEX IF NOT EXISTS idx_bills_congress ON bills(congress);
+
+-- hearings: bridge sync + API queries by hearing_date and updated_at
+CREATE INDEX IF NOT EXISTS idx_hearings_date ON hearings(hearing_date);
+CREATE INDEX IF NOT EXISTS idx_hearings_updated ON hearings(updated_at);
+
+-- ad_deviation_events: bridge sync queries by detected_at
+CREATE INDEX IF NOT EXISTS idx_ad_deviations_detected ON ad_deviation_events(detected_at);
+CREATE INDEX IF NOT EXISTS idx_ad_deviations_member ON ad_deviation_events(member_id);

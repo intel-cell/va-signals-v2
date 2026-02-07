@@ -75,15 +75,15 @@ class TestScoreToGrade:
 
 
 class TestComputeFreshness:
-    def test_no_expectations_returns_100(self):
-        """No configured expectations -> score 100."""
+    def test_no_expectations_returns_zero(self):
+        """No configured expectations -> score 0 (no data = fail closed)."""
         with patch("src.resilience.health_score.load_expectations", return_value=[]):
             con = connect()
             try:
                 result = _compute_freshness(con)
             finally:
                 con.close()
-        assert result.score == 100.0
+        assert result.score == 0.0
         assert result.weight == 0.35
 
     def test_all_sources_fresh(self):
@@ -161,8 +161,8 @@ class TestComputeErrorRate:
         assert result.score <= 10
         assert result.details["high_failure_sources"] == ["federal_register"]
 
-    def test_no_runs_returns_100(self):
-        """No runs at all -> score 100 (no evidence of failure)."""
+    def test_no_runs_returns_zero(self):
+        """No runs at all -> score 0 (no data = fail closed)."""
         expectations = [
             SourceExpectation("nonexistent", "daily", 6, 24, False),
         ]
@@ -172,7 +172,7 @@ class TestComputeErrorRate:
                 result = _compute_error_rate(con)
             finally:
                 con.close()
-        assert result.score == 100.0
+        assert result.score == 0.0
 
     def test_no_data_not_counted_as_failure(self):
         """NO_DATA is a normal outcome and should NOT penalize health score."""

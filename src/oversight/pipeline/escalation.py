@@ -74,7 +74,7 @@ def check_escalation(title: str, content: str) -> EscalationResult:
     ml_score, ml_risk_level, ml_confidence = _try_ml_score(title, content)
 
     return EscalationResult(
-        is_escalation=len(matched) > 0,
+        is_escalation=len(matched) > 0 or (ml_score is not None and ml_score > 0.75),
         matched_signals=matched,
         severity=max_severity,
         ml_score=ml_score,

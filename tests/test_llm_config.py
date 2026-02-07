@@ -52,4 +52,4 @@ def test_classifier_uses_central_config():
 def test_state_classify_uses_central_config():
     from src.state.classify import HAIKU_MODEL as STATE_MODEL
 
-    assert STATE_MODEL == HAIKU_LEGACY_MODEL
+    assert STATE_MODEL == HAIKU_MODEL

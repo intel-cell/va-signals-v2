@@ -70,9 +70,9 @@ def _compute_freshness(con) -> HealthDimension:
     if not expectations:
         return HealthDimension(
             name="source_freshness",
-            score=100.0,
+            score=0.0,
             weight=0.35,
-            details={"note": "no expectations configured"},
+            details={"note": "no expectations configured", "configured": False},
         )
 
     now = datetime.now(UTC)
@@ -139,7 +139,7 @@ def _compute_error_rate(con) -> HealthDimension:
             source_rates[exp.source_id] = {"failure_rate": 0.0, "runs": 0}
 
     if total_runs == 0:
-        base_score = 100.0
+        base_score = 0.0
     else:
         base_score = (total_success / total_runs) * 100.0
 
@@ -170,9 +170,9 @@ def _compute_circuit_breaker_health() -> HealthDimension:
     if total == 0:
         return HealthDimension(
             name="circuit_breaker_health",
-            score=100.0,
+            score=0.0,
             weight=0.20,
-            details={"total": 0},
+            details={"total": 0, "configured": False},
         )
 
     healthy_score = 0.0
@@ -261,6 +261,15 @@ def compute_health_score() -> AggregateHealth:
     dimensions = [freshness, error_rate, cb_health, coverage]
 
     weighted_score = sum(d.score * d.weight for d in dimensions)
+
+    # Floor gate: if any critical dimension scores below threshold,
+    # cap overall score to prevent catastrophic failures being masked.
+    # (P2: Mathematician + Resilience Engineer finding)
+    MIN_DIMENSION_THRESHOLD = 30.0
+    if any(d.score < MIN_DIMENSION_THRESHOLD for d in dimensions):
+        worst = min(d.score for d in dimensions)
+        weighted_score = min(weighted_score, worst * 1.5)
+
     weighted_score = round(weighted_score, 1)
 
     incidents = get_recent_incidents(hours=24)

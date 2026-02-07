@@ -5,7 +5,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from src.llm_config import HAIKU_LEGACY_MODEL as HAIKU_MODEL
+from src.llm_config import HAIKU_MODEL
 from src.resilience.circuit_breaker import CircuitBreakerOpen, anthropic_cb
 from src.resilience.wiring import circuit_breaker_sync
 from src.secrets import get_env_or_keychain
