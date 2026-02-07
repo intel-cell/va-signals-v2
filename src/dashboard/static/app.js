@@ -502,6 +502,20 @@ function handleWebSocketMessage(data) {
             }
             break;
 
+        case 'battlefield':
+            if (data.data) {
+                const alertType = data.data.alert_type || 'gate_update';
+                const bfTitle = data.data.title || 'Gate update';
+                const days = data.data.days_impact;
+                const bfSeverity = data.data.priority_level || 'medium';
+                const toastType2 = bfSeverity === 'critical' ? 'error' :
+                                   bfSeverity === 'high' ? 'warning' : 'info';
+                const daysText = days ? ` (${Math.abs(days)}d ${days > 0 ? 'delayed' : 'accelerated'})` : '';
+                showToast(toastType2, `Gate: ${alertType.replace('_', ' ')}`, `${bfTitle}${daysText}`);
+                refreshBattlefield();
+            }
+            break;
+
         case 'error':
             showToast('error', 'Error', data.message);
             break;

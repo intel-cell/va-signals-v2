@@ -6,7 +6,8 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..auth.models import UserRole
+from ..auth.middleware import require_auth, require_role
+from ..auth.models import AuthContext, UserRole
 from ..auth.rbac import RoleChecker
 from .manager import tenant_manager
 from .middleware import get_tenant_context
@@ -25,16 +26,14 @@ router = APIRouter(prefix="/api/tenants", tags=["Tenants"])
 @router.post("", response_model=TenantResponse)
 async def create_tenant(
     request: TenantCreateRequest,
-    current_user=Depends(RoleChecker(UserRole.VIEWER)),
+    current_user: AuthContext = Depends(require_auth),
 ):
     """
     Create a new tenant organization.
 
     The creating user becomes the owner with COMMANDER role.
     """
-    # Get user_id from auth context
-    # In real implementation, extract from request.state
-    user_id = "current_user_id"  # Placeholder
+    user_id = current_user.user_id
 
     try:
         tenant = tenant_manager.create_tenant(request, user_id)
@@ -56,10 +55,10 @@ async def create_tenant(
 
 @router.get("/me", summary="Get user's tenants")
 async def get_my_tenants(
-    current_user=Depends(RoleChecker(UserRole.VIEWER)),
+    current_user: AuthContext = Depends(require_auth),
 ):
     """Get all tenants the current user belongs to."""
-    user_id = "current_user_id"  # Placeholder - extract from auth
+    user_id = current_user.user_id
     tenants = tenant_manager.get_user_tenants(user_id)
     return {"tenants": tenants, "count": len(tenants)}
 
@@ -144,7 +143,7 @@ async def list_tenant_members(
 async def invite_member(
     tenant_id: str,
     request: TenantInviteRequest,
-    current_user=Depends(RoleChecker(UserRole.LEADERSHIP)),
+    current_user: AuthContext = Depends(require_role(UserRole.LEADERSHIP, UserRole.COMMANDER)),
 ):
     """
     Invite a user to the tenant. Requires LEADERSHIP role.
@@ -179,7 +178,7 @@ async def invite_member(
             tenant_id=tenant_id,
             user_id=user_id,
             role=request.role,
-            invited_by="current_user_id",  # Placeholder
+            invited_by=current_user.user_id,
         )
 
         return {

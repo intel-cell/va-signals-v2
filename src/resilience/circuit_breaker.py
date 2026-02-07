@@ -389,3 +389,11 @@ newsapi_cb = CircuitBreaker(
         timeout_seconds=300,
     ),
 )
+
+anthropic_cb = CircuitBreaker(
+    "anthropic",
+    CircuitBreakerConfig(
+        failure_threshold=5,
+        timeout_seconds=60,  # Shorter recovery: LLM outages often resolve quickly
+    ),
+)

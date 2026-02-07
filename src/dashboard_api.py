@@ -25,6 +25,7 @@ from .battlefield.api import router as battlefield_router
 from .ceo_brief.api import router as ceo_brief_router
 from .evidence.dashboard_routes import router as evidence_router
 from .ml.api import router as ml_router
+from .resilience.api import router as resilience_router
 from .routers.agenda_drift import router as agenda_drift_router
 from .routers.compound import router as compound_router
 from .routers.health import DeadManResponse, PipelineStaleness  # noqa: F401 - re-exported for tests
@@ -214,6 +215,7 @@ app.include_router(legislative_router)
 app.include_router(state_router)
 app.include_router(oversight_router)
 app.include_router(compound_router)
+app.include_router(resilience_router)
 
 # Mount static files last (catch-all for SPA)
 if STATIC_DIR.exists():

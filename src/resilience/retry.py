@@ -8,6 +8,7 @@ backoff strategies.
 import asyncio
 import logging
 import random
+import time as time_mod
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
@@ -189,9 +190,30 @@ def retry(
 
             @wraps(func)
             def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-                return asyncio.get_event_loop().run_until_complete(
-                    retry_with_backoff(func, *args, config=config, **kwargs)
-                )
+                last_exception: Exception | None = None
+                for attempt in range(1, config.max_attempts + 1):
+                    try:
+                        return func(*args, **kwargs)
+                    except Exception as e:
+                        last_exception = e
+                        if not should_retry(e, config):
+                            raise
+                        if attempt >= config.max_attempts:
+                            logger.warning(
+                                f"All {config.max_attempts} attempts failed "
+                                f"for {func.__name__}: {e}"
+                            )
+                            raise
+                        delay = calculate_delay(attempt, config)
+                        logger.info(
+                            f"Retry {attempt}/{config.max_attempts} for "
+                            f"{func.__name__} after {delay:.2f}s: "
+                            f"{type(e).__name__}: {e}"
+                        )
+                        time_mod.sleep(delay)
+                if last_exception:
+                    raise last_exception
+                raise RuntimeError("Retry loop exited unexpectedly")
 
             return sync_wrapper
 

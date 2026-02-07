@@ -97,7 +97,11 @@ def get_last_success(source_id: str, con=None) -> str | None:
 
 
 def get_consecutive_failures(source_id: str, con=None) -> int:
-    """Count consecutive non-SUCCESS runs from most recent."""
+    """Count consecutive ERROR runs from most recent.
+
+    NO_DATA is a normal outcome and breaks the consecutive-failure streak
+    just like SUCCESS does.
+    """
     close = False
     if con is None:
         con = connect()
@@ -114,7 +118,7 @@ def get_consecutive_failures(source_id: str, con=None) -> int:
         )
         count = 0
         for row in cur.fetchall():
-            if row[0] == "SUCCESS":
+            if row[0] in ("SUCCESS", "NO_DATA"):
                 break
             count += 1
         return count
@@ -197,7 +201,10 @@ def check_source(expectation: SourceExpectation, con=None) -> StaleSourceAlert |
 
 
 def get_failure_rate(source_id: str, window_hours: float = 24.0, con=None) -> tuple[float, int]:
-    """Get the failure rate (NO_DATA + ERROR / total) within a time window.
+    """Get the failure rate (ERROR / total) within a time window.
+
+    NO_DATA is a normal outcome (source checked, nothing new) and does NOT
+    count as failure.  Only ERROR counts as failure.
 
     Returns:
         (failure_rate, total_runs) — rate between 0.0 and 1.0
@@ -220,7 +227,7 @@ def get_failure_rate(source_id: str, window_hours: float = 24.0, con=None) -> tu
         total = len(rows)
         if total == 0:
             return 0.0, 0
-        failures = sum(1 for r in rows if r[0] in ("NO_DATA", "ERROR"))
+        failures = sum(1 for r in rows if r[0] == "ERROR")
         return round(failures / total, 4), total
     finally:
         if close:
