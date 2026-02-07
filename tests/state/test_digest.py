@@ -1,11 +1,9 @@
 """Tests for state digest generation."""
 
 import argparse
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-import pytest
-
-from src.state.digest import generate_weekly_digest, _send_digest_email, main
+from src.state.digest import _send_digest_email, generate_weekly_digest, main
 
 
 class TestGenerateWeeklyDigest:
@@ -14,9 +12,7 @@ class TestGenerateWeeklyDigest:
     @patch("src.state.db_helpers.get_unnotified_signals")
     @patch("src.state.db_helpers.mark_signal_notified")
     @patch("src.state.notify.format_state_digest")
-    def test_returns_none_when_no_signals(
-        self, mock_format, mock_mark, mock_get_signals
-    ):
+    def test_returns_none_when_no_signals(self, mock_format, mock_mark, mock_get_signals):
         """Returns None when no signals are found."""
         mock_get_signals.return_value = []
 
@@ -29,9 +25,7 @@ class TestGenerateWeeklyDigest:
     @patch("src.state.db_helpers.get_unnotified_signals")
     @patch("src.state.db_helpers.mark_signal_notified")
     @patch("src.state.notify.format_state_digest")
-    def test_returns_formatted_digest(
-        self, mock_format, mock_mark, mock_get_signals
-    ):
+    def test_returns_formatted_digest(self, mock_format, mock_mark, mock_get_signals):
         """Returns formatted digest when signals exist."""
         mock_get_signals.side_effect = [
             # Medium severity signals
@@ -87,9 +81,7 @@ class TestGenerateWeeklyDigest:
     @patch("src.state.db_helpers.get_unnotified_signals")
     @patch("src.state.db_helpers.mark_signal_notified")
     @patch("src.state.notify.format_state_digest")
-    def test_does_not_mark_signals_in_dry_run(
-        self, mock_format, mock_mark, mock_get_signals
-    ):
+    def test_does_not_mark_signals_in_dry_run(self, mock_format, mock_mark, mock_get_signals):
         """Does not mark signals as notified in dry run mode."""
         mock_get_signals.side_effect = [
             [{"signal_id": "sig-001", "state": "TX", "title": "Test", "url": "https://test.com"}],
@@ -104,17 +96,30 @@ class TestGenerateWeeklyDigest:
     @patch("src.state.db_helpers.get_unnotified_signals")
     @patch("src.state.db_helpers.mark_signal_notified")
     @patch("src.state.notify.format_state_digest")
-    def test_groups_signals_by_state(
-        self, mock_format, mock_mark, mock_get_signals
-    ):
+    def test_groups_signals_by_state(self, mock_format, mock_mark, mock_get_signals):
         """Groups signals by state before formatting."""
         mock_get_signals.side_effect = [
             [
-                {"signal_id": "sig-001", "state": "TX", "title": "TX Signal", "url": "https://tx.com"},
-                {"signal_id": "sig-002", "state": "CA", "title": "CA Signal", "url": "https://ca.com"},
+                {
+                    "signal_id": "sig-001",
+                    "state": "TX",
+                    "title": "TX Signal",
+                    "url": "https://tx.com",
+                },
+                {
+                    "signal_id": "sig-002",
+                    "state": "CA",
+                    "title": "CA Signal",
+                    "url": "https://ca.com",
+                },
             ],
             [
-                {"signal_id": "sig-003", "state": "TX", "title": "TX Signal 2", "url": "https://tx2.com"},
+                {
+                    "signal_id": "sig-003",
+                    "state": "TX",
+                    "title": "TX Signal 2",
+                    "url": "https://tx2.com",
+                },
             ],
         ]
         mock_format.return_value = {"text": "Digest"}
@@ -144,9 +149,7 @@ class TestSendDigestEmail:
     @patch("src.notify_email.is_configured")
     @patch("src.notify_email._send_email")
     @patch("src.notify_email._base_html_template")
-    def test_sends_email_with_correct_subject(
-        self, mock_template, mock_send, mock_configured
-    ):
+    def test_sends_email_with_correct_subject(self, mock_template, mock_send, mock_configured):
         """Sends email with correct subject format."""
         mock_configured.return_value = True
         mock_template.return_value = "<html>Test</html>"
@@ -164,9 +167,7 @@ class TestSendDigestEmail:
     @patch("src.notify_email.is_configured")
     @patch("src.notify_email._send_email")
     @patch("src.notify_email._base_html_template")
-    def test_converts_markdown_formatting_to_html(
-        self, mock_template, mock_send, mock_configured
-    ):
+    def test_converts_markdown_formatting_to_html(self, mock_template, mock_send, mock_configured):
         """Converts Slack-style markdown to HTML."""
         mock_configured.return_value = True
         mock_template.return_value = "<html></html>"
@@ -183,9 +184,7 @@ class TestSendDigestEmail:
     @patch("src.notify_email.is_configured")
     @patch("src.notify_email._send_email")
     @patch("src.notify_email._base_html_template")
-    def test_converts_slack_links_to_html(
-        self, mock_template, mock_send, mock_configured
-    ):
+    def test_converts_slack_links_to_html(self, mock_template, mock_send, mock_configured):
         """Converts Slack-style links to HTML anchor tags."""
         mock_configured.return_value = True
         mock_template.return_value = "<html></html>"
@@ -201,9 +200,7 @@ class TestSendDigestEmail:
     @patch("src.notify_email.is_configured")
     @patch("src.notify_email._send_email")
     @patch("src.notify_email._base_html_template")
-    def test_includes_plain_text_fallback(
-        self, mock_template, mock_send, mock_configured
-    ):
+    def test_includes_plain_text_fallback(self, mock_template, mock_send, mock_configured):
         """Includes plain text in email for fallback."""
         mock_configured.return_value = True
         mock_template.return_value = "<html></html>"

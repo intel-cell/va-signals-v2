@@ -52,12 +52,15 @@ def test_get_secret_env_aliases_get_env_or_keychain(monkeypatch):
         fake_get_env_or_keychain,
     )
 
-    assert get_secret_env(
-        "TEST_SECRET",
-        "test-service",
-        user_env="CUSTOM_USER",
-        allow_missing=True,
-    ) == "alias-value"
+    assert (
+        get_secret_env(
+            "TEST_SECRET",
+            "test-service",
+            user_env="CUSTOM_USER",
+            allow_missing=True,
+        )
+        == "alias-value"
+    )
     assert captured["args"] == ("TEST_SECRET", "test-service", "CUSTOM_USER", True)
 
 

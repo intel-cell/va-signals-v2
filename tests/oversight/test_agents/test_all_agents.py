@@ -1,18 +1,17 @@
 """Tests for all oversight agents."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.oversight.agents import (
-    GAOAgent,
-    OIGAgent,
-    CRSAgent,
-    CongressionalRecordAgent,
-    CommitteePressAgent,
-    NewsWireAgent,
-    InvestigativeAgent,
-    TradePressAgent,
     CAFCAgent,
+    CommitteePressAgent,
+    CongressionalRecordAgent,
+    CRSAgent,
+    GAOAgent,
+    InvestigativeAgent,
+    NewsWireAgent,
+    OIGAgent,
+    TradePressAgent,
 )
 from src.oversight.agents.base import RawEvent
 

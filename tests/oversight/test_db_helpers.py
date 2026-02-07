@@ -1,17 +1,14 @@
 """Tests for oversight DB helpers."""
 
-import pytest
-from datetime import datetime, timezone
-
 from src.oversight.db_helpers import (
-    insert_om_event,
+    get_active_escalation_signals,
     get_om_event,
-    update_om_event_surfaced,
-    insert_om_rejected,
     get_om_events_for_digest,
     insert_om_escalation_signal,
-    get_active_escalation_signals,
+    insert_om_event,
+    insert_om_rejected,
     seed_default_escalation_signals,
+    update_om_event_surfaced,
 )
 
 
@@ -91,10 +88,7 @@ def test_get_om_events_for_digest():
     }
     insert_om_event(event)
 
-    events = get_om_events_for_digest(
-        start_date="2026-01-19",
-        end_date="2026-01-21"
-    )
+    events = get_om_events_for_digest(start_date="2026-01-19", end_date="2026-01-21")
 
     assert len(events) >= 1
     assert any(e["event_id"] == "test-digest-789" for e in events)

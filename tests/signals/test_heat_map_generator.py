@@ -3,20 +3,20 @@
 CHARLIE COMMAND - Phase 3: Heat Map Generator validation.
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timezone, timedelta
 
 from src.signals.impact.heat_map_generator import (
     HeatMapGenerator,
+    assess_bill_impact,
+    assess_bill_likelihood,
+    assess_generic_impact,
+    assess_hearing_impact,
+    assess_hearing_likelihood,
+    calculate_urgency_days,
     generate_heat_map,
     render_heat_map_for_brief,
-    assess_bill_likelihood,
-    assess_bill_impact,
-    assess_hearing_likelihood,
-    assess_hearing_impact,
-    assess_generic_likelihood,
-    assess_generic_impact,
-    calculate_urgency_days,
 )
 from src.signals.impact.models import HeatMapQuadrant
 
@@ -136,7 +136,7 @@ class TestUrgencyCalculation:
 
     def test_urgency_with_effective_date(self):
         """Test urgency calculation with effective date."""
-        future_date = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat().replace("+00:00", "Z")
+        future_date = (datetime.now(UTC) + timedelta(days=30)).isoformat().replace("+00:00", "Z")
         context = {
             "effective_date": future_date,
         }
@@ -145,7 +145,7 @@ class TestUrgencyCalculation:
 
     def test_urgency_with_hearing_date(self):
         """Test urgency calculation with hearing date."""
-        future_date = (datetime.now(timezone.utc) + timedelta(days=7)).strftime("%Y-%m-%d")
+        future_date = (datetime.now(UTC) + timedelta(days=7)).strftime("%Y-%m-%d")
         context = {
             "hearing_date": future_date,
         }
@@ -196,7 +196,7 @@ class TestHeatMapGenerator:
 
     def test_generate_from_hearings(self, generator):
         """Test heat map generation from hearings."""
-        future_date = (datetime.now(timezone.utc) + timedelta(days=10)).strftime("%Y-%m-%d")
+        future_date = (datetime.now(UTC) + timedelta(days=10)).strftime("%Y-%m-%d")
         hearings = [
             {
                 "event_id": "hvac-001",
@@ -248,8 +248,8 @@ class TestHeatMapGenerator:
         issue = heat_map.issues[0]
 
         assert issue.likelihood == 5  # Passed = max likelihood
-        assert issue.impact == 5      # Reform = max impact
-        assert issue.score > 0        # Score should be calculated
+        assert issue.impact == 5  # Reform = max impact
+        assert issue.score > 0  # Score should be calculated
         assert issue.quadrant == HeatMapQuadrant.HIGH_PRIORITY
 
     def test_quadrant_assignment(self, generator):

@@ -1,16 +1,15 @@
 """Tests for baseline builder."""
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from src.oversight.pipeline.baseline import (
-    build_baseline,
-    get_latest_baseline,
-    compute_topic_distribution,
-    BaselineSummary,
-)
 from src.oversight.db_helpers import insert_om_event
+from src.oversight.pipeline.baseline import (
+    BaselineSummary,
+    build_baseline,
+    compute_topic_distribution,
+    get_latest_baseline,
+)
 
 
 def _insert_test_events(count: int, source_type: str = "gao", theme: str = "healthcare"):
@@ -18,19 +17,21 @@ def _insert_test_events(count: int, source_type: str = "gao", theme: str = "heal
     base_date = datetime(2026, 1, 15)
     for i in range(count):
         event_date = base_date - timedelta(days=i)
-        insert_om_event({
-            "event_id": f"test-baseline-{source_type}-{i}",
-            "event_type": "report_release",
-            "theme": theme,
-            "primary_source_type": source_type,
-            "primary_url": f"https://example.com/{i}",
-            "pub_timestamp": event_date.strftime("%Y-%m-%dT10:00:00Z"),
-            "pub_precision": "datetime",
-            "pub_source": "extracted",
-            "title": f"Test Report {i} about {theme}",
-            "summary": f"This report examines {theme} issues...",
-            "fetched_at": event_date.strftime("%Y-%m-%dT12:00:00Z"),
-        })
+        insert_om_event(
+            {
+                "event_id": f"test-baseline-{source_type}-{i}",
+                "event_type": "report_release",
+                "theme": theme,
+                "primary_source_type": source_type,
+                "primary_url": f"https://example.com/{i}",
+                "pub_timestamp": event_date.strftime("%Y-%m-%dT10:00:00Z"),
+                "pub_precision": "datetime",
+                "pub_source": "extracted",
+                "title": f"Test Report {i} about {theme}",
+                "summary": f"This report examines {theme} issues...",
+                "fetched_at": event_date.strftime("%Y-%m-%dT12:00:00Z"),
+            }
+        )
 
 
 def test_baseline_summary_creation():

@@ -1,20 +1,15 @@
 """Tests for LDA.gov Lobbying Disclosure integration."""
 
 import json
-import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import patch
 
+import pytest
+
+from src.db import get_lda_stats, init_db, insert_lda_alert, upsert_lda_filing
 from src.fetch_lda import (
     _normalize_filing,
-    _compute_va_relevance,
     evaluate_alerts,
-    VA_ENTITY_ID,
-    REGISTRATION_TYPES,
-    AMENDMENT_TYPES,
 )
-from src.db import init_db, upsert_lda_filing, insert_lda_alert, get_lda_stats
-
 
 # ── Sample API responses ──────────────────────────────────────
 
@@ -35,9 +30,7 @@ def _make_raw_filing(**overrides):
             {
                 "general_issue_code": "VET",
                 "description": "Lobbying on veterans benefits issues",
-                "government_entities": [
-                    {"name": "Department of Veterans Affairs"}
-                ],
+                "government_entities": [{"name": "Department of Veterans Affairs"}],
                 "lobbyists": [
                     {
                         "first_name": "John",
@@ -57,9 +50,7 @@ def _make_raw_filing_foreign():
     """Build a filing with foreign entity."""
     return _make_raw_filing(
         filing_uuid="test-uuid-foreign",
-        foreign_entities=[
-            {"name": "Foreign Corp", "country": "China", "contribution": 100000}
-        ],
+        foreign_entities=[{"name": "Foreign Corp", "country": "China", "contribution": 100000}],
     )
 
 
@@ -71,9 +62,7 @@ def _make_raw_filing_revolving_door():
             {
                 "general_issue_code": "VET",
                 "description": "Veterans health policy",
-                "government_entities": [
-                    {"name": "Department of Veterans Affairs"}
-                ],
+                "government_entities": [{"name": "Department of Veterans Affairs"}],
                 "lobbyists": [
                     {
                         "first_name": "Jane",
@@ -218,9 +207,7 @@ class TestVARelevance:
                 {
                     "general_issue_code": "TAX",
                     "description": "Tax policy reform",
-                    "government_entities": [
-                        {"name": "Department of Treasury"}
-                    ],
+                    "government_entities": [{"name": "Department of Treasury"}],
                     "lobbyists": [],
                 }
             ],
@@ -356,6 +343,7 @@ class TestRunLDADaily:
         init_db()
 
         from src.run_lda import run_lda_daily
+
         result = run_lda_daily(since="2026-01-15", dry_run=True)
 
         assert result["status"] == "NO_DATA"
@@ -372,6 +360,7 @@ class TestRunLDADaily:
         init_db()
 
         from src.run_lda import run_lda_daily
+
         result = run_lda_daily(since="2026-01-15", dry_run=True)
 
         # Dry run doesn't write to DB so status depends on filings found
@@ -388,6 +377,7 @@ class TestRunLDADaily:
         init_db()
 
         from src.run_lda import run_lda_daily
+
         result = run_lda_daily(since="2026-01-15", dry_run=False)
 
         assert result["status"] == "SUCCESS"

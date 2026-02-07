@@ -7,17 +7,19 @@ Verifies ECHO auth module is properly integrated with dashboard_api.
 These tests confirm the integration is working before full test suite execution.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
 import time
+from unittest.mock import patch
+
+import pytest
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def app_client():
     """Create test client with mocked Firebase init."""
-    with patch('src.auth.firebase_config.init_firebase'):
+    with patch("src.auth.firebase_config.init_firebase"):
         from src.dashboard_api import app
+
         return TestClient(app)
 
 
@@ -26,11 +28,11 @@ def mock_firebase_claims():
     """Standard mock claims for testing."""
     now = int(time.time())
     return {
-        'user_id': 'test-uid-001',
-        'email': 'test@veteran-signals.com',
-        'display_name': 'Test User',
-        'iat': now,
-        'exp': now + 3600,
+        "user_id": "test-uid-001",
+        "email": "test@veteran-signals.com",
+        "display_name": "Test User",
+        "iat": now,
+        "exp": now + 3600,
     }
 
 
@@ -86,10 +88,7 @@ class TestAuthMiddleware:
         """Verify Bearer token triggers authentication check."""
         # Without valid Firebase setup, requests with Bearer token
         # should still go through auth middleware (returns 401 if token invalid)
-        response = app_client.get(
-            "/api/auth/me",
-            headers={"Authorization": "Bearer any-token"}
-        )
+        response = app_client.get("/api/auth/me", headers={"Authorization": "Bearer any-token"})
 
         # Should be 401 (invalid token) not 404 or 500
         # This proves the auth middleware is processing the token
@@ -97,16 +96,14 @@ class TestAuthMiddleware:
 
     def test_invalid_token_returns_401(self, app_client):
         """Invalid tokens should return 401."""
-        with patch('src.auth.firebase_config.verify_firebase_token') as mock_verify:
+        with patch("src.auth.firebase_config.verify_firebase_token") as mock_verify:
             mock_verify.return_value = None  # Invalid token
 
             response = app_client.get(
-                "/api/auth/me",
-                headers={"Authorization": "Bearer invalid-token"}
+                "/api/auth/me", headers={"Authorization": "Bearer invalid-token"}
             )
 
             assert response.status_code == 401
-
 
     def test_dev_mode_bypass_removed(self, app_client, monkeypatch):
         """Regression guard: DEV_MODE must NOT bypass authentication.
@@ -118,8 +115,7 @@ class TestAuthMiddleware:
         monkeypatch.setenv("DEV_MODE", "true")
         response = app_client.get("/api/auth/me")
         assert response.status_code == 401, (
-            "DEV_MODE bypass is still active! "
-            "Remove the DEV_MODE check from src/auth/middleware.py"
+            "DEV_MODE bypass is still active! Remove the DEV_MODE check from src/auth/middleware.py"
         )
 
     def test_session_secret_fails_closed_in_production(self, monkeypatch):
@@ -128,6 +124,7 @@ class TestAuthMiddleware:
         monkeypatch.delenv("SESSION_SECRET", raising=False)
 
         from src.auth.firebase_config import _get_session_secret
+
         with pytest.raises(RuntimeError, match="SESSION_SECRET must be set"):
             _get_session_secret()
 
@@ -151,12 +148,7 @@ class TestRBACIntegration:
     def test_rbac_imports_available(self):
         """Verify RBAC can be imported from auth module."""
         from src.auth import (
-            require_auth,
-            require_role,
             UserRole,
-            Permission,
-            has_permission,
-            require_permission,
         )
 
         # Verify UserRole enum has expected values
@@ -170,8 +162,8 @@ class TestRBACIntegration:
         from src.auth import Permission
 
         # Check some expected permissions exist
-        assert hasattr(Permission, 'READ_DASHBOARD')
-        assert hasattr(Permission, 'MANAGE_USERS')
+        assert hasattr(Permission, "READ_DASHBOARD")
+        assert hasattr(Permission, "MANAGE_USERS")
 
 
 class TestAuditIntegration:
@@ -182,8 +174,6 @@ class TestAuditIntegration:
         from src.auth import (
             AuditMiddleware,
             log_audit,
-            get_audit_logs,
-            get_audit_stats,
         )
 
         # Should not raise import errors
@@ -199,11 +189,11 @@ class TestDashboardAPIIntegration:
         from src.dashboard_api import app
 
         # Check that auth routes are in the app
-        routes = [route.path for route in app.routes if hasattr(route, 'path')]
-        auth_routes = [r for r in routes if r.startswith('/api/auth')]
+        routes = [route.path for route in app.routes if hasattr(route, "path")]
+        auth_routes = [r for r in routes if r.startswith("/api/auth")]
 
         assert len(auth_routes) > 0, "No auth routes found in app"
-        assert '/api/auth/login' in routes or any('/api/auth' in r for r in routes)
+        assert "/api/auth/login" in routes or any("/api/auth" in r for r in routes)
 
     def test_existing_endpoints_still_work(self, app_client, mock_firebase_claims):
         """Verify existing dashboard endpoints still function with RBAC."""
@@ -219,11 +209,10 @@ class TestDashboardAPIIntegration:
         )
 
         # Patch get_current_user at the middleware module level
-        with patch('src.auth.middleware.get_current_user', return_value=mock_auth):
+        with patch("src.auth.middleware.get_current_user", return_value=mock_auth):
             # Test existing endpoint with auth
             response = app_client.get(
-                "/api/runs/stats",
-                headers={"Authorization": "Bearer mock-token"}
+                "/api/runs/stats", headers={"Authorization": "Bearer mock-token"}
             )
 
             assert response.status_code == 200

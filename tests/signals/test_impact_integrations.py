@@ -6,42 +6,38 @@ Tests cover:
 - BRAVO integration (evidence pack enrichment)
 """
 
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from src.signals.impact.integrations import (
-    # DELTA
-    push_heat_scores_to_delta,
-    batch_push_heat_scores,
-    get_vehicles_needing_heat_scores,
     _issue_id_to_vehicle_id,
-    # ALPHA
-    get_impact_section_for_brief,
-    get_risks_for_brief,
-    get_objections_for_brief,
-    _score_to_likelihood,
     _score_to_impact,
+    _score_to_likelihood,
     _vehicle_type_to_source_type,
+    batch_push_heat_scores,
+    check_integration_status,
     # BRAVO
     enrich_memo_with_evidence,
     find_evidence_for_source,
     get_citations_for_topic,
+    # ALPHA
+    get_impact_section_for_brief,
+    get_objections_for_brief,
+    get_risks_for_brief,
+    get_vehicles_needing_heat_scores,
+    # DELTA
+    push_heat_scores_to_delta,
     # Pipeline
     run_charlie_integration,
-    check_integration_status,
 )
 from src.signals.impact.models import (
     HeatMap,
-    HeatMapIssue,
-    HeatMapQuadrant,
     create_heat_map_issue,
 )
-
 
 # =============================================================================
 # ISSUE ID TO VEHICLE ID CONVERSION TESTS
 # =============================================================================
+
 
 class TestIssueIdToVehicleId:
     """Test CHARLIE to DELTA ID format conversion."""
@@ -70,6 +66,7 @@ class TestIssueIdToVehicleId:
 # =============================================================================
 # SCORE CONVERSION TESTS
 # =============================================================================
+
 
 class TestScoreConversions:
     """Test CHARLIE score to ALPHA enum conversions."""
@@ -128,6 +125,7 @@ class TestVehicleTypeToSourceType:
 # =============================================================================
 # DELTA INTEGRATION TESTS
 # =============================================================================
+
 
 class TestDeltaIntegration:
     """Test DELTA battlefield dashboard integration."""
@@ -190,6 +188,7 @@ class TestDeltaIntegration:
 # =============================================================================
 # ALPHA INTEGRATION TESTS
 # =============================================================================
+
 
 class TestAlphaIntegration:
     """Test ALPHA CEO Brief integration."""
@@ -305,6 +304,7 @@ class TestAlphaIntegration:
 # BRAVO INTEGRATION TESTS
 # =============================================================================
 
+
 class TestBravoIntegration:
     """Test BRAVO evidence pack integration."""
 
@@ -352,6 +352,7 @@ class TestBravoIntegration:
 # INTEGRATION PIPELINE TESTS
 # =============================================================================
 
+
 class TestIntegrationPipeline:
     """Test full integration pipeline."""
 
@@ -365,14 +366,23 @@ class TestIntegrationPipeline:
             mock_gen.return_value = mock_hm
 
             with patch.object(
-                __import__("src.signals.impact.integrations", fromlist=["push_heat_scores_to_delta"]),
-                "push_heat_scores_to_delta"
+                __import__(
+                    "src.signals.impact.integrations", fromlist=["push_heat_scores_to_delta"]
+                ),
+                "push_heat_scores_to_delta",
             ) as mock_push:
-                mock_push.return_value = {"updated": 0, "not_found": 0, "errors": [], "heat_map_id": "HMAP-TEST"}
+                mock_push.return_value = {
+                    "updated": 0,
+                    "not_found": 0,
+                    "errors": [],
+                    "heat_map_id": "HMAP-TEST",
+                }
 
                 with patch.object(
-                    __import__("src.signals.impact.integrations", fromlist=["get_impact_section_for_brief"]),
-                    "get_impact_section_for_brief"
+                    __import__(
+                        "src.signals.impact.integrations", fromlist=["get_impact_section_for_brief"]
+                    ),
+                    "get_impact_section_for_brief",
                 ) as mock_brief:
                     mock_brief.return_value = {
                         "risks_opportunities": [],
@@ -422,6 +432,7 @@ class TestIntegrationPipeline:
 # =============================================================================
 # HEAT MAP TO DELTA FORMAT TESTS
 # =============================================================================
+
 
 class TestHeatMapToDeltaFormat:
     """Test heat map data conversion for DELTA."""

@@ -5,19 +5,18 @@ CHARLIE COMMAND - Phase 2: Translator validation.
 
 import pytest
 
+from src.signals.envelope import Envelope
+from src.signals.impact.models import (
+    Posture,
+    RiskLevel,
+)
 from src.signals.impact.translator import (
     PolicyToOperationsTranslator,
     TranslationContext,
     translate_bill_to_impact,
-    translate_hearing_to_impact,
     translate_fr_to_impact,
+    translate_hearing_to_impact,
 )
-from src.signals.impact.models import (
-    Posture,
-    ConfidenceLevel,
-    RiskLevel,
-)
-from src.signals.envelope import Envelope
 
 
 class TestPolicyToOperationsTranslator:
@@ -72,16 +71,12 @@ class TestPolicyToOperationsTranslator:
 
     def test_determine_posture_high_compliance(self, translator):
         """Test posture for high compliance risk."""
-        posture = translator._determine_posture(
-            RiskLevel.HIGH, RiskLevel.LOW, "rule"
-        )
+        posture = translator._determine_posture(RiskLevel.HIGH, RiskLevel.LOW, "rule")
         assert posture == Posture.OPPOSE
 
     def test_determine_posture_monitoring(self, translator):
         """Test monitoring posture for low risk."""
-        posture = translator._determine_posture(
-            RiskLevel.LOW, RiskLevel.LOW, "bill"
-        )
+        posture = translator._determine_posture(RiskLevel.LOW, RiskLevel.LOW, "bill")
         assert posture == Posture.MONITOR
 
     def test_translate_context_to_memo(self, translator):
@@ -102,7 +97,12 @@ class TestPolicyToOperationsTranslator:
         assert memo.policy_hook.vehicle == "hr-1234"
         assert memo.policy_hook.vehicle_type == "bill"
         assert len(memo.why_it_matters.affected_workflows) > 0
-        assert memo.our_posture in [Posture.MONITOR, Posture.NEUTRAL_ENGAGED, Posture.SUPPORT, Posture.OPPOSE]
+        assert memo.our_posture in [
+            Posture.MONITOR,
+            Posture.NEUTRAL_ENGAGED,
+            Posture.SUPPORT,
+            Posture.OPPOSE,
+        ]
 
     def test_translate_envelope(self, translator):
         """Test translation from Envelope to impact memo."""
@@ -118,7 +118,10 @@ class TestPolicyToOperationsTranslator:
 
         memo = translator.translate_envelope(envelope)
 
-        assert "appeals" in memo.why_it_matters.affected_workflows or "bva" in memo.why_it_matters.affected_workflows
+        assert (
+            "appeals" in memo.why_it_matters.affected_workflows
+            or "bva" in memo.why_it_matters.affected_workflows
+        )
         assert memo.policy_hook.vehicle == "hr-5678"
 
 
@@ -227,7 +230,7 @@ class TestDomainKnowledge:
 
     def test_workflows_have_descriptions(self, translator):
         """Test that VBA workflows have proper metadata."""
-        for workflow_id, workflow in translator.workflows.items():
+        for _workflow_id, workflow in translator.workflows.items():
             assert "name" in workflow
             assert "description" in workflow
             assert "metrics" in workflow

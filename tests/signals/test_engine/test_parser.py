@@ -1,14 +1,13 @@
 """Tests for expression tree parser."""
 
 import pytest
+
 from src.signals.engine.parser import (
-    parse_expression,
-    validate_expression,
-    ExpressionNode,
-    EvaluatorNode,
     AllOfNode,
     AnyOfNode,
-    NoneOfNode,
+    EvaluatorNode,
+    parse_expression,
+    validate_expression,
 )
 
 
@@ -55,7 +54,10 @@ def test_parse_nested_expression():
             {
                 "any_of": [
                     {"evaluator": "field_in", "args": {"field": "committee", "values": ["HVAC"]}},
-                    {"evaluator": "field_intersects", "args": {"field": "topics", "values": ["rating"]}},
+                    {
+                        "evaluator": "field_intersects",
+                        "args": {"field": "topics", "values": ["rating"]},
+                    },
                 ],
                 "label": "discriminator",
             },
@@ -75,8 +77,33 @@ def test_validate_rejects_unknown_evaluator():
 
 def test_validate_max_depth():
     # Create deeply nested expression (6 levels)
-    expr = {"all_of": [{"all_of": [{"all_of": [{"all_of": [{"all_of": [{"all_of": [
-        {"evaluator": "equals", "args": {"field": "version", "value": 1}}
-    ]}]}]}]}]}]}
+    expr = {
+        "all_of": [
+            {
+                "all_of": [
+                    {
+                        "all_of": [
+                            {
+                                "all_of": [
+                                    {
+                                        "all_of": [
+                                            {
+                                                "all_of": [
+                                                    {
+                                                        "evaluator": "equals",
+                                                        "args": {"field": "version", "value": 1},
+                                                    }
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
     with pytest.raises(ValueError, match="depth"):
         validate_expression(expr, max_depth=5)

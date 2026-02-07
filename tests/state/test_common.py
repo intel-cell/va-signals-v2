@@ -1,12 +1,9 @@
 """Tests for state intelligence common utilities."""
 
-import pytest
-
 from src.state.common import (
     RawSignal,
-    generate_signal_id,
     detect_program,
-    VETERAN_KEYWORDS,
+    generate_signal_id,
     is_veteran_relevant,
 )
 

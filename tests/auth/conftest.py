@@ -6,16 +6,16 @@ ECHO auth module integrated - fixtures now operational.
 Updated: 2026-02-04
 """
 
-import pytest
 import time
-from typing import Generator
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from unittest.mock import patch
 
+import pytest
 
 # =============================================================================
 # TEST USER FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def commander_user() -> dict:
@@ -71,6 +71,7 @@ def unauthenticated_user() -> dict:
 # MOCK TOKEN FIXTURES
 # =============================================================================
 
+
 def _make_mock_token_claims(user: dict) -> dict:
     """Create mock Firebase token claims from user dict."""
     now = int(time.time())
@@ -105,6 +106,7 @@ def invalid_firebase_token() -> str:
 # APP CLIENT FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def test_client():
     """
@@ -113,7 +115,9 @@ def test_client():
     Uses real app with mocked Firebase verification.
     """
     from fastapi.testclient import TestClient
+
     from src.dashboard_api import app
+
     return TestClient(app)
 
 
@@ -135,6 +139,7 @@ def authenticated_client_as(test_client, mock_firebase_verify):
             response = client.get("/api/runs")
             assert response.status_code == 200
     """
+
     def _create_client(user: dict):
         # Mock Firebase to return this user's claims
         mock_firebase_verify.return_value = _make_mock_token_claims(user)
@@ -159,6 +164,7 @@ def authenticated_client(test_client, mock_firebase_verify, viewer_user):
 # =============================================================================
 # DATABASE FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def test_db():
@@ -202,19 +208,24 @@ def test_db():
 @pytest.fixture
 def seeded_test_db(test_db):
     """Test database with seeded test users."""
-    from datetime import datetime, timezone
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     users = [
         ("test-commander-uid", "commander@veteran-signals.com", "Test Commander", "commander", now),
-        ("test-leadership-uid", "leadership@veteran-signals.com", "Test Leadership", "leadership", now),
+        (
+            "test-leadership-uid",
+            "leadership@veteran-signals.com",
+            "Test Leadership",
+            "leadership",
+            now,
+        ),
         ("test-analyst-uid", "analyst@veteran-signals.com", "Test Analyst", "analyst", now),
         ("test-viewer-uid", "viewer@veteran-signals.com", "Test Viewer", "viewer", now),
     ]
 
     test_db.executemany(
         "INSERT INTO users (user_id, email, display_name, role, created_at) VALUES (?, ?, ?, ?, ?)",
-        users
+        users,
     )
     test_db.commit()
     return test_db

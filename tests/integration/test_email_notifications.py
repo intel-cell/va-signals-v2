@@ -1,19 +1,17 @@
 """Integration tests for email notification system."""
 
 import os
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from src.notify_email import (
-    is_configured,
-    _get_config,
-    _send_email,
-    send_error_alert,
-    send_new_docs_alert,
-    send_daily_digest,
     _base_html_template,
     _format_timestamp,
+    _get_config,
+    _send_email,
+    is_configured,
+    send_daily_digest,
+    send_error_alert,
+    send_new_docs_alert,
 )
 
 
@@ -22,69 +20,93 @@ class TestEmailConfiguration:
 
     def test_is_configured_returns_true_when_all_vars_set(self):
         """Returns True when all required env vars are set."""
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password123",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password123",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             assert is_configured() is True
 
     def test_is_configured_returns_false_when_missing_host(self):
         """Returns False when SMTP_HOST is missing."""
-        with patch.dict(os.environ, {
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password123",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password123",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             assert is_configured() is False
 
     def test_is_configured_returns_false_when_missing_user(self):
         """Returns False when SMTP_USER is missing."""
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_PASS": "password123",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_PASS": "password123",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             assert is_configured() is False
 
     def test_is_configured_returns_false_when_missing_password(self):
         """Returns False when SMTP_PASS is missing."""
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             assert is_configured() is False
 
     def test_is_configured_returns_false_when_missing_from(self):
         """Returns False when EMAIL_FROM is missing."""
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password123",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password123",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             assert is_configured() is False
 
     def test_is_configured_returns_false_when_missing_to(self):
         """Returns False when EMAIL_TO is missing."""
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password123",
-            "EMAIL_FROM": "from@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password123",
+                "EMAIL_FROM": "from@example.com",
+            },
+            clear=True,
+        ):
             assert is_configured() is False
 
     def test_get_config_returns_defaults(self):
@@ -97,14 +119,18 @@ class TestEmailConfiguration:
 
     def test_get_config_reads_env_vars(self):
         """Reads configuration from environment variables."""
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "mail.example.com",
-            "SMTP_PORT": "465",
-            "SMTP_USER": "test@example.com",
-            "SMTP_PASS": "secret",
-            "EMAIL_FROM": "noreply@example.com",
-            "EMAIL_TO": "alerts@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "mail.example.com",
+                "SMTP_PORT": "465",
+                "SMTP_USER": "test@example.com",
+                "SMTP_PASS": "secret",
+                "EMAIL_FROM": "noreply@example.com",
+                "EMAIL_TO": "alerts@example.com",
+            },
+            clear=True,
+        ):
             config = _get_config()
             assert config["host"] == "mail.example.com"
             assert config["port"] == 465
@@ -130,14 +156,18 @@ class TestSendEmail:
         mock_smtp_class.return_value.__enter__ = MagicMock(return_value=mock_smtp)
         mock_smtp_class.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = _send_email("Test Subject", "<html>Body</html>", "Body")
 
         assert result is True
@@ -152,14 +182,18 @@ class TestSendEmail:
         mock_smtp_class.return_value.__enter__ = MagicMock(return_value=mock_smtp)
         mock_smtp_class.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to1@example.com, to2@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to1@example.com, to2@example.com",
+            },
+            clear=True,
+        ):
             _send_email("Subject", "<html></html>", "Text")
 
         # Verify sendmail called with list of recipients
@@ -173,14 +207,18 @@ class TestSendEmail:
         """Returns False on SMTP error without raising."""
         mock_smtp_class.side_effect = Exception("SMTP connection failed")
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = _send_email("Subject", "<html></html>", "Text")
 
         # Should return False, not raise
@@ -195,14 +233,18 @@ class TestSendErrorAlert:
         """Constructs error alert with correct information."""
         mock_send.return_value = True
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = send_error_alert(
                 source_id="govinfo_fr_bulk",
                 errors=["API timeout", "Database connection failed"],
@@ -211,7 +253,7 @@ class TestSendErrorAlert:
                     "ended_at": "2026-01-20T10:05:00Z",
                     "status": "ERROR",
                     "records_fetched": 0,
-                }
+                },
             )
 
         assert result is True
@@ -239,7 +281,7 @@ class TestSendErrorAlert:
             result = send_error_alert(
                 source_id="test",
                 errors=["Error"],
-                run_record={"started_at": "", "ended_at": "", "status": "ERROR"}
+                run_record={"started_at": "", "ended_at": "", "status": "ERROR"},
             )
         assert result is False
 
@@ -252,14 +294,18 @@ class TestSendNewDocsAlert:
         """Constructs new docs alert with correct information."""
         mock_send.return_value = True
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = send_new_docs_alert(
                 source_id="govinfo_fr_bulk",
                 docs=[
@@ -277,7 +323,7 @@ class TestSendNewDocsAlert:
                 run_record={
                     "started_at": "2026-01-20T10:00:00Z",
                     "records_fetched": 100,
-                }
+                },
             )
 
         assert result is True
@@ -298,18 +344,22 @@ class TestSendNewDocsAlert:
         """Uses singular form in subject for one document."""
         mock_send.return_value = True
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             send_new_docs_alert(
                 source_id="test",
                 docs=[{"doc_id": "DOC-001", "source_url": ""}],
-                run_record={"started_at": "", "records_fetched": 1}
+                run_record={"started_at": "", "records_fetched": 1},
             )
 
         call_args = mock_send.call_args
@@ -322,22 +372,23 @@ class TestSendNewDocsAlert:
         mock_send.return_value = True
 
         docs = [
-            {"doc_id": f"DOC-{i:03d}", "source_url": f"https://example.com/{i}"}
-            for i in range(15)
+            {"doc_id": f"DOC-{i:03d}", "source_url": f"https://example.com/{i}"} for i in range(15)
         ]
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             send_new_docs_alert(
-                source_id="test",
-                docs=docs,
-                run_record={"started_at": "", "records_fetched": 15}
+                source_id="test", docs=docs, run_record={"started_at": "", "records_fetched": 15}
             )
 
         call_args = mock_send.call_args
@@ -352,9 +403,7 @@ class TestSendNewDocsAlert:
         """Returns False when email not configured."""
         with patch.dict(os.environ, {}, clear=True):
             result = send_new_docs_alert(
-                source_id="test",
-                docs=[{"doc_id": "DOC", "source_url": ""}],
-                run_record={}
+                source_id="test", docs=[{"doc_id": "DOC", "source_url": ""}], run_record={}
             )
         assert result is False
 
@@ -367,14 +416,18 @@ class TestSendDailyDigest:
         """Constructs daily digest with run summary."""
         mock_send.return_value = True
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = send_daily_digest(
                 runs=[
                     {"source_id": "source_a", "status": "SUCCESS", "records_fetched": 50},
@@ -386,7 +439,7 @@ class TestSendDailyDigest:
                     "source_b": [],
                     "source_c": [],
                 },
-                date_label="2026-01-20"
+                date_label="2026-01-20",
             )
 
         assert result is True

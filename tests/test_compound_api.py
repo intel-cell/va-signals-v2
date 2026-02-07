@@ -10,17 +10,17 @@ Covers:
 - 404 handling
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from src.auth.models import AuthContext, UserRole
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def make_auth_context(role: UserRole) -> AuthContext:
     return AuthContext(
@@ -36,6 +36,7 @@ def make_auth_context(role: UserRole) -> AuthContext:
 def client():
     with patch("src.auth.firebase_config.init_firebase"):
         from src.dashboard_api import app
+
         return TestClient(app)
 
 
@@ -58,8 +59,18 @@ SAMPLE_SIGNAL = {
     "narrative": "Correlated 3 events across oversight, bill.",
     "temporal_window_hours": 72,
     "member_events": [
-        {"source_type": "oversight", "event_id": "ev-1", "title": "GAO Report", "timestamp": "2026-02-01T00:00:00Z"},
-        {"source_type": "bill", "event_id": "ev-2", "title": "HR 1234", "timestamp": "2026-02-02T00:00:00Z"},
+        {
+            "source_type": "oversight",
+            "event_id": "ev-1",
+            "title": "GAO Report",
+            "timestamp": "2026-02-01T00:00:00Z",
+        },
+        {
+            "source_type": "bill",
+            "event_id": "ev-2",
+            "title": "HR 1234",
+            "timestamp": "2026-02-02T00:00:00Z",
+        },
     ],
     "topics": ["disability_benefits", "claims_backlog"],
     "created_at": "2026-02-05T12:00:00Z",
@@ -85,10 +96,13 @@ SAMPLE_STATS = {
 # GET /api/compound/signals
 # ===========================================================================
 
+
 class TestListCompoundSignals:
     """GET /api/compound/signals"""
 
-    @patch("src.routers.compound.get_compound_signals", return_value=[SAMPLE_SIGNAL, SAMPLE_SIGNAL_2])
+    @patch(
+        "src.routers.compound.get_compound_signals", return_value=[SAMPLE_SIGNAL, SAMPLE_SIGNAL_2]
+    )
     def test_list_signals_ok(self, mock_get, client):
         with _auth(UserRole.VIEWER):
             resp = client.get("/api/compound/signals")
@@ -104,11 +118,19 @@ class TestListCompoundSignals:
         with _auth(UserRole.VIEWER):
             resp = client.get(
                 "/api/compound/signals",
-                params={"limit": 5, "offset": 10, "rule_id": "oversight_legislative", "min_severity": 0.5},
+                params={
+                    "limit": 5,
+                    "offset": 10,
+                    "rule_id": "oversight_legislative",
+                    "min_severity": 0.5,
+                },
             )
         assert resp.status_code == 200
         mock_get.assert_called_once_with(
-            limit=5, offset=10, rule_id="oversight_legislative", min_severity=0.5,
+            limit=5,
+            offset=10,
+            rule_id="oversight_legislative",
+            min_severity=0.5,
         )
         data = resp.json()
         assert data["limit"] == 5
@@ -138,6 +160,7 @@ class TestListCompoundSignals:
 # ===========================================================================
 # GET /api/compound/signals/{compound_id}
 # ===========================================================================
+
 
 class TestGetCompoundSignal:
     """GET /api/compound/signals/{compound_id}"""
@@ -180,6 +203,7 @@ class TestGetCompoundSignal:
 # POST /api/compound/signals/{compound_id}/resolve
 # ===========================================================================
 
+
 class TestResolveCompoundSignal:
     """POST /api/compound/signals/{compound_id}/resolve"""
 
@@ -219,6 +243,7 @@ class TestResolveCompoundSignal:
 # GET /api/compound/stats
 # ===========================================================================
 
+
 class TestCompoundStats:
     """GET /api/compound/stats"""
 
@@ -237,7 +262,10 @@ class TestCompoundStats:
         resp = client.get("/api/compound/stats")
         assert resp.status_code == 401
 
-    @patch("src.routers.compound.get_compound_stats", return_value={"total": 0, "unresolved": 0, "resolved": 0, "by_rule": {}})
+    @patch(
+        "src.routers.compound.get_compound_stats",
+        return_value={"total": 0, "unresolved": 0, "resolved": 0, "by_rule": {}},
+    )
     def test_stats_empty(self, mock_stats, client):
         with _auth(UserRole.VIEWER):
             resp = client.get("/api/compound/stats")
@@ -260,13 +288,18 @@ class TestCompoundStats:
 # POST /api/compound/run
 # ===========================================================================
 
+
 class TestRunCorrelationEngine:
     """POST /api/compound/run"""
 
     @patch("src.routers.compound.CorrelationEngine")
     def test_run_ok(self, MockEngine, client):
         mock_instance = MagicMock()
-        mock_instance.run.return_value = {"total_signals": 5, "stored": 3, "by_rule": {"oversight_legislative": 5}}
+        mock_instance.run.return_value = {
+            "total_signals": 5,
+            "stored": 3,
+            "by_rule": {"oversight_legislative": 5},
+        }
         MockEngine.return_value = mock_instance
         with _auth(UserRole.ANALYST):
             resp = client.post("/api/compound/run")
@@ -310,6 +343,7 @@ class TestRunCorrelationEngine:
 # ===========================================================================
 # Role hierarchy tests
 # ===========================================================================
+
 
 class TestRoleHierarchy:
     """Verify role hierarchy across compound endpoints."""

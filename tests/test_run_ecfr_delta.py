@@ -1,4 +1,3 @@
-import argparse
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -84,9 +83,17 @@ class TestRunEcfrDelta:
     @patch("src.run_ecfr_delta.requests.head")
     @patch("src.run_ecfr_delta.load_run_schema", return_value={})
     @patch("src.run_ecfr_delta.write_run_record")
-    def test_title_38_default(self, mock_write, mock_schema, mock_head,
-                               mock_init_db, mock_upsert, mock_validate,
-                               mock_insert, mock_alert):
+    def test_title_38_default(
+        self,
+        mock_write,
+        mock_schema,
+        mock_head,
+        mock_init_db,
+        mock_upsert,
+        mock_validate,
+        mock_insert,
+        mock_alert,
+    ):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.headers = {"Last-Modified": "Thu, 01 Jan 2026", "ETag": '"abc"'}
@@ -106,9 +113,17 @@ class TestRunEcfrDelta:
     @patch("src.run_ecfr_delta.requests.head")
     @patch("src.run_ecfr_delta.load_run_schema", return_value={})
     @patch("src.run_ecfr_delta.write_run_record")
-    def test_title_5(self, mock_write, mock_schema, mock_head,
-                      mock_init_db, mock_upsert, mock_validate,
-                      mock_insert, mock_alert):
+    def test_title_5(
+        self,
+        mock_write,
+        mock_schema,
+        mock_head,
+        mock_init_db,
+        mock_upsert,
+        mock_validate,
+        mock_insert,
+        mock_alert,
+    ):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.headers = {"Last-Modified": "Thu, 01 Jan 2026", "ETag": '"def"'}
@@ -127,9 +142,17 @@ class TestRunEcfrDelta:
     @patch("src.run_ecfr_delta.requests.head")
     @patch("src.run_ecfr_delta.load_run_schema", return_value={})
     @patch("src.run_ecfr_delta.write_run_record")
-    def test_title_20(self, mock_write, mock_schema, mock_head,
-                       mock_init_db, mock_upsert, mock_validate,
-                       mock_insert, mock_alert):
+    def test_title_20(
+        self,
+        mock_write,
+        mock_schema,
+        mock_head,
+        mock_init_db,
+        mock_upsert,
+        mock_validate,
+        mock_insert,
+        mock_alert,
+    ):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.headers = {"Last-Modified": "Thu, 01 Jan 2026", "ETag": '"ghi"'}
@@ -148,9 +171,17 @@ class TestRunEcfrDelta:
     @patch("src.run_ecfr_delta.requests.head")
     @patch("src.run_ecfr_delta.load_run_schema", return_value={})
     @patch("src.run_ecfr_delta.write_run_record")
-    def test_no_change_returns_no_data(self, mock_write, mock_schema, mock_head,
-                                        mock_init_db, mock_upsert, mock_validate,
-                                        mock_insert, mock_alert):
+    def test_no_change_returns_no_data(
+        self,
+        mock_write,
+        mock_schema,
+        mock_head,
+        mock_init_db,
+        mock_upsert,
+        mock_validate,
+        mock_insert,
+        mock_alert,
+    ):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.headers = {"Last-Modified": "old", "ETag": '"same"'}
@@ -167,9 +198,17 @@ class TestRunEcfrDelta:
     @patch("src.run_ecfr_delta.requests.head")
     @patch("src.run_ecfr_delta.load_run_schema", return_value={})
     @patch("src.run_ecfr_delta.write_run_record")
-    def test_http_error_returns_error(self, mock_write, mock_schema, mock_head,
-                                       mock_init_db, mock_upsert, mock_validate,
-                                       mock_insert, mock_alert):
+    def test_http_error_returns_error(
+        self,
+        mock_write,
+        mock_schema,
+        mock_head,
+        mock_init_db,
+        mock_upsert,
+        mock_validate,
+        mock_insert,
+        mock_alert,
+    ):
         mock_resp = MagicMock()
         mock_resp.status_code = 503
         mock_head.return_value = mock_resp

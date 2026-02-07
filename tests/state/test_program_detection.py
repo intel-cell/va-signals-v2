@@ -5,18 +5,16 @@ monitoring is by design (issue #11). This test file covers program detection
 patterns added for all 11 categories (3 existing + 8 new).
 """
 
-import pytest
 from unittest.mock import patch
 
+from src.state.classify import classify_by_llm
 from src.state.common import detect_program
-from src.state.classify import ClassificationResult, classify_by_llm
 from src.state.db_helpers import (
-    insert_state_signal,
-    insert_state_classification,
     get_unnotified_signals,
+    insert_state_classification,
+    insert_state_signal,
     mark_signal_notified,
 )
-
 
 # --- Original 3 program categories ---
 
@@ -65,7 +63,10 @@ class TestProgramDetectionNew:
         assert detect_program("C&P exam scheduling changes") == "disability_compensation"
 
     def test_disability_compensation_service_connected(self):
-        assert detect_program("Service-connected disability claim backlog") == "disability_compensation"
+        assert (
+            detect_program("Service-connected disability claim backlog")
+            == "disability_compensation"
+        )
 
     def test_education_gi_bill(self):
         assert detect_program("GI Bill benefits expanded for veterans") == "education"
@@ -248,18 +249,22 @@ class TestNotificationRouting:
 
     def _insert_signal_and_classify(self, signal_id, severity):
         """Helper to insert a signal and its classification."""
-        insert_state_signal({
-            "signal_id": signal_id,
-            "state": "TX",
-            "source_id": "tx_tvc_news",
-            "title": f"Test signal {severity}",
-            "url": f"https://example.com/{signal_id}",
-        })
-        insert_state_classification({
-            "signal_id": signal_id,
-            "severity": severity,
-            "classification_method": "keyword",
-        })
+        insert_state_signal(
+            {
+                "signal_id": signal_id,
+                "state": "TX",
+                "source_id": "tx_tvc_news",
+                "title": f"Test signal {severity}",
+                "url": f"https://example.com/{signal_id}",
+            }
+        )
+        insert_state_classification(
+            {
+                "signal_id": signal_id,
+                "severity": severity,
+                "classification_method": "keyword",
+            }
+        )
 
     def test_medium_signals_get_digest_queued(self):
         self._insert_signal_and_classify("sig_medium_001", "medium")

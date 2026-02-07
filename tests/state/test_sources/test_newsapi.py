@@ -1,9 +1,8 @@
 """Tests for NewsAPI news source."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from src.state.sources.newsapi import NewsAPISource, SEARCH_QUERIES
+from src.state.sources.newsapi import SEARCH_QUERIES, NewsAPISource
 
 
 def test_newsapi_source_attributes():

@@ -10,16 +10,17 @@ Uses mock Firebase token verification to avoid external dependencies.
 """
 
 import time
-import pytest
-from unittest.mock import patch, MagicMock
+from datetime import UTC
+from unittest.mock import patch
 
+import pytest
 
 # =============================================================================
 # HELPERS
 # =============================================================================
 
-def _mock_claims(user_id="test-uid", email="test@veteran-signals.com",
-                 display_name="Test User"):
+
+def _mock_claims(user_id="test-uid", email="test@veteran-signals.com", display_name="Test User"):
     """Build mock Firebase token claims."""
     now = int(time.time())
     return {
@@ -31,8 +32,9 @@ def _mock_claims(user_id="test-uid", email="test@veteran-signals.com",
     }
 
 
-def _mock_user_data(user_id="test-uid", email="test@veteran-signals.com",
-                     display_name="Test User", role="viewer"):
+def _mock_user_data(
+    user_id="test-uid", email="test@veteran-signals.com", display_name="Test User", role="viewer"
+):
     """Build mock user data as returned by _create_or_update_user."""
     return {
         "user_id": user_id,
@@ -46,6 +48,7 @@ def _mock_user_data(user_id="test-uid", email="test@veteran-signals.com",
 def _reset_auth_rate_limiter():
     """Reset auth rate limiter between tests to prevent cross-test interference."""
     from src.auth.api import _auth_limiter
+
     _auth_limiter.reset()
 
 
@@ -54,13 +57,16 @@ def app_client():
     """TestClient with mocked Firebase init."""
     with patch("src.auth.firebase_config.init_firebase"):
         from fastapi.testclient import TestClient
+
         from src.dashboard_api import app
+
         yield TestClient(app)
 
 
 # =============================================================================
 # GOOGLE LOGIN TESTS (Primary production flow: /api/auth/session)
 # =============================================================================
+
 
 class TestGoogleLogin:
     """Test Google OAuth authentication flow via /api/auth/session."""
@@ -70,14 +76,18 @@ class TestGoogleLogin:
         claims = _mock_claims()
         user_data = _mock_user_data()
 
-        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
-             patch("src.auth.api._create_or_update_user", return_value=user_data):
-
-            response = app_client.post("/api/auth/session", json={
-                "idToken": "valid-firebase-token",
-                "provider": "google",
-                "rememberMe": False,
-            })
+        with (
+            patch("src.auth.api.verify_firebase_token", return_value=claims),
+            patch("src.auth.api._create_or_update_user", return_value=user_data),
+        ):
+            response = app_client.post(
+                "/api/auth/session",
+                json={
+                    "idToken": "valid-firebase-token",
+                    "provider": "google",
+                    "rememberMe": False,
+                },
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -92,10 +102,13 @@ class TestGoogleLogin:
     def test_google_login_invalid_token(self, app_client):
         """Test Google login with invalid Firebase token returns 401."""
         with patch("src.auth.api.verify_firebase_token", return_value=None):
-            response = app_client.post("/api/auth/session", json={
-                "idToken": "invalid-token",
-                "provider": "google",
-            })
+            response = app_client.post(
+                "/api/auth/session",
+                json={
+                    "idToken": "invalid-token",
+                    "provider": "google",
+                },
+            )
 
             assert response.status_code == 401
             assert "va_signals_session" not in response.cookies
@@ -104,10 +117,13 @@ class TestGoogleLogin:
         """Test Google login with expired token returns 401."""
         # verify_firebase_token returns None for expired tokens
         with patch("src.auth.api.verify_firebase_token", return_value=None):
-            response = app_client.post("/api/auth/session", json={
-                "idToken": "expired-token",
-                "provider": "google",
-            })
+            response = app_client.post(
+                "/api/auth/session",
+                json={
+                    "idToken": "expired-token",
+                    "provider": "google",
+                },
+            )
 
             assert response.status_code == 401
 
@@ -115,6 +131,7 @@ class TestGoogleLogin:
 # =============================================================================
 # EMAIL LOGIN TESTS (Secondary flow: /api/auth/login)
 # =============================================================================
+
 
 class TestEmailLogin:
     """Test email/password authentication via /api/auth/login.
@@ -128,13 +145,17 @@ class TestEmailLogin:
         claims = _mock_claims(email="user@veteran-signals.com")
         user_data = _mock_user_data(email="user@veteran-signals.com")
 
-        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
-             patch("src.auth.api._create_or_update_user", return_value=user_data):
-
-            response = app_client.post("/api/auth/login", json={
-                "email": "user@veteran-signals.com",
-                "password": "firebase-id-token",
-            })
+        with (
+            patch("src.auth.api.verify_firebase_token", return_value=claims),
+            patch("src.auth.api._create_or_update_user", return_value=user_data),
+        ):
+            response = app_client.post(
+                "/api/auth/login",
+                json={
+                    "email": "user@veteran-signals.com",
+                    "password": "firebase-id-token",
+                },
+            )
 
             assert response.status_code == 200
             data = response.json()
@@ -145,10 +166,13 @@ class TestEmailLogin:
     def test_email_login_wrong_password(self, app_client):
         """Test login with invalid Firebase token returns 401."""
         with patch("src.auth.api.verify_firebase_token", return_value=None):
-            response = app_client.post("/api/auth/login", json={
-                "email": "user@veteran-signals.com",
-                "password": "bad-token",
-            })
+            response = app_client.post(
+                "/api/auth/login",
+                json={
+                    "email": "user@veteran-signals.com",
+                    "password": "bad-token",
+                },
+            )
 
             assert response.status_code == 401
             assert "va_signals_session" not in response.cookies
@@ -156,10 +180,13 @@ class TestEmailLogin:
     def test_email_login_nonexistent_user(self, app_client):
         """Test login with invalid token for non-existent user returns 401."""
         with patch("src.auth.api.verify_firebase_token", return_value=None):
-            response = app_client.post("/api/auth/login", json={
-                "email": "nobody@veteran-signals.com",
-                "password": "any-token",
-            })
+            response = app_client.post(
+                "/api/auth/login",
+                json={
+                    "email": "nobody@veteran-signals.com",
+                    "password": "any-token",
+                },
+            )
 
             # Returns 401 (same as wrong password — no user enumeration)
             assert response.status_code == 401
@@ -170,10 +197,13 @@ class TestEmailLogin:
         claims = _mock_claims(email="real@veteran-signals.com")
 
         with patch("src.auth.api.verify_firebase_token", return_value=claims):
-            response = app_client.post("/api/auth/login", json={
-                "email": "different@veteran-signals.com",
-                "password": "valid-token-wrong-email",
-            })
+            response = app_client.post(
+                "/api/auth/login",
+                json={
+                    "email": "different@veteran-signals.com",
+                    "password": "valid-token-wrong-email",
+                },
+            )
 
             assert response.status_code == 401
 
@@ -181,6 +211,7 @@ class TestEmailLogin:
 # =============================================================================
 # SESSION MANAGEMENT TESTS
 # =============================================================================
+
 
 class TestSessionManagement:
     """Test session handling: creation, persistence, and logout."""
@@ -190,22 +221,28 @@ class TestSessionManagement:
         claims = _mock_claims()
         user_data = _mock_user_data()
 
-        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
-             patch("src.auth.api._create_or_update_user", return_value=user_data):
-
+        with (
+            patch("src.auth.api.verify_firebase_token", return_value=claims),
+            patch("src.auth.api._create_or_update_user", return_value=user_data),
+        ):
             # Step 1: Create session
-            session_resp = app_client.post("/api/auth/session", json={
-                "idToken": "valid-token",
-                "provider": "google",
-            })
+            session_resp = app_client.post(
+                "/api/auth/session",
+                json={
+                    "idToken": "valid-token",
+                    "provider": "google",
+                },
+            )
             assert session_resp.status_code == 200
 
         # Step 2: Use the session cookie to access /api/auth/me
         # The TestClient automatically carries cookies forward.
         # We mock _get_user_role since there's no real DB in tests.
         from src.auth.models import UserRole
-        with patch("src.auth.middleware.AuthMiddleware._get_user_role",
-                   return_value=UserRole.VIEWER):
+
+        with patch(
+            "src.auth.middleware.AuthMiddleware._get_user_role", return_value=UserRole.VIEWER
+        ):
             me_resp = app_client.get("/api/auth/me")
             # Session cookie authenticates the request — should get 200
             assert me_resp.status_code == 200
@@ -227,9 +264,10 @@ class TestSessionManagement:
         # depending on timing. The important thing is the mechanism works.
         # For a definitive test, we mock time:
         with patch("src.auth.firebase_config.datetime") as mock_dt:
-            from datetime import datetime, timezone, timedelta
+            from datetime import datetime, timedelta
+
             # Set "now" to 2 hours in the future
-            future = datetime.now(timezone.utc) + timedelta(hours=2)
+            future = datetime.now(UTC) + timedelta(hours=2)
             mock_dt.now.return_value = future
             mock_dt.fromtimestamp = datetime.fromtimestamp
             result = verify_session_token(token)
@@ -241,12 +279,17 @@ class TestSessionManagement:
         user_data = _mock_user_data()
 
         # Step 1: Create session
-        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
-             patch("src.auth.api._create_or_update_user", return_value=user_data):
-            session_resp = app_client.post("/api/auth/session", json={
-                "idToken": "valid-token",
-                "provider": "google",
-            })
+        with (
+            patch("src.auth.api.verify_firebase_token", return_value=claims),
+            patch("src.auth.api._create_or_update_user", return_value=user_data),
+        ):
+            session_resp = app_client.post(
+                "/api/auth/session",
+                json={
+                    "idToken": "valid-token",
+                    "provider": "google",
+                },
+            )
             assert session_resp.status_code == 200
             assert "va_signals_session" in session_resp.cookies
 
@@ -260,7 +303,8 @@ class TestSessionManagement:
         # After logout, the session cookie should be deleted
         set_cookie_headers = logout_resp.headers.get_list("set-cookie")
         session_cleared = any(
-            "va_signals_session" in h and ('=""' in h or "max-age=0" in h or 'expires=' in h.lower())
+            "va_signals_session" in h
+            and ('=""' in h or "max-age=0" in h or "expires=" in h.lower())
             for h in set_cookie_headers
         )
         assert session_cleared, f"Session cookie not cleared. Headers: {set_cookie_headers}"
@@ -270,13 +314,17 @@ class TestSessionManagement:
         claims = _mock_claims()
         user_data = _mock_user_data()
 
-        with patch("src.auth.api.verify_firebase_token", return_value=claims), \
-             patch("src.auth.api._create_or_update_user", return_value=user_data):
-
-            response = app_client.post("/api/auth/session", json={
-                "idToken": "valid-token",
-                "provider": "google",
-            })
+        with (
+            patch("src.auth.api.verify_firebase_token", return_value=claims),
+            patch("src.auth.api._create_or_update_user", return_value=user_data),
+        ):
+            response = app_client.post(
+                "/api/auth/session",
+                json={
+                    "idToken": "valid-token",
+                    "provider": "google",
+                },
+            )
 
             # Check Set-Cookie headers for security flags
             set_cookie_headers = response.headers.get_list("set-cookie")
@@ -292,6 +340,7 @@ class TestSessionManagement:
 # PASSWORD RESET TESTS
 # =============================================================================
 
+
 class TestPasswordReset:
     """Test password reset flow.
 
@@ -306,6 +355,7 @@ class TestPasswordReset:
         # The backend doesn't expose a /api/auth/reset-password endpoint.
         # This test documents that design decision.
         from src.auth import api
+
         route_paths = [r.path for r in api.router.routes if hasattr(r, "path")]
         assert "/reset-password" not in route_paths
         assert "/forgot-password" not in route_paths
@@ -316,16 +366,18 @@ class TestPasswordReset:
         # (which would indicate the endpoint exists and processes requests).
         # It may return 403 (CSRF), 404, or 405 — all acceptable since
         # they don't leak user existence info.
-        response = app_client.post("/api/auth/reset-password", json={
-            "email": "test@veteran-signals.com"
-        })
-        assert response.status_code not in (200, 400), \
+        response = app_client.post(
+            "/api/auth/reset-password", json={"email": "test@veteran-signals.com"}
+        )
+        assert response.status_code not in (200, 400), (
             "Should not have a functioning reset-password endpoint"
+        )
 
 
 # =============================================================================
 # CSRF PROTECTION TESTS
 # =============================================================================
+
 
 class TestCSRFProtection:
     """Test CSRF protection on state-changing operations."""
@@ -350,15 +402,18 @@ class TestCSRFProtection:
 
         # Must mock at middleware._authenticate so the CSRF check in dispatch()
         # sees this as a session-authenticated request.
-        with patch("src.auth.middleware.AuthMiddleware._authenticate",
-                   return_value=mock_auth):
+        with patch("src.auth.middleware.AuthMiddleware._authenticate", return_value=mock_auth):
             # POST to a non-CSRF-exempt endpoint without CSRF token
-            response = app_client.post("/api/auth/users", json={
-                "email": "new@veteran-signals.com",
-                "role": "viewer",
-            })
-            assert response.status_code == 403, \
+            response = app_client.post(
+                "/api/auth/users",
+                json={
+                    "email": "new@veteran-signals.com",
+                    "role": "viewer",
+                },
+            )
+            assert response.status_code == 403, (
                 "Session-authed POST without CSRF should be rejected"
+            )
 
     def test_csrf_token_provided(self, app_client):
         """POST with matching CSRF cookie and header succeeds."""
@@ -375,11 +430,11 @@ class TestCSRFProtection:
         # Get a CSRF token (sets the cookie)
         csrf_token = self._get_csrf_token(app_client)
 
-        with patch("src.auth.middleware.AuthMiddleware._authenticate",
-                   return_value=mock_auth), \
-             patch("src.auth.api._get_user_by_email", return_value=None), \
-             patch("src.auth.api._execute_write"):
-
+        with (
+            patch("src.auth.middleware.AuthMiddleware._authenticate", return_value=mock_auth),
+            patch("src.auth.api._get_user_by_email", return_value=None),
+            patch("src.auth.api._execute_write"),
+        ):
             response = app_client.post(
                 "/api/auth/users",
                 json={"email": "new@veteran-signals.com", "role": "viewer"},
@@ -387,8 +442,9 @@ class TestCSRFProtection:
                 cookies={"csrf_token": csrf_token},
             )
             # Should not be 403 (CSRF passed)
-            assert response.status_code != 403, \
+            assert response.status_code != 403, (
                 f"CSRF should pass with valid token. Got {response.status_code}"
+            )
 
     def test_csrf_token_invalid(self, app_client):
         """POST with mismatched CSRF cookie and header gets 403."""
@@ -402,16 +458,14 @@ class TestCSRFProtection:
             auth_method="session",
         )
 
-        with patch("src.auth.middleware.AuthMiddleware._authenticate",
-                   return_value=mock_auth):
+        with patch("src.auth.middleware.AuthMiddleware._authenticate", return_value=mock_auth):
             response = app_client.post(
                 "/api/auth/users",
                 json={"email": "new@veteran-signals.com", "role": "viewer"},
                 headers={"X-CSRF-Token": "wrong-token"},
                 cookies={"csrf_token": "different-token"},
             )
-            assert response.status_code == 403, \
-                "Mismatched CSRF tokens should be rejected"
+            assert response.status_code == 403, "Mismatched CSRF tokens should be rejected"
 
     def test_csrf_not_required_for_bearer_auth(self, app_client):
         """Bearer token auth should bypass CSRF (API clients).
@@ -432,24 +486,26 @@ class TestCSRFProtection:
         )
 
         # Mock _authenticate at the middleware level so CSRF check sees firebase auth
-        with patch("src.auth.middleware.AuthMiddleware._authenticate",
-                   return_value=mock_auth), \
-             patch("src.auth.api._get_user_by_email", return_value=None), \
-             patch("src.auth.api._execute_write"):
-
+        with (
+            patch("src.auth.middleware.AuthMiddleware._authenticate", return_value=mock_auth),
+            patch("src.auth.api._get_user_by_email", return_value=None),
+            patch("src.auth.api._execute_write"),
+        ):
             response = app_client.post(
                 "/api/auth/users",
                 json={"email": "new@veteran-signals.com", "role": "viewer"},
                 headers={"Authorization": "Bearer mock-token"},
                 # No CSRF header — should still work for Bearer auth
             )
-            assert response.status_code != 403, \
+            assert response.status_code != 403, (
                 f"Bearer auth should not require CSRF. Got {response.status_code}"
+            )
 
 
 # =============================================================================
 # RATE LIMITING TESTS
 # =============================================================================
+
 
 class TestAuthRateLimiting:
     """Test per-IP rate limiting on auth endpoints."""
@@ -459,36 +515,48 @@ class TestAuthRateLimiting:
         with patch("src.auth.api.verify_firebase_token", return_value=None):
             # Send requests up to the burst limit (5 by default)
             for i in range(5):
-                response = app_client.post("/api/auth/login", json={
-                    "email": "attacker@example.com",
-                    "password": "bad-token",
-                })
+                response = app_client.post(
+                    "/api/auth/login",
+                    json={
+                        "email": "attacker@example.com",
+                        "password": "bad-token",
+                    },
+                )
                 # Should be 401 (invalid token), NOT 429
-                assert response.status_code == 401, \
-                    f"Request {i+1} should be allowed, got {response.status_code}"
+                assert response.status_code == 401, (
+                    f"Request {i + 1} should be allowed, got {response.status_code}"
+                )
 
             # Next request should be rate limited
-            response = app_client.post("/api/auth/login", json={
-                "email": "attacker@example.com",
-                "password": "bad-token",
-            })
-            assert response.status_code == 429, \
-                "Should be rate limited after burst exceeded"
+            response = app_client.post(
+                "/api/auth/login",
+                json={
+                    "email": "attacker@example.com",
+                    "password": "bad-token",
+                },
+            )
+            assert response.status_code == 429, "Should be rate limited after burst exceeded"
             assert "Retry-After" in response.headers
 
     def test_rate_limit_applies_to_session_endpoint(self, app_client):
         """Rate limit also applies to /api/auth/session."""
         with patch("src.auth.api.verify_firebase_token", return_value=None):
             for _ in range(5):
-                app_client.post("/api/auth/session", json={
+                app_client.post(
+                    "/api/auth/session",
+                    json={
+                        "idToken": "bad-token",
+                        "provider": "google",
+                    },
+                )
+
+            response = app_client.post(
+                "/api/auth/session",
+                json={
                     "idToken": "bad-token",
                     "provider": "google",
-                })
-
-            response = app_client.post("/api/auth/session", json={
-                "idToken": "bad-token",
-                "provider": "google",
-            })
+                },
+            )
             assert response.status_code == 429
 
     def test_rate_limit_per_ip_isolation(self, app_client):

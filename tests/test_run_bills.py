@@ -1,29 +1,38 @@
 """Tests for src/run_bills.py — CLI runner for VA Bills sync."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-
-from src import run_bills
 import src.db as db
-
+from src import run_bills
 
 # ── helpers ──────────────────────────────────────────────────────
 
+
 def _insert_test_bill():
-    db.upsert_bill({
-        "bill_id": "hr-118-100", "congress": 118, "bill_type": "hr",
-        "bill_number": 100, "title": "Test VA Bill",
-        "sponsor_name": "Smith", "sponsor_bioguide_id": "S000001",
-        "sponsor_party": "D", "sponsor_state": "CA",
-        "introduced_date": "2024-01-10", "latest_action_date": "2024-02-15",
-        "latest_action_text": "Introduced", "policy_area": "Veterans",
-        "committees_json": "[]", "cosponsors_count": 3,
-    })
+    db.upsert_bill(
+        {
+            "bill_id": "hr-118-100",
+            "congress": 118,
+            "bill_type": "hr",
+            "bill_number": 100,
+            "title": "Test VA Bill",
+            "sponsor_name": "Smith",
+            "sponsor_bioguide_id": "S000001",
+            "sponsor_party": "D",
+            "sponsor_state": "CA",
+            "introduced_date": "2024-01-10",
+            "latest_action_date": "2024-02-15",
+            "latest_action_text": "Introduced",
+            "policy_area": "Veterans",
+            "committees_json": "[]",
+            "cosponsors_count": 3,
+        }
+    )
 
 
 # ── Argument parsing ─────────────────────────────────────────────
+
 
 class TestMainArgParsing:
     @patch.object(run_bills, "run_bills_sync")
@@ -61,31 +70,46 @@ class TestMainArgParsing:
 
 # ── run_bills_sync ───────────────────────────────────────────────
 
+
 class TestRunBillsSync:
     @patch.object(run_bills, "send_error_alert")
     @patch.object(run_bills, "sync_va_bills")
     def test_success_path(self, mock_sync, mock_alert, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr(run_bills, "ROOT", tmp_path)
         mock_sync.return_value = {
-            "new_bills": 3, "new_actions": 5, "updated_bills": 1, "errors": [],
+            "new_bills": 3,
+            "new_actions": 5,
+            "updated_bills": 1,
+            "errors": [],
         }
 
         # Need schema file for validation
         schemas_dir = tmp_path / "schemas"
         schemas_dir.mkdir()
-        (schemas_dir / "source_run.schema.json").write_text(json.dumps({
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-            "required": ["source_id", "started_at", "ended_at", "status", "records_fetched", "errors"],
-            "properties": {
-                "source_id": {"type": "string"},
-                "started_at": {"type": "string"},
-                "ended_at": {"type": "string"},
-                "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
-                "records_fetched": {"type": "integer", "minimum": 0},
-                "errors": {"type": "array", "items": {"type": "string"}},
-            },
-        }))
+        (schemas_dir / "source_run.schema.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "required": [
+                        "source_id",
+                        "started_at",
+                        "ended_at",
+                        "status",
+                        "records_fetched",
+                        "errors",
+                    ],
+                    "properties": {
+                        "source_id": {"type": "string"},
+                        "started_at": {"type": "string"},
+                        "ended_at": {"type": "string"},
+                        "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
+                        "records_fetched": {"type": "integer", "minimum": 0},
+                        "errors": {"type": "array", "items": {"type": "string"}},
+                    },
+                }
+            )
+        )
 
         result = run_bills.run_bills_sync(full=False, congress=118)
 
@@ -104,19 +128,30 @@ class TestRunBillsSync:
 
         schemas_dir = tmp_path / "schemas"
         schemas_dir.mkdir()
-        (schemas_dir / "source_run.schema.json").write_text(json.dumps({
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-            "required": ["source_id", "started_at", "ended_at", "status", "records_fetched", "errors"],
-            "properties": {
-                "source_id": {"type": "string"},
-                "started_at": {"type": "string"},
-                "ended_at": {"type": "string"},
-                "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
-                "records_fetched": {"type": "integer", "minimum": 0},
-                "errors": {"type": "array", "items": {"type": "string"}},
-            },
-        }))
+        (schemas_dir / "source_run.schema.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "required": [
+                        "source_id",
+                        "started_at",
+                        "ended_at",
+                        "status",
+                        "records_fetched",
+                        "errors",
+                    ],
+                    "properties": {
+                        "source_id": {"type": "string"},
+                        "started_at": {"type": "string"},
+                        "ended_at": {"type": "string"},
+                        "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
+                        "records_fetched": {"type": "integer", "minimum": 0},
+                        "errors": {"type": "array", "items": {"type": "string"}},
+                    },
+                }
+            )
+        )
 
         result = run_bills.run_bills_sync()
 
@@ -129,24 +164,38 @@ class TestRunBillsSync:
     def test_no_data_path(self, mock_sync, mock_alert, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr(run_bills, "ROOT", tmp_path)
         mock_sync.return_value = {
-            "new_bills": 0, "new_actions": 0, "updated_bills": 0, "errors": [],
+            "new_bills": 0,
+            "new_actions": 0,
+            "updated_bills": 0,
+            "errors": [],
         }
 
         schemas_dir = tmp_path / "schemas"
         schemas_dir.mkdir()
-        (schemas_dir / "source_run.schema.json").write_text(json.dumps({
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-            "required": ["source_id", "started_at", "ended_at", "status", "records_fetched", "errors"],
-            "properties": {
-                "source_id": {"type": "string"},
-                "started_at": {"type": "string"},
-                "ended_at": {"type": "string"},
-                "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
-                "records_fetched": {"type": "integer", "minimum": 0},
-                "errors": {"type": "array", "items": {"type": "string"}},
-            },
-        }))
+        (schemas_dir / "source_run.schema.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "required": [
+                        "source_id",
+                        "started_at",
+                        "ended_at",
+                        "status",
+                        "records_fetched",
+                        "errors",
+                    ],
+                    "properties": {
+                        "source_id": {"type": "string"},
+                        "started_at": {"type": "string"},
+                        "ended_at": {"type": "string"},
+                        "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
+                        "records_fetched": {"type": "integer", "minimum": 0},
+                        "errors": {"type": "array", "items": {"type": "string"}},
+                    },
+                }
+            )
+        )
 
         result = run_bills.run_bills_sync()
         assert result["status"] == "NO_DATA"
@@ -156,31 +205,45 @@ class TestRunBillsSync:
     def test_sync_errors_status(self, mock_sync, mock_alert, tmp_path, monkeypatch, capsys):
         monkeypatch.setattr(run_bills, "ROOT", tmp_path)
         mock_sync.return_value = {
-            "new_bills": 2, "new_actions": 0, "updated_bills": 0,
+            "new_bills": 2,
+            "new_actions": 0,
+            "updated_bills": 0,
             "errors": ["Rate limited on page 3"],
         }
 
         schemas_dir = tmp_path / "schemas"
         schemas_dir.mkdir()
-        (schemas_dir / "source_run.schema.json").write_text(json.dumps({
-            "$schema": "https://json-schema.org/draft/2020-12/schema",
-            "type": "object",
-            "required": ["source_id", "started_at", "ended_at", "status", "records_fetched", "errors"],
-            "properties": {
-                "source_id": {"type": "string"},
-                "started_at": {"type": "string"},
-                "ended_at": {"type": "string"},
-                "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
-                "records_fetched": {"type": "integer", "minimum": 0},
-                "errors": {"type": "array", "items": {"type": "string"}},
-            },
-        }))
+        (schemas_dir / "source_run.schema.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "required": [
+                        "source_id",
+                        "started_at",
+                        "ended_at",
+                        "status",
+                        "records_fetched",
+                        "errors",
+                    ],
+                    "properties": {
+                        "source_id": {"type": "string"},
+                        "started_at": {"type": "string"},
+                        "ended_at": {"type": "string"},
+                        "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
+                        "records_fetched": {"type": "integer", "minimum": 0},
+                        "errors": {"type": "array", "items": {"type": "string"}},
+                    },
+                }
+            )
+        )
 
         result = run_bills.run_bills_sync()
         assert result["status"] == "ERROR"
 
 
 # ── print_summary ────────────────────────────────────────────────
+
 
 class TestPrintSummary:
     def test_empty_db_summary(self, capsys):
@@ -198,6 +261,7 @@ class TestPrintSummary:
 
 # ── write_run_record ─────────────────────────────────────────────
 
+
 class TestWriteRunRecord:
     def test_writes_json_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(run_bills, "ROOT", tmp_path)
@@ -211,6 +275,7 @@ class TestWriteRunRecord:
 
 
 # ── load_run_schema ──────────────────────────────────────────────
+
 
 class TestLoadRunSchema:
     def test_loads_schema(self):

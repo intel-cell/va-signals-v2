@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.oversight.db_helpers import insert_om_event, get_om_event
+from src.oversight.db_helpers import get_om_event, insert_om_event
 from src.oversight.runner import _extract_theme
 
 
@@ -87,11 +87,20 @@ class TestExtractTheme:
         assert _extract_theme("Program Evaluation Results", "gao") == "oversight_report"
 
     def test_congressional_action_keywords(self):
-        assert _extract_theme("Senate Hearing on VA Budget", "committee_press") == "congressional_action"
-        assert _extract_theme("Committee Markup Session", "congressional_record") == "congressional_action"
+        assert (
+            _extract_theme("Senate Hearing on VA Budget", "committee_press")
+            == "congressional_action"
+        )
+        assert (
+            _extract_theme("Committee Markup Session", "congressional_record")
+            == "congressional_action"
+        )
         assert _extract_theme("New Legislation Introduced", "news_wire") == "congressional_action"
         assert _extract_theme("House Bill on Veterans", "committee_press") == "congressional_action"
-        assert _extract_theme("Joint Resolution for VA Reform", "congressional_record") == "congressional_action"
+        assert (
+            _extract_theme("Joint Resolution for VA Reform", "congressional_record")
+            == "congressional_action"
+        )
 
     def test_legal_ruling_keywords(self):
         assert _extract_theme("Court Rules on Benefits Case", "cafc") == "legal_ruling"
@@ -107,7 +116,9 @@ class TestExtractTheme:
     def test_budget_fiscal_keywords(self):
         assert _extract_theme("VA Budget Request for FY2027", "committee_press") == "budget_fiscal"
         assert _extract_theme("Funding Increase for Mental Health", "news_wire") == "budget_fiscal"
-        assert _extract_theme("New Appropriation Approved", "congressional_record") == "budget_fiscal"
+        assert (
+            _extract_theme("New Appropriation Approved", "congressional_record") == "budget_fiscal"
+        )
 
     def test_personnel_keywords(self):
         assert _extract_theme("New VA Secretary Nominee", "news_wire") == "personnel"
@@ -116,8 +127,12 @@ class TestExtractTheme:
 
     def test_healthcare_operations_keywords(self):
         assert _extract_theme("Hospital Inspection Results", "oig") == "healthcare_operations"
-        assert _extract_theme("Wait Time Improvements at VA", "news_wire") == "healthcare_operations"
-        assert _extract_theme("Staffing Shortages Continue", "trade_press") == "healthcare_operations"
+        assert (
+            _extract_theme("Wait Time Improvements at VA", "news_wire") == "healthcare_operations"
+        )
+        assert (
+            _extract_theme("Staffing Shortages Continue", "trade_press") == "healthcare_operations"
+        )
 
     def test_benefits_claims_keywords(self):
         assert _extract_theme("Disability Claims Backlog Grows", "news_wire") == "benefits_claims"
@@ -131,7 +146,10 @@ class TestExtractTheme:
         assert _extract_theme("Untitled Document XYZ", "oig") == "oversight_report"
 
     def test_source_type_fallback_congressional_record(self):
-        assert _extract_theme("Untitled Document XYZ", "congressional_record") == "congressional_action"
+        assert (
+            _extract_theme("Untitled Document XYZ", "congressional_record")
+            == "congressional_action"
+        )
 
     def test_source_type_fallback_committee_press(self):
         assert _extract_theme("Untitled Document XYZ", "committee_press") == "congressional_action"

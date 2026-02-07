@@ -1,14 +1,12 @@
 """Tests for deduplicator module."""
 
-import pytest
-
+from src.oversight.db_helpers import insert_om_event
 from src.oversight.pipeline.deduplicator import (
+    DeduplicationResult,
     extract_entities,
     find_canonical_event,
     link_related_coverage,
-    DeduplicationResult,
 )
-from src.oversight.db_helpers import insert_om_event, get_om_event
 
 
 def test_extract_entities_gao_report():
@@ -61,19 +59,21 @@ def test_extract_entities_oig_report():
 def test_find_canonical_event_match():
     """Find existing canonical event by entity match."""
     # Insert a canonical event
-    insert_om_event({
-        "event_id": "canonical-gao-123",
-        "event_type": "report_release",
-        "theme": "healthcare",
-        "primary_source_type": "gao",
-        "primary_url": "https://gao.gov/products/gao-26-555555",
-        "pub_timestamp": "2026-01-20T10:00:00Z",
-        "pub_precision": "datetime",
-        "pub_source": "extracted",
-        "title": "Original GAO Report",
-        "canonical_refs": {"gao_report": "GAO-26-555555"},
-        "fetched_at": "2026-01-20T12:00:00Z",
-    })
+    insert_om_event(
+        {
+            "event_id": "canonical-gao-123",
+            "event_type": "report_release",
+            "theme": "healthcare",
+            "primary_source_type": "gao",
+            "primary_url": "https://gao.gov/products/gao-26-555555",
+            "pub_timestamp": "2026-01-20T10:00:00Z",
+            "pub_precision": "datetime",
+            "pub_source": "extracted",
+            "title": "Original GAO Report",
+            "canonical_refs": {"gao_report": "GAO-26-555555"},
+            "fetched_at": "2026-01-20T12:00:00Z",
+        }
+    )
 
     # Try to find it with matching entity
     result = find_canonical_event(
@@ -98,17 +98,19 @@ def test_find_canonical_event_no_match():
 def test_link_related_coverage():
     """Link news coverage to canonical event."""
     # Insert canonical event
-    insert_om_event({
-        "event_id": "canonical-for-linking",
-        "event_type": "report_release",
-        "primary_source_type": "gao",
-        "primary_url": "https://gao.gov/test",
-        "pub_timestamp": "2026-01-20T10:00:00Z",
-        "pub_precision": "datetime",
-        "pub_source": "extracted",
-        "title": "GAO Report for Linking Test",
-        "fetched_at": "2026-01-20T12:00:00Z",
-    })
+    insert_om_event(
+        {
+            "event_id": "canonical-for-linking",
+            "event_type": "report_release",
+            "primary_source_type": "gao",
+            "primary_url": "https://gao.gov/test",
+            "pub_timestamp": "2026-01-20T10:00:00Z",
+            "pub_precision": "datetime",
+            "pub_source": "extracted",
+            "title": "GAO Report for Linking Test",
+            "fetched_at": "2026-01-20T12:00:00Z",
+        }
+    )
 
     # Link related coverage
     link_related_coverage(

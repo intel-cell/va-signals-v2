@@ -1,14 +1,16 @@
 """Tests for signals router."""
 
 import pytest
-from src.signals.router import SignalsRouter, RouteResult
+
 from src.signals.envelope import Envelope
+from src.signals.router import RouteResult, SignalsRouter
 
 
 @pytest.fixture
 def router(tmp_path, monkeypatch):
     """Create router with test DB for suppression."""
     import src.db as db_module
+
     test_db = tmp_path / "test_signals.db"
     monkeypatch.setattr(db_module, "DB_PATH", test_db)
     db_module.init_db()
@@ -76,7 +78,10 @@ def test_router_includes_evaluation_result(router, gao_envelope):
     assert result.evaluation is not None
     assert result.evaluation.passed is True
     # Should have matched terms from contains_any evaluator
-    assert "GAO" in result.evaluation.matched_terms or "investigation" in result.evaluation.matched_terms
+    assert (
+        "GAO" in result.evaluation.matched_terms
+        or "investigation" in result.evaluation.matched_terms
+    )
 
 
 def test_router_checks_suppression(router, gao_envelope):

@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.state.sources.base import StateSource
 from src.state.common import RawSignal
+from src.state.sources.base import StateSource
 
 
 def test_state_source_is_abstract():

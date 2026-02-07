@@ -7,8 +7,9 @@ Comprehensive E2E test scenarios for Command Dashboard.
 Tests full stack: UI → API → Database → Response
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 from src.auth.models import AuthContext, UserRole
@@ -17,8 +18,9 @@ from src.auth.models import AuthContext, UserRole
 @pytest.fixture
 def app_client():
     """Create test client with mocked Firebase."""
-    with patch('src.auth.firebase_config.init_firebase'):
+    with patch("src.auth.firebase_config.init_firebase"):
         from src.dashboard_api import app
+
         return TestClient(app)
 
 
@@ -70,14 +72,18 @@ class TestDashboardNavigation:
 
     def test_dashboard_loads_for_authenticated_user(self, app_client):
         """Dashboard should load for authenticated users."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.get("/")
             # Should return index.html or redirect
             assert response.status_code in (200, 302, 307)
 
     def test_all_dashboard_tabs_accessible(self, app_client):
         """All dashboard tabs should have working API endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             # Overview tab
             response = app_client.get("/api/runs/stats")
             assert response.status_code == 200
@@ -100,7 +106,9 @@ class TestCommandCenterFlow:
 
     def test_command_center_stats(self, app_client):
         """Command Center should display mission stats."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             # Get overview stats
             response = app_client.get("/api/runs/stats")
             assert response.status_code == 200
@@ -109,7 +117,9 @@ class TestCommandCenterFlow:
 
     def test_battlefield_dashboard(self, app_client):
         """Battlefield dashboard should be accessible."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             try:
                 response = app_client.get("/api/battlefield/dashboard")
                 # Accept 200 or 500 (missing table)
@@ -123,7 +133,9 @@ class TestExecutiveSummaryFlow:
 
     def test_executive_metrics_available(self, app_client):
         """Executive metrics should be retrievable."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             # FR stats
             response = app_client.get("/api/runs/stats")
             assert response.status_code == 200
@@ -138,7 +150,9 @@ class TestExecutiveSummaryFlow:
 
     def test_oversight_stats(self, app_client):
         """Oversight stats for executive view."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.get("/api/oversight/stats")
             assert response.status_code == 200
 
@@ -149,24 +163,33 @@ class TestCEOBriefFlow:
     def test_brief_list_requires_analyst(self, app_client):
         """Brief listing requires ANALYST role."""
         # VIEWER should be rejected
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.get("/api/ceo-brief/briefs")
             assert response.status_code == 403
 
         # ANALYST should succeed
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/ceo-brief/briefs")
             assert response.status_code == 200
 
     def test_brief_generation_requires_leadership(self, app_client):
         """Brief generation requires LEADERSHIP role."""
         # ANALYST should be rejected
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.post("/api/ceo-brief/generate")
             assert response.status_code == 403
 
         # LEADERSHIP should succeed
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.get_current_user",
+            return_value=make_auth_context(UserRole.LEADERSHIP),
+        ):
             response = app_client.post("/api/ceo-brief/generate")
             assert response.status_code == 200
 
@@ -177,18 +200,24 @@ class TestAuditLogFlow:
     def test_audit_logs_require_commander(self, app_client):
         """Audit log access requires COMMANDER role."""
         # LEADERSHIP should be rejected - mock require_auth for auth router
-        with patch('src.auth.middleware.require_auth', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.require_auth", return_value=make_auth_context(UserRole.LEADERSHIP)
+        ):
             response = app_client.get("/api/auth/audit/logs")
             assert response.status_code == 403
 
         # COMMANDER should succeed
-        with patch('src.auth.middleware.require_auth', return_value=make_auth_context(UserRole.COMMANDER)):
+        with patch(
+            "src.auth.middleware.require_auth", return_value=make_auth_context(UserRole.COMMANDER)
+        ):
             response = app_client.get("/api/auth/audit/logs")
             assert response.status_code == 200
 
     def test_audit_stats_require_commander(self, app_client):
         """Audit stats requires COMMANDER role."""
-        with patch('src.auth.middleware.require_auth', return_value=make_auth_context(UserRole.COMMANDER)):
+        with patch(
+            "src.auth.middleware.require_auth", return_value=make_auth_context(UserRole.COMMANDER)
+        ):
             response = app_client.get("/api/auth/audit/stats")
             assert response.status_code == 200
             data = response.json()
@@ -200,7 +229,9 @@ class TestEvidencePackFlow:
 
     def test_evidence_packs_list(self, app_client):
         """Evidence pack listing should work for ANALYST."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/evidence/packs")
             assert response.status_code == 200
             data = response.json()
@@ -209,7 +240,9 @@ class TestEvidencePackFlow:
 
     def test_evidence_search(self, app_client):
         """Evidence search should work for ANALYST."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/evidence/search?q=veteran")
             assert response.status_code == 200
             data = response.json()
@@ -222,14 +255,18 @@ class TestUserManagementFlow:
     def test_user_list_requires_commander(self, app_client):
         """User listing requires COMMANDER role."""
         # LEADERSHIP should be rejected - mock require_auth for auth router
-        with patch('src.auth.middleware.require_auth', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.require_auth", return_value=make_auth_context(UserRole.LEADERSHIP)
+        ):
             response = app_client.get("/api/auth/users")
             assert response.status_code == 403
 
         # COMMANDER should succeed (RBAC passes)
         # Note: May get 500 if users table doesn't exist - that's acceptable
         # as it proves RBAC passed. Use try/except for db initialization issues.
-        with patch('src.auth.middleware.require_auth', return_value=make_auth_context(UserRole.COMMANDER)):
+        with patch(
+            "src.auth.middleware.require_auth", return_value=make_auth_context(UserRole.COMMANDER)
+        ):
             try:
                 response = app_client.get("/api/auth/users")
                 # Accept 200 (success) or 500 (db error) - both prove RBAC passed
@@ -266,19 +303,25 @@ class TestErrorHandling:
 
     def test_404_for_nonexistent_pack(self, app_client):
         """Should return 404 for nonexistent evidence pack."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/evidence/packs/nonexistent-pack-id")
             assert response.status_code == 404
 
     def test_404_for_nonexistent_brief(self, app_client):
         """Should return 404 for nonexistent CEO brief."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/ceo-brief/briefs/nonexistent-brief-id")
             assert response.status_code == 404
 
     def test_validation_error_for_bad_params(self, app_client):
         """Should return validation error for bad parameters."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             # Limit out of range
             response = app_client.get("/api/runs?limit=9999")
             assert response.status_code == 422  # Validation error

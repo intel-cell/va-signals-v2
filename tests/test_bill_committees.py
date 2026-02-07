@@ -1,13 +1,10 @@
 """Tests for bill committee fetch and update functionality."""
 
 import json
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 import src.db as db
 from src.fetch_bills import fetch_bill_committees
-
 
 # ── Sample API response ────────────────────────────────────────
 
@@ -29,27 +26,31 @@ SAMPLE_COMMITTEES_RESPONSE = {
 
 # ── helpers ─────────────────────────────────────────────────────
 
+
 def _insert_test_bill(committees_json="[]"):
-    db.upsert_bill({
-        "bill_id": "hr-119-100",
-        "congress": 119,
-        "bill_type": "hr",
-        "bill_number": 100,
-        "title": "Test VA Bill",
-        "sponsor_name": "Smith",
-        "sponsor_bioguide_id": "S000001",
-        "sponsor_party": "D",
-        "sponsor_state": "CA",
-        "introduced_date": "2025-01-10",
-        "latest_action_date": "2025-02-15",
-        "latest_action_text": "Introduced",
-        "policy_area": "Veterans",
-        "committees_json": committees_json,
-        "cosponsors_count": 3,
-    })
+    db.upsert_bill(
+        {
+            "bill_id": "hr-119-100",
+            "congress": 119,
+            "bill_type": "hr",
+            "bill_number": 100,
+            "title": "Test VA Bill",
+            "sponsor_name": "Smith",
+            "sponsor_bioguide_id": "S000001",
+            "sponsor_party": "D",
+            "sponsor_state": "CA",
+            "introduced_date": "2025-01-10",
+            "latest_action_date": "2025-02-15",
+            "latest_action_text": "Introduced",
+            "policy_area": "Veterans",
+            "committees_json": committees_json,
+            "cosponsors_count": 3,
+        }
+    )
 
 
 # ── fetch_bill_committees ──────────────────────────────────────
+
 
 class TestFetchBillCommittees:
     @patch("src.fetch_bills._fetch_json")
@@ -96,6 +97,7 @@ class TestFetchBillCommittees:
 
 # ── update_committees_json ─────────────────────────────────────
 
+
 class TestUpdateCommitteesJson:
     def test_updates_existing_bill(self):
         _insert_test_bill(committees_json="[]")
@@ -119,6 +121,7 @@ class TestUpdateCommitteesJson:
 
 
 # ── sync integration ──────────────────────────────────────────
+
 
 class TestSyncCommitteeBackfill:
     @patch("src.fetch_bills.fetch_bill_committees")
@@ -157,7 +160,7 @@ class TestSyncCommitteeBackfill:
             {"name": "VA Committee", "chamber": "House", "type": "Standing"}
         ]
 
-        stats = sync_va_bills(congress=119, limit=10, dry_run=False)
+        sync_va_bills(congress=119, limit=10, dry_run=False)
 
         # fetch_bill_committees should have been called for the bill with empty committees
         mock_fetch_comms.assert_called()

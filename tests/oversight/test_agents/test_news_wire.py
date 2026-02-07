@@ -1,12 +1,12 @@
 """Tests for NewsWire agent."""
 
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.oversight.agents.news_wire import NewsWireAgent, VA_SEARCH_TERMS
 from src.oversight.agents.base import RawEvent
+from src.oversight.agents.news_wire import NewsWireAgent
 
 
 @pytest.fixture
@@ -115,7 +115,7 @@ class TestNewsWireAgentFetchNew:
             raise_for_status=lambda: None,
         )
 
-        since = datetime(2026, 1, 15, tzinfo=timezone.utc)
+        since = datetime(2026, 1, 15, tzinfo=UTC)
         news_wire_agent.fetch_new(since=since)
 
         # Verify the 'from' parameter was set correctly
@@ -301,8 +301,8 @@ class TestNewsWireAgentBackfill:
             raise_for_status=lambda: None,
         )
 
-        start = datetime(2026, 1, 10, tzinfo=timezone.utc)
-        end = datetime(2026, 1, 20, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 10, tzinfo=UTC)
+        end = datetime(2026, 1, 20, tzinfo=UTC)
 
         events = news_wire_agent.backfill(start, end)
 
@@ -315,8 +315,8 @@ class TestNewsWireAgentBackfill:
         """backfill returns empty list when API key is missing."""
         mock_get_key.side_effect = Exception("No API key")
 
-        start = datetime(2026, 1, 10, tzinfo=timezone.utc)
-        end = datetime(2026, 1, 20, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 10, tzinfo=UTC)
+        end = datetime(2026, 1, 20, tzinfo=UTC)
 
         events = news_wire_agent.backfill(start, end)
 

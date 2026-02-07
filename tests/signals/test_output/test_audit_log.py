@@ -1,16 +1,19 @@
 """Tests for audit log writer."""
 
-import pytest
 import json
-from src.signals.output.audit_log import write_audit_log
-from src.signals.engine.evaluator import EvaluationResult
+
+import pytest
+
 from src.db import connect
+from src.signals.engine.evaluator import EvaluationResult
+from src.signals.output.audit_log import write_audit_log
 
 
 @pytest.fixture
 def setup_db(tmp_path, monkeypatch):
     """Set up test database."""
     import src.db as db_module
+
     test_db = tmp_path / "test_signals.db"
     monkeypatch.setattr(db_module, "DB_PATH", test_db)
     db_module.init_db()
@@ -56,7 +59,9 @@ def test_write_audit_log_stores_suppressed(setup_db):
     # Verify stored correctly
     con = connect()
     cur = con.cursor()
-    cur.execute("SELECT suppressed, suppression_reason FROM signal_audit_log WHERE id = ?", (row_id,))
+    cur.execute(
+        "SELECT suppressed, suppression_reason FROM signal_audit_log WHERE id = ?", (row_id,)
+    )
     row = cur.fetchone()
     con.close()
 

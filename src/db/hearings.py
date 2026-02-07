@@ -48,7 +48,8 @@ def upsert_hearing(hearing: dict) -> tuple[bool, list[dict]]:
             if dt.year >= 2099:
                 logger.warning(
                     "Rejecting hearing with far-future date: event_id=%s date=%s",
-                    hearing.get("event_id"), hearing_date,
+                    hearing.get("event_id"),
+                    hearing_date,
                 )
                 return (False, [])
         except (ValueError, TypeError):
@@ -105,18 +106,31 @@ def upsert_hearing(hearing: dict) -> tuple[bool, list[dict]]:
     changes = []
 
     # Fields to track for changes
-    tracked_fields = ["status", "hearing_date", "hearing_time", "title", "location", "witnesses_json"]
+    tracked_fields = [
+        "status",
+        "hearing_date",
+        "hearing_time",
+        "title",
+        "location",
+        "witnesses_json",
+    ]
 
     for field in tracked_fields:
         old_val = existing_dict.get(field)
         new_val = hearing.get(field)
         # Normalize None vs empty string comparison
-        if old_val != new_val and not (old_val is None and new_val == "") and not (old_val == "" and new_val is None):
-            changes.append({
-                "field_changed": field,
-                "old_value": old_val,
-                "new_value": new_val,
-            })
+        if (
+            old_val != new_val
+            and not (old_val is None and new_val == "")
+            and not (old_val == "" and new_val is None)
+        ):
+            changes.append(
+                {
+                    "field_changed": field,
+                    "old_value": old_val,
+                    "new_value": new_val,
+                }
+            )
 
     # Update the record if there are changes
     if changes:
@@ -192,6 +206,7 @@ def get_hearings(upcoming: bool = True, limit: int = 20, committee: str = None) 
     con = connect()
 
     from datetime import date
+
     today = date.today().isoformat()
 
     query = """SELECT event_id, congress, chamber, committee_code, committee_name,
@@ -340,6 +355,7 @@ def get_hearing_stats() -> dict:
     con = connect()
 
     from datetime import date
+
     today = date.today().isoformat()
 
     # Total hearings
@@ -359,7 +375,7 @@ def get_hearing_stats() -> dict:
         con,
         """SELECT committee_code, committee_name, COUNT(*)
            FROM hearings GROUP BY committee_code
-           ORDER BY COUNT(*) DESC"""
+           ORDER BY COUNT(*) DESC""",
     )
     by_committee = {r[0]: {"name": r[1], "count": r[2]} for r in cur.fetchall()}
 

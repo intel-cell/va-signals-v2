@@ -1,6 +1,5 @@
 """Tests for hearings adapter."""
 
-import pytest
 from src.signals.adapters.hearings import HearingsAdapter
 from src.signals.envelope import Envelope
 

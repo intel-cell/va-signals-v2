@@ -1,8 +1,9 @@
 """Tests for expression evaluator."""
 
 import pytest
+
+from src.signals.engine.evaluator import evaluate_expression
 from src.signals.envelope import Envelope
-from src.signals.engine.evaluator import evaluate_expression, EvaluationResult
 
 
 @pytest.fixture
