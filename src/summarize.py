@@ -6,6 +6,7 @@ of Federal Register rules and notices.
 """
 
 import json
+import logging
 import sys
 import time
 from pathlib import Path
@@ -25,7 +26,11 @@ from src.llm_config import SONNET_MODEL as CLAUDE_MODEL
 
 from .db import connect, execute
 from .provenance import utc_now_iso
+from .resilience.circuit_breaker import CircuitBreakerOpen, anthropic_cb
+from .resilience.wiring import circuit_breaker_sync
 from .secrets import get_env_or_keychain
+
+_llm_logger = logging.getLogger(__name__)
 
 CLAUDE_MAX_TOKENS = 1024
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
@@ -325,6 +330,14 @@ def _extract_json(text: str) -> dict[str, Any] | None:
     return None
 
 
+@circuit_breaker_sync(anthropic_cb)
+def _post_anthropic(headers, payload, timeout):
+    """Execute a single Anthropic API POST, protected by circuit breaker."""
+    r = requests.post(CLAUDE_API_URL, headers=headers, json=payload, timeout=timeout)
+    r.raise_for_status()
+    return r
+
+
 def _call_claude(
     system_prompt: str,
     user_prompt: str,
@@ -361,8 +374,7 @@ def _call_claude(
 
     for attempt in range(retries + 1):
         try:
-            r = requests.post(CLAUDE_API_URL, headers=headers, json=payload, timeout=timeout)
-            r.raise_for_status()
+            r = _post_anthropic(headers, payload, timeout)
 
             data = r.json()
             content = data.get("content", [{}])[0].get("text", "")
@@ -386,6 +398,9 @@ def _call_claude(
                 ]
                 time.sleep(0.5)
 
+        except CircuitBreakerOpen as e:
+            _llm_logger.warning("Anthropic circuit breaker OPEN in summarize: %s", e)
+            return None
         except requests.exceptions.RequestException as e:
             if attempt < retries:
                 time.sleep(1)

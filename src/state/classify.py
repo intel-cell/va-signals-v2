@@ -6,7 +6,11 @@ import re
 from dataclasses import dataclass, field
 
 from src.llm_config import HAIKU_LEGACY_MODEL as HAIKU_MODEL
+from src.resilience.circuit_breaker import CircuitBreakerOpen, anthropic_cb
+from src.resilience.wiring import circuit_breaker_sync
 from src.secrets import get_env_or_keychain
+
+_llm_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -190,6 +194,7 @@ def _get_api_key() -> str:
     return get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api")
 
 
+@circuit_breaker_sync(anthropic_cb)
 def _call_haiku(prompt: str) -> dict:
     """Call Haiku model and return parsed JSON response."""
     import anthropic
@@ -261,6 +266,9 @@ def classify_by_llm(
             program=result.get("federal_program"),
         )
 
+    except CircuitBreakerOpen as e:
+        _llm_logger.warning("Anthropic circuit breaker OPEN in state classifier: %s", e)
+        return classify_by_keywords(title, content)
     except Exception as e:
         logger.warning(f"LLM classification failed, falling back to keywords: {e}")
         return classify_by_keywords(title, content)

@@ -1,12 +1,17 @@
 """Haiku pre-filter classifier for oversight events."""
 
 import json
+import logging
 from dataclasses import dataclass
 
 import anthropic
 
 from src.llm_config import HAIKU_MODEL
+from src.resilience.circuit_breaker import CircuitBreakerOpen, anthropic_cb
+from src.resilience.wiring import circuit_breaker_sync
 from src.secrets import get_env_or_keychain
+
+_llm_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -30,6 +35,7 @@ def _get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
+@circuit_breaker_sync(anthropic_cb)
 def _call_haiku(prompt: str, system: str) -> str:
     """Call Haiku model and return response text."""
     client = _get_client()
@@ -94,6 +100,12 @@ def is_va_relevant(title: str, content: str) -> dict:
     try:
         response_text = _call_haiku(prompt, VA_RELEVANCE_SYSTEM)
         return json.loads(response_text)
+    except CircuitBreakerOpen as exc:
+        _llm_logger.warning("Anthropic circuit breaker OPEN in classifier: %s", exc)
+        return {
+            "is_va_relevant": True,
+            "explanation": f"Circuit breaker open: {exc} - assuming relevant",
+        }
     except (json.JSONDecodeError, KeyError, RuntimeError) as exc:
         # Fail open - assume relevant if we can't classify
         return {
@@ -118,6 +130,12 @@ def is_dated_action(title: str, content: str) -> dict:
     try:
         response_text = _call_haiku(prompt, DATED_ACTION_SYSTEM)
         return json.loads(response_text)
+    except CircuitBreakerOpen as exc:
+        _llm_logger.warning("Anthropic circuit breaker OPEN in classifier: %s", exc)
+        return {
+            "is_dated_action": True,
+            "explanation": f"Circuit breaker open: {exc} - assuming dated",
+        }
     except (json.JSONDecodeError, KeyError, RuntimeError) as exc:
         # Fail open - assume dated action if we can't classify
         return {

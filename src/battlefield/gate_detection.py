@@ -22,6 +22,24 @@ from .db_helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _create_and_route_alert(**kwargs) -> str:
+    """Create a gate alert and route it through the signal bridge."""
+    # Separate bridge-only kwargs from create_gate_alert kwargs
+    bridge_extras = {}
+    for key in ("title",):
+        if key in kwargs:
+            bridge_extras[key] = kwargs.pop(key)
+
+    alert_id = create_gate_alert(**kwargs)
+    try:
+        from src.battlefield.signal_bridge import route_gate_alert
+
+        route_gate_alert({"alert_id": alert_id, **kwargs, **bridge_extras})
+    except Exception as e:
+        logger.warning(f"Gate bridge error (non-fatal): {e}")
+    return alert_id
+
+
 def _execute(sql: str, params: dict | None = None) -> list[dict]:
     """Execute a query and return results as list of dicts."""
     conn = connect()
@@ -101,7 +119,7 @@ def detect_hearing_changes() -> dict:
             # Date change
             days_impact = _days_between(update["old_value"], update["new_value"])
 
-            create_gate_alert(
+            _create_and_route_alert(
                 vehicle_id=vehicle_id,
                 alert_type="gate_moved",
                 old_value=update["old_value"],
@@ -110,6 +128,7 @@ def detect_hearing_changes() -> dict:
                 recommended_action=_recommend_date_action(days_impact),
                 source_event_id=str(update["id"]),
                 source_type="hearing_updates",
+                title=update.get("title", "Hearing date changed"),
             )
             stats["date_changes"] += 1
             stats["alerts_created"] += 1
@@ -119,7 +138,7 @@ def detect_hearing_changes() -> dict:
 
         elif update["field_changed"] == "status":
             # Status change (e.g., Scheduled -> Cancelled)
-            create_gate_alert(
+            _create_and_route_alert(
                 vehicle_id=vehicle_id,
                 alert_type="status_changed",
                 old_value=update["old_value"],
@@ -129,6 +148,7 @@ def detect_hearing_changes() -> dict:
                 ),
                 source_event_id=str(update["id"]),
                 source_type="hearing_updates",
+                title=update.get("title", "Hearing status changed"),
             )
             stats["status_changes"] += 1
             stats["alerts_created"] += 1
@@ -151,13 +171,14 @@ def detect_hearing_changes() -> dict:
     for hearing in new_hearings:
         vehicle_id = f"hearing_{hearing['event_id']}"
 
-        create_gate_alert(
+        _create_and_route_alert(
             vehicle_id=vehicle_id,
             alert_type="new_gate",
             new_value=f"Hearing scheduled for {hearing['hearing_date']}",
             recommended_action="Review hearing agenda and prepare talking points",
             source_event_id=hearing["event_id"],
             source_type="hearings",
+            title=hearing.get("title", "New hearing scheduled"),
         )
         stats["new_hearings"] += 1
         stats["alerts_created"] += 1
@@ -234,13 +255,14 @@ def detect_bill_status_changes() -> dict:
             else:
                 recommendation = "Review action and assess implications"
 
-            create_gate_alert(
+            _create_and_route_alert(
                 vehicle_id=vehicle_id,
                 alert_type=alert_type,
                 new_value=action["action_text"],
                 recommended_action=recommendation,
                 source_event_id=str(action["id"]),
                 source_type="bill_actions",
+                title=f"{identifier}: {(action['action_text'] or '')[:80]}",
             )
             stats["status_changes"] += 1
             stats["alerts_created"] += 1
@@ -277,25 +299,27 @@ def detect_oversight_escalations() -> dict:
         vehicle_id = f"om_{event['event_id']}"
 
         if event["is_escalation"]:
-            create_gate_alert(
+            _create_and_route_alert(
                 vehicle_id=vehicle_id,
                 alert_type="new_gate",
                 new_value=f"Escalation: {event['title'][:100]}",
                 recommended_action="Review escalation and brief leadership",
                 source_event_id=event["event_id"],
                 source_type="om_events",
+                title=event.get("title", "Oversight escalation"),
             )
             stats["escalations"] += 1
             stats["alerts_created"] += 1
 
         if event["is_deviation"]:
-            create_gate_alert(
+            _create_and_route_alert(
                 vehicle_id=vehicle_id,
                 alert_type="status_changed",
                 new_value=f"Deviation detected: {event['deviation_reason'] or 'Review required'}",
                 recommended_action="Analyze deviation from baseline",
                 source_event_id=event["event_id"],
                 source_type="om_events",
+                title=event.get("title", "Oversight deviation"),
             )
             stats["deviations"] += 1
             stats["alerts_created"] += 1
@@ -334,13 +358,14 @@ def detect_passed_gates() -> dict:
         )
 
         # Create gate_passed alert
-        create_gate_alert(
+        _create_and_route_alert(
             vehicle_id=event["vehicle_id"],
             alert_type="gate_passed",
             new_value=f"Gate passed: {event['title'][:100]}",
             recommended_action="Review outcomes and update vehicle status",
             source_event_id=event["event_id"],
             source_type="bf_calendar_events",
+            title=event.get("title", "Gate passed"),
         )
 
         stats["marked_passed"] += 1

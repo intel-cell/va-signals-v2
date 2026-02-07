@@ -1,14 +1,19 @@
 """Sonnet deviation classifier for oversight events."""
 
 import json
+import logging
 from dataclasses import dataclass
 
 import anthropic
 
 from src.llm_config import SONNET_MODEL
+from src.resilience.circuit_breaker import CircuitBreakerOpen, anthropic_cb
+from src.resilience.wiring import circuit_breaker_sync
 from src.secrets import get_env_or_keychain
 
 from .baseline import BaselineSummary
+
+_llm_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -25,6 +30,18 @@ def _get_client() -> anthropic.Anthropic:
     """Get Anthropic client with API key from environment."""
     api_key = get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api")
     return anthropic.Anthropic(api_key=api_key)
+
+
+@circuit_breaker_sync(anthropic_cb)
+def _call_sonnet(client: anthropic.Anthropic, system: str, prompt: str) -> str:
+    """Call Sonnet model for deviation detection, protected by circuit breaker."""
+    response = client.messages.create(
+        model=SONNET_MODEL,
+        max_tokens=256,
+        system=system,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text
 
 
 DEVIATION_SYSTEM = """You are an expert analyst detecting deviations from baseline patterns in government oversight activity.
@@ -91,14 +108,9 @@ Is this event a deviation from the baseline pattern?
 
     try:
         client = _get_client()
-        response = client.messages.create(
-            model=SONNET_MODEL,
-            max_tokens=256,
-            system=DEVIATION_SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        response_text = _call_sonnet(client, DEVIATION_SYSTEM, prompt)
 
-        result = json.loads(response.content[0].text)
+        result = json.loads(response_text)
         return DeviationResult(
             is_deviation=result.get("is_deviation", False),
             deviation_type=result.get("deviation_type"),
@@ -106,6 +118,14 @@ Is this event a deviation from the baseline pattern?
             explanation=result.get("explanation", ""),
         )
 
+    except CircuitBreakerOpen as e:
+        _llm_logger.warning("Anthropic circuit breaker OPEN in deviation: %s", e)
+        return DeviationResult(
+            is_deviation=False,
+            deviation_type=None,
+            confidence=0.0,
+            explanation=f"Circuit breaker open: {str(e)}",
+        )
     except (json.JSONDecodeError, KeyError, anthropic.APIError, RuntimeError) as e:
         # Fail closed - don't flag as deviation if we can't classify
         return DeviationResult(

@@ -5,6 +5,7 @@ Embedding-based detection of framing shifts in committee member utterances.
 Compares new utterances against a member's historical baseline centroid.
 """
 
+import logging
 import math
 from datetime import UTC, datetime
 
@@ -19,7 +20,11 @@ from .db import (
     insert_ad_baseline,
     insert_ad_deviation_event,
 )
+from .resilience.circuit_breaker import CircuitBreakerOpen, anthropic_cb
+from .resilience.wiring import circuit_breaker_sync
 from .secrets import get_env_or_keychain
+
+_llm_logger = logging.getLogger(__name__)
 
 # Thresholds (tunable)
 DEVIATION_THRESHOLD_DIST = 0.20  # Minimum cosine distance to flag
@@ -231,6 +236,14 @@ def _get_anthropic_key() -> str | None:
     return get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api", allow_missing=True)
 
 
+@circuit_breaker_sync(anthropic_cb)
+def _post_anthropic_ad(headers, payload, timeout):
+    """Execute a single Anthropic API POST for agenda drift, protected by circuit breaker."""
+    r = requests.post(CLAUDE_API_URL, headers=headers, json=payload, timeout=timeout)
+    r.raise_for_status()
+    return r
+
+
 def _call_claude_for_explanation(
     system_prompt: str,
     user_prompt: str,
@@ -264,13 +277,15 @@ def _call_claude_for_explanation(
     }
 
     try:
-        r = requests.post(CLAUDE_API_URL, headers=headers, json=payload, timeout=timeout)
-        r.raise_for_status()
+        r = _post_anthropic_ad(headers, payload, timeout)
 
         data = r.json()
         content = data.get("content", [{}])[0].get("text", "")
         return content.strip() if content else None
 
+    except CircuitBreakerOpen as e:
+        _llm_logger.warning("Anthropic circuit breaker OPEN in agenda_drift: %s", e)
+        return None
     except requests.exceptions.RequestException as e:
         print(f"Claude API request error: {e}")
         return None

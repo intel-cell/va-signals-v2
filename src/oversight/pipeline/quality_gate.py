@@ -34,7 +34,7 @@ def check_quality_gate(timestamps: TimestampResult, url: str) -> QualityGateResu
         )
 
     # Timestamp must have meaningful precision
-    if timestamps.pub_precision == "unknown" and not timestamps.pub_timestamp:
+    if timestamps.pub_precision == "unknown":
         return QualityGateResult(
             passed=False,
             rejection_reason="temporal_incomplete",
