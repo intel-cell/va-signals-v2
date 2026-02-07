@@ -23,6 +23,7 @@ from pathlib import Path
 
 from .db import connect, execute, init_db, insert_source_run
 from .provenance import utc_now_iso
+from .resilience.run_lifecycle import with_lifecycle
 from .signals.adapters import BillsAdapter, HearingsAdapter, OMEventsAdapter
 from .signals.envelope import Envelope
 from .signals.output.audit_log import write_audit_log
@@ -216,6 +217,7 @@ def _get_routing_rule_for_result(router: SignalsRouter, result: RouteResult) -> 
     return {}
 
 
+@with_lifecycle("signals_routing")
 def cmd_route(args):
     """Route pending events through the signals engine."""
     init_db()

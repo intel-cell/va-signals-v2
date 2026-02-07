@@ -17,6 +17,7 @@ Transitions:
 
 import asyncio
 import logging
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -99,6 +100,7 @@ class CircuitBreaker:
 
     # Global registry of circuit breakers
     _registry: dict[str, "CircuitBreaker"] = {}
+    _registry_lock = threading.Lock()
 
     def __init__(
         self,
@@ -114,7 +116,8 @@ class CircuitBreaker:
         self._lock = asyncio.Lock()
 
         # Register this circuit breaker
-        CircuitBreaker._registry[name] = self
+        with CircuitBreaker._registry_lock:
+            CircuitBreaker._registry[name] = self
 
         logger.info(f"Circuit breaker '{name}' initialized")
 
@@ -131,12 +134,14 @@ class CircuitBreaker:
     @classmethod
     def get(cls, name: str) -> Optional["CircuitBreaker"]:
         """Get a circuit breaker by name."""
-        return cls._registry.get(name)
+        with cls._registry_lock:
+            return cls._registry.get(name)
 
     @classmethod
     def all(cls) -> dict[str, "CircuitBreaker"]:
         """Get all registered circuit breakers."""
-        return cls._registry.copy()
+        with cls._registry_lock:
+            return cls._registry.copy()
 
     async def _check_state(self) -> None:
         """Check and potentially transition state."""

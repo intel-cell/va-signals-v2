@@ -10,6 +10,14 @@ Provides:
 """
 
 from .circuit_breaker import CircuitBreaker, CircuitBreakerOpen, CircuitState
+from .failure_correlator import (
+    CorrelatedIncident,
+    detect_circuit_breaker_cascade,
+    detect_correlated_failures,
+    get_current_incident,
+    get_recent_incidents,
+)
+from .health_score import AggregateHealth, HealthDimension, compute_health_score
 from .rate_limiter import RateLimiter, RateLimitExceeded
 from .retry import RetryConfig, retry_with_backoff
 from .staleness_monitor import (
@@ -43,4 +51,12 @@ __all__ = [
     "with_timeout",
     "FetchTimeout",
     "GLOBAL_HTTP_TIMEOUT",
+    "CorrelatedIncident",
+    "detect_correlated_failures",
+    "detect_circuit_breaker_cascade",
+    "get_recent_incidents",
+    "get_current_incident",
+    "AggregateHealth",
+    "HealthDimension",
+    "compute_health_score",
 ]

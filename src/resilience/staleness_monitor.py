@@ -4,15 +4,21 @@ Compares actual source_runs timestamps against configured expectations
 to detect when periodic signals fail to arrive on schedule.
 """
 
+import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import yaml
+from jsonschema import ValidationError, validate
 
 from src.db import connect, execute
 
+logger = logging.getLogger(__name__)
+
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "source_expectations.yaml"
+SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "source_expectations.schema.json"
 
 
 @dataclass
@@ -43,6 +49,16 @@ def load_expectations(config_path: Path = CONFIG_PATH) -> list[SourceExpectation
         data = yaml.safe_load(f)
     if not data or "sources" not in data:
         return []
+
+    # Validate against JSON schema
+    if SCHEMA_PATH.exists():
+        try:
+            schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+            validate(instance=data, schema=schema)
+        except ValidationError as exc:
+            logger.error("source_expectations.yaml failed schema validation: %s", exc.message)
+            raise
+
     expectations = []
     for source_id, cfg in data["sources"].items():
         expectations.append(

@@ -37,6 +37,7 @@ from .fetch_va_pubs import fetch_va_pubs_docs
 from .fetch_whitehouse import fetch_whitehouse_docs
 from .notify_email import send_error_alert, send_new_docs_alert
 from .provenance import utc_now_iso
+from .resilience.run_lifecycle import with_lifecycle
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -164,6 +165,7 @@ def run_source(source_id: str) -> dict[str, Any]:
     return run_record, new_docs
 
 
+@with_lifecycle("authority_aggregate")
 def run_authority_docs(sources: list[str] = None) -> dict[str, Any]:
     """
     Run authority document collection.

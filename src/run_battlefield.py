@@ -22,6 +22,7 @@ from datetime import datetime
 from src.db import insert_source_run
 from src.notify_email import send_error_alert
 from src.provenance import utc_now_iso
+from src.resilience.run_lifecycle import with_lifecycle
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,7 @@ def init_tables():
     logger.info("Tables initialized successfully.")
 
 
+@with_lifecycle("battlefield_sync")
 def run_sync():
     """Sync all sources to battlefield."""
     from src.battlefield.calendar import sync_all_sources

@@ -9,6 +9,7 @@ Tracks information collection requests that VA submits to OMB for approval.
 
 import hashlib
 import json
+import logging
 import re
 from datetime import UTC, datetime
 from urllib.parse import urlencode
@@ -18,6 +19,8 @@ from bs4 import BeautifulSoup
 
 from .resilience.circuit_breaker import reginfo_cb
 from .resilience.wiring import circuit_breaker_sync, with_timeout
+
+logger = logging.getLogger(__name__)
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
 
@@ -126,7 +129,7 @@ def fetch_va_pra_submissions(
         search_url = f"{REGINFO_SEARCH_URL}?{urlencode(params)}"
         resp = _get_reginfo_page(search_url)
     except requests.RequestException as e:
-        print(f"Error fetching RegInfo PRA page: {e}")
+        logger.error("Error fetching RegInfo PRA page: %s", e)
         return docs
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -212,7 +215,7 @@ def fetch_va_pra_submissions(
                 docs.append(doc)
 
             except Exception as e:
-                print(f"Error parsing row: {e}")
+                logger.error("Error parsing row: %s", e)
                 continue
 
     # If table parsing didn't work, try alternative link-based extraction

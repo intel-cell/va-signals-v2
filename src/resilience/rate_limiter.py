@@ -6,6 +6,7 @@ Provides rate limiting using token bucket algorithm.
 
 import asyncio
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -65,23 +66,27 @@ class RateLimiter:
 
     # Global registry
     _registry: dict[str, "RateLimiter"] = {}
+    _registry_lock = threading.Lock()
 
     def __init__(self, rate: float, burst: int, name: str = "default"):
         self.config = RateLimiterConfig(rate=rate, burst=burst, name=name)
         self._state = RateLimiterState(tokens=float(burst), last_update=time.time())
         self._lock = asyncio.Lock()
 
-        RateLimiter._registry[name] = self
+        with RateLimiter._registry_lock:
+            RateLimiter._registry[name] = self
 
     @classmethod
     def get(cls, name: str) -> Optional["RateLimiter"]:
         """Get a rate limiter by name."""
-        return cls._registry.get(name)
+        with cls._registry_lock:
+            return cls._registry.get(name)
 
     @classmethod
     def all(cls) -> dict[str, "RateLimiter"]:
         """Get all registered rate limiters."""
-        return cls._registry.copy()
+        with cls._registry_lock:
+            return cls._registry.copy()
 
     def _refill(self) -> None:
         """Refill tokens based on elapsed time."""

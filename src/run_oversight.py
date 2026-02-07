@@ -25,6 +25,7 @@ from .oversight.runner import (
     run_all_agents,
     run_backfill,
 )
+from .resilience.run_lifecycle import with_lifecycle
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,6 +34,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@with_lifecycle("oversight")
 def cmd_run(args):
     """Run agents."""
     init_db()

@@ -33,6 +33,7 @@ from .fetch_lda import (
 )
 from .notify_email import send_error_alert, send_new_docs_alert
 from .provenance import utc_now_iso
+from .resilience.run_lifecycle import with_lifecycle
 
 ROOT = Path(__file__).resolve().parents[1]
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ def write_run_record(run_record: dict[str, Any]) -> None:
     )
 
 
+@with_lifecycle("lda_gov")
 def run_lda_daily(since: str = None, dry_run: bool = False) -> dict[str, Any]:
     """
     Run LDA daily delta detection.

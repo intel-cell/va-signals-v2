@@ -31,6 +31,7 @@ from .db import (
 from .fetch_hearings import sync_va_hearings
 from .notify_email import send_error_alert
 from .provenance import utc_now_iso
+from .resilience.run_lifecycle import with_lifecycle
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ID = "congress_hearings"
@@ -49,6 +50,7 @@ def write_run_record(run_record: dict[str, Any]) -> None:
     )
 
 
+@with_lifecycle("congress_hearings")
 def run_hearings_sync(full: bool = False, congress: int = 119) -> dict[str, Any]:
     """
     Run VA hearings sync.

@@ -1,5 +1,6 @@
 """Core database infrastructure — connect, execute, schema helpers."""
 
+import logging
 import os
 import re
 import sqlite3
@@ -7,6 +8,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse, urlunparse
+
+logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "data" / "signals.db"
@@ -68,7 +71,25 @@ def executemany(
     if not params_list:
         return cur
     sql, _ = _prepare_query(sql, params_list[0])
-    cur.executemany(sql, params_list)
+    try:
+        cur.executemany(sql, params_list)
+    except Exception:
+        logger.warning(
+            "executemany batch failed, falling back to row-by-row execution (%d rows)",
+            len(params_list),
+        )
+        success_count = 0
+        for i, params in enumerate(params_list):
+            try:
+                cur.execute(sql, params)
+                success_count += 1
+            except Exception:
+                logger.warning(
+                    "Row %d failed in row-by-row fallback: params=%r",
+                    i,
+                    dict(params.items() if isinstance(params, Mapping) else enumerate(params)),
+                )
+        cur.rowcount = success_count
     return cur
 
 

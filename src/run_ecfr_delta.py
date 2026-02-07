@@ -11,6 +11,7 @@ from jsonschema import validate
 from .db import init_db, insert_source_run, upsert_ecfr_seen
 from .notify_email import send_error_alert
 from .provenance import utc_now_iso
+from .resilience.run_lifecycle import with_lifecycle
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,6 +54,7 @@ def write_run_record(run_record: dict[str, Any], title_num: str) -> None:
     )
 
 
+@with_lifecycle("ecfr_delta")
 def run_ecfr_delta(title_num: str = "38") -> dict[str, Any]:
     title_info = TITLES[title_num]
     cfg = load_cfg()

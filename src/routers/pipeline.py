@@ -110,22 +110,24 @@ def get_runs(
     """Get recent source runs with optional filters. Requires ANALYST role."""
     con = connect()
 
-    query = "SELECT id, source_id, started_at, ended_at, status, records_fetched, errors_json FROM source_runs WHERE 1=1"
-    params: dict[str, Any] = {}
+    try:
+        query = "SELECT id, source_id, started_at, ended_at, status, records_fetched, errors_json FROM source_runs WHERE 1=1"
+        params: dict[str, Any] = {}
 
-    if source_id:
-        query += " AND source_id = :source_id"
-        params["source_id"] = source_id
-    if status:
-        query += " AND status = :status"
-        params["status"] = status
+        if source_id:
+            query += " AND source_id = :source_id"
+            params["source_id"] = source_id
+        if status:
+            query += " AND status = :status"
+            params["status"] = status
 
-    query += " ORDER BY ended_at DESC LIMIT :limit"
-    params["limit"] = limit
+        query += " ORDER BY ended_at DESC LIMIT :limit"
+        params["limit"] = limit
 
-    cur = execute(con, query, params)
-    rows = cur.fetchall()
-    con.close()
+        cur = execute(con, query, params)
+        rows = cur.fetchall()
+    finally:
+        con.close()
 
     runs = [
         SourceRun(
@@ -148,59 +150,62 @@ def get_runs_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     """Get aggregated statistics for source runs. Requires VIEWER role."""
     con = connect()
 
-    # Total counts by status
-    cur = execute(con, "SELECT status, COUNT(*) FROM source_runs GROUP BY status")
-    status_counts = dict(cur.fetchall())
+    try:
+        # Total counts by status
+        cur = execute(con, "SELECT status, COUNT(*) FROM source_runs GROUP BY status")
+        status_counts = dict(cur.fetchall())
 
-    total_runs = sum(status_counts.values())
-    success_count = status_counts.get("SUCCESS", 0)
-    error_count = status_counts.get("ERROR", 0)
-    no_data_count = status_counts.get("NO_DATA", 0)
+        total_runs = sum(status_counts.values())
+        success_count = status_counts.get("SUCCESS", 0)
+        error_count = status_counts.get("ERROR", 0)
+        no_data_count = status_counts.get("NO_DATA", 0)
 
-    success_rate = (success_count / total_runs * 100) if total_runs > 0 else 0.0
-    error_rate = (error_count / total_runs * 100) if total_runs > 0 else 0.0
-    healthy_rate = ((success_count + no_data_count) / total_runs * 100) if total_runs > 0 else 0.0
+        success_rate = (success_count / total_runs * 100) if total_runs > 0 else 0.0
+        error_rate = (error_count / total_runs * 100) if total_runs > 0 else 0.0
+        healthy_rate = (
+            ((success_count + no_data_count) / total_runs * 100) if total_runs > 0 else 0.0
+        )
 
-    # Runs by source
-    cur = execute(
-        con,
-        "SELECT source_id, COUNT(*) FROM source_runs GROUP BY source_id ORDER BY COUNT(*) DESC",
-    )
-    runs_by_source = [RunsBySource(source_id=row[0], count=row[1]) for row in cur.fetchall()]
+        # Runs by source
+        cur = execute(
+            con,
+            "SELECT source_id, COUNT(*) FROM source_runs GROUP BY source_id ORDER BY COUNT(*) DESC",
+        )
+        runs_by_source = [RunsBySource(source_id=row[0], count=row[1]) for row in cur.fetchall()]
 
-    # Runs by day (last 7 days)
-    seven_days_ago = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
-    cur = execute(
-        con,
-        """
-        SELECT DATE(ended_at) as day, COUNT(*)
-        FROM source_runs
-        WHERE DATE(ended_at) >= :seven_days_ago
-        GROUP BY day
-        ORDER BY day DESC
-        """,
-        {"seven_days_ago": seven_days_ago},
-    )
-    runs_by_day = [RunsByDay(date=row[0], count=row[1]) for row in cur.fetchall()]
+        # Runs by day (last 7 days)
+        seven_days_ago = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
+        cur = execute(
+            con,
+            """
+            SELECT DATE(ended_at) as day, COUNT(*)
+            FROM source_runs
+            WHERE DATE(ended_at) >= :seven_days_ago
+            GROUP BY day
+            ORDER BY day DESC
+            """,
+            {"seven_days_ago": seven_days_ago},
+        )
+        runs_by_day = [RunsByDay(date=row[0], count=row[1]) for row in cur.fetchall()]
 
-    # Runs in last 24 hours
-    twenty_four_hours_ago = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
-    cur = execute(
-        con,
-        "SELECT COUNT(*) FROM source_runs WHERE ended_at >= :since",
-        {"since": twenty_four_hours_ago},
-    )
-    runs_today = cur.fetchone()[0]
+        # Runs in last 24 hours
+        twenty_four_hours_ago = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
+        cur = execute(
+            con,
+            "SELECT COUNT(*) FROM source_runs WHERE ended_at >= :since",
+            {"since": twenty_four_hours_ago},
+        )
+        runs_today = cur.fetchone()[0]
 
-    # New docs in last 24 hours
-    cur = execute(
-        con,
-        "SELECT COUNT(*) FROM fr_seen WHERE first_seen_at >= :since",
-        {"since": twenty_four_hours_ago},
-    )
-    new_docs_today = cur.fetchone()[0]
-
-    con.close()
+        # New docs in last 24 hours
+        cur = execute(
+            con,
+            "SELECT COUNT(*) FROM fr_seen WHERE first_seen_at >= :since",
+            {"since": twenty_four_hours_ago},
+        )
+        new_docs_today = cur.fetchone()[0]
+    finally:
+        con.close()
 
     return StatsResponse(
         total_runs=total_runs,
@@ -224,23 +229,25 @@ def get_fr_documents(
 ):
     """Get recent Federal Register documents. Requires ANALYST role."""
     con = connect()
-    cur = execute(
-        con,
-        """
-        SELECT doc_id, published_date, first_seen_at, source_url
-        FROM fr_seen
-        ORDER BY first_seen_at DESC
-        LIMIT :limit
-        """,
-        {"limit": limit},
-    )
-    rows = cur.fetchall()
 
-    # Get total count
-    cur = execute(con, "SELECT COUNT(*) FROM fr_seen")
-    total_count = cur.fetchone()[0]
+    try:
+        cur = execute(
+            con,
+            """
+            SELECT doc_id, published_date, first_seen_at, source_url
+            FROM fr_seen
+            ORDER BY first_seen_at DESC
+            LIMIT :limit
+            """,
+            {"limit": limit},
+        )
+        rows = cur.fetchall()
 
-    con.close()
+        # Get total count
+        cur = execute(con, "SELECT COUNT(*) FROM fr_seen")
+        total_count = cur.fetchone()[0]
+    finally:
+        con.close()
 
     documents = [
         FRDocument(
@@ -259,16 +266,19 @@ def get_fr_documents(
 def get_ecfr_documents(_: None = Depends(RoleChecker(UserRole.ANALYST))):
     """Get eCFR tracking status. Requires ANALYST role."""
     con = connect()
-    cur = execute(
-        con,
-        """
-        SELECT doc_id, last_modified, etag, first_seen_at, source_url
-        FROM ecfr_seen
-        ORDER BY first_seen_at DESC
-        """,
-    )
-    rows = cur.fetchall()
-    con.close()
+
+    try:
+        cur = execute(
+            con,
+            """
+            SELECT doc_id, last_modified, etag, first_seen_at, source_url
+            FROM ecfr_seen
+            ORDER BY first_seen_at DESC
+            """,
+        )
+        rows = cur.fetchall()
+    finally:
+        con.close()
 
     documents = [
         ECFRDocument(
@@ -291,19 +301,22 @@ def get_errors(
 ):
     """Get recent runs with errors. Requires ANALYST role."""
     con = connect()
-    cur = execute(
-        con,
-        """
-        SELECT id, source_id, ended_at, status, errors_json
-        FROM source_runs
-        WHERE status = 'ERROR' OR errors_json != '[]'
-        ORDER BY ended_at DESC
-        LIMIT :limit
-        """,
-        {"limit": limit},
-    )
-    rows = cur.fetchall()
-    con.close()
+
+    try:
+        cur = execute(
+            con,
+            """
+            SELECT id, source_id, ended_at, status, errors_json
+            FROM source_runs
+            WHERE status = 'ERROR' OR errors_json != '[]'
+            ORDER BY ended_at DESC
+            LIMIT :limit
+            """,
+            {"limit": limit},
+        )
+        rows = cur.fetchall()
+    finally:
+        con.close()
 
     error_runs = [
         ErrorRun(

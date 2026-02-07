@@ -12,6 +12,7 @@ import json
 
 from . import db
 from .agenda_drift import DEVIATION_THRESHOLD_Z, build_baseline, detect_deviation, explain_deviation
+from .resilience.run_lifecycle import with_lifecycle
 
 MIN_EMBEDDINGS_FOR_BASELINE = 5
 
@@ -305,6 +306,7 @@ def print_summary():
             print(f"  {d['member_name']}: z={d['zscore']:.2f} in {d['hearing_id']}")
 
 
+@with_lifecycle("agenda_drift")
 def main():
     parser = argparse.ArgumentParser(description="Run agenda drift detection")
     parser.add_argument(

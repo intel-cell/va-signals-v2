@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import logging
 import re
 import ssl
 import sys
@@ -25,6 +26,8 @@ from . import db
 from .resilience.circuit_breaker import congress_api_cb
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 from .secrets import get_env_or_keychain
+
+logger = logging.getLogger(__name__)
 
 # VA-related committee codes
 VA_COMMITTEES = {
@@ -120,7 +123,7 @@ def fetch_committee_bills(committee_code: str, congress: int = 119, limit: int =
         try:
             data = _fetch_json(url, api_key)
         except urllib.error.HTTPError as e:
-            print(f"Error fetching committee bills page {offset}: {e}")
+            logger.error("Error fetching committee bills page %d: %s", offset, e)
             break
 
         # Handle different API response structures
@@ -189,7 +192,7 @@ def fetch_bill_details(congress: int, bill_type: str, number: int) -> dict | Non
     try:
         data = _fetch_json(url, api_key)
     except urllib.error.HTTPError as e:
-        print(f"Error fetching bill {bill_type.upper()}-{number}: {e}")
+        logger.error("Error fetching bill %s-%d: %s", bill_type.upper(), number, e)
         return None
 
     bill = data.get("bill", {})
@@ -272,7 +275,7 @@ def fetch_bill_actions(congress: int, bill_type: str, number: int) -> list[dict]
         try:
             data = _fetch_json(url, api_key)
         except urllib.error.HTTPError as e:
-            print(f"Error fetching actions for {bill_type.upper()}-{number}: {e}")
+            logger.error("Error fetching actions for %s-%d: %s", bill_type.upper(), number, e)
             break
 
         batch = data.get("actions", [])
@@ -316,7 +319,7 @@ def fetch_bill_committees(congress: int, bill_type: str, bill_number: int) -> li
     try:
         data = _fetch_json(url, api_key)
     except (urllib.error.HTTPError, urllib.error.URLError, Exception) as e:
-        print(f"Error fetching committees for {bill_type.upper()}-{bill_number}: {e}")
+        logger.error("Error fetching committees for %s-%d: %s", bill_type.upper(), bill_number, e)
         return []
 
     committees = []
@@ -367,7 +370,7 @@ def sync_va_bills(congress: int = 119, limit: int = 250, dry_run: bool = False) 
             all_bills.extend(bills)
         except Exception as e:
             error_msg = f"Error fetching {committee_name}: {e}"
-            print(f"  {error_msg}")
+            logger.error("%s", error_msg)
             stats["errors"].append(error_msg)
 
     # Deduplicate by (congress, bill_type, number)

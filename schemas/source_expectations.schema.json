@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VA Signals V2 - Source Expectations Config",
+  "type": "object",
+  "required": ["sources"],
+  "additionalProperties": false,
+  "properties": {
+    "sources": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["frequency", "tolerance_hours", "alert_after_hours", "is_critical"],
+        "additionalProperties": false,
+        "properties": {
+          "frequency": {
+            "type": "string",
+            "enum": ["daily", "weekly"]
+          },
+          "tolerance_hours": {
+            "type": "number",
+            "minimum": 0
+          },
+          "alert_after_hours": {
+            "type": "number",
+            "minimum": 0
+          },
+          "is_critical": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

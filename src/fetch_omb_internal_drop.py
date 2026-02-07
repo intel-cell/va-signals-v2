@@ -7,8 +7,11 @@ Computes hashes for change detection and stores metadata.
 
 import hashlib
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Root of the project
 ROOT = Path(__file__).resolve().parents[1]
@@ -164,7 +167,7 @@ def scan_omb_drop_folder(
             docs.append(doc)
 
         except Exception as e:
-            print(f"Error processing {file_path}: {e}")
+            logger.error("Error processing %s: %s", file_path, e)
             continue
 
     return docs

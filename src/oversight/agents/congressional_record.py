@@ -1,5 +1,6 @@
 """Congressional Record source agent."""
 
+import logging
 import re
 import time
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,8 @@ from src.resilience.wiring import circuit_breaker_sync, with_timeout
 from ...secrets import get_env_or_keychain
 from .base import OversightAgent, RawEvent, TimestampResult
 
+logger = logging.getLogger(__name__)
+
 BASE_API_URL = "https://api.congress.gov/v3"
 
 
@@ -26,6 +29,21 @@ class CongressionalRecordAgent(OversightAgent):
         # Use word boundaries for VA to avoid "EVA" matching
         self.search_terms = ["veterans", r"\bVA\b", "Department of Veterans"]
         self.api_key = get_env_or_keychain("CONGRESS_API_KEY", "congress-api")
+
+    @with_timeout(30, name="congress_html")
+    @circuit_breaker_sync(congress_api_cb)
+    def _fetch_html(self, url: str) -> str | None:
+        """Fetch raw HTML from a URL with resilience protection."""
+        external_api_limiter.allow()
+        try:
+            resp = requests.get(url, headers={"User-Agent": "VA-Signals/1.0"}, timeout=25)
+            if resp.status_code == 200:
+                return resp.text
+            logger.warning("Non-200 status %d fetching HTML from %s", resp.status_code, url)
+            return None
+        except requests.RequestException as e:
+            logger.error("Error fetching HTML from %s: %s", url, e)
+            return None
 
     @with_timeout(45, name="congress_api")
     @circuit_breaker_sync(congress_api_cb)
@@ -70,7 +88,7 @@ class CongressionalRecordAgent(OversightAgent):
                 time.sleep(0.5)
             except Exception as e:
                 # Log error but continue
-                print(f"Error fetching CR for {day.date()}: {e}")
+                logger.error("Error fetching CR for %s: %s", day.date(), e)
 
         return events
 
@@ -131,7 +149,7 @@ class CongressionalRecordAgent(OversightAgent):
                                 events.append(event)
 
             except Exception as e:
-                print(f"Error processing issue {issue_url}: {e}")
+                logger.error("Error processing issue %s: %s", issue_url, e)
                 continue
 
         return events
@@ -183,13 +201,9 @@ class CongressionalRecordAgent(OversightAgent):
         # Fetch raw HTML if we have a text URL
         raw_html = ""
         if text_url:
-            try:
-                # We need to be careful about rate limits here too
-                resp = requests.get(text_url, headers={"User-Agent": "VA-Signals/1.0"})
-                if resp.status_code == 200:
-                    raw_html = resp.text
-            except Exception as e:
-                print(f"Error fetching HTML for {text_url}: {e}")
+            html = self._fetch_html(text_url)
+            if html:
+                raw_html = html
 
         return RawEvent(
             title=title,

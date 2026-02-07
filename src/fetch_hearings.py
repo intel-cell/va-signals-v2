@@ -13,6 +13,7 @@ Usage:
 
 import argparse
 import json
+import logging
 import ssl
 import sys
 import urllib.error
@@ -25,6 +26,8 @@ from . import db
 from .resilience.circuit_breaker import congress_api_cb
 from .resilience.wiring import circuit_breaker_sync, with_timeout
 from .secrets import get_env_or_keychain
+
+logger = logging.getLogger(__name__)
 
 # Congress.gov API base URL
 API_BASE = "https://api.congress.gov/v3"
@@ -119,7 +122,7 @@ def fetch_committee_meetings(
         try:
             data = _fetch_json(url, api_key)
         except urllib.error.HTTPError as e:
-            print(f"Error fetching committee meetings page {offset}: {e}")
+            logger.error("Error fetching committee meetings page %d: %s", offset, e)
             break
 
         batch = data.get("committeeMeetings", [])
@@ -158,7 +161,7 @@ def fetch_meeting_details(congress: int, chamber: str, event_id: str) -> dict | 
     except urllib.error.HTTPError as e:
         if e.code == 404:
             return None
-        print(f"Error fetching meeting details for {event_id}: {e}")
+        logger.error("Error fetching meeting details for %s: %s", event_id, e)
         return None
 
     return data.get("committeeMeeting")
@@ -228,7 +231,9 @@ def sync_va_hearings(
                 # Fetch full details to get committee info
                 try:
                     details = fetch_meeting_details(congress, chamber, event_id)
-                except Exception:
+                except Exception as e:
+                    logger.error("Error fetching details for event %s: %s", event_id, e)
+                    stats["errors"].append(f"Error fetching details for event {event_id}: {e}")
                     continue
 
                 if not details:
@@ -250,7 +255,7 @@ def sync_va_hearings(
 
         except Exception as e:
             error_msg = f"Error fetching {chamber} meetings: {e}"
-            print(f"  {error_msg}")
+            logger.error("%s", error_msg)
             stats["errors"].append(error_msg)
 
     print(f"\nProcessing {len(all_va_meetings)} VA committee meetings...")

@@ -31,6 +31,7 @@ from .db import (
 from .fetch_bills import sync_va_bills
 from .notify_email import send_error_alert
 from .provenance import utc_now_iso
+from .resilience.run_lifecycle import with_lifecycle
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ID = "congress_bills"
@@ -47,6 +48,7 @@ def write_run_record(run_record: dict[str, Any]) -> None:
     (outdir / f"BILLS_{stamp}.json").write_text(json.dumps(run_record, indent=2), encoding="utf-8")
 
 
+@with_lifecycle("congress_bills")
 def run_bills_sync(full: bool = False, congress: int = 118) -> dict[str, Any]:
     """
     Run VA bills sync.

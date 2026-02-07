@@ -17,6 +17,7 @@ from .db import init_db, insert_source_run, upsert_fr_seen
 from .fr_bulk import list_latest_month_folders, list_month_packages
 from .notify_email import send_error_alert, send_new_docs_alert
 from .provenance import utc_now_iso
+from .resilience.run_lifecycle import with_lifecycle
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,6 +39,7 @@ def write_run_record(run_record: dict[str, Any]) -> None:
     )
 
 
+@with_lifecycle("govinfo_fr_bulk")
 def run_fr_delta(max_months: int = 3) -> dict[str, Any]:
     cfg = load_cfg()
     source = next(s for s in cfg["approved_sources"] if s["id"] == "govinfo_fr_bulk")

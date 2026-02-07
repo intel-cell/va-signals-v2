@@ -10,6 +10,7 @@ Extracts: bill signings, executive orders, memoranda, proclamations.
 
 import hashlib
 import json
+import logging
 from datetime import UTC, datetime
 
 import requests
@@ -17,6 +18,8 @@ from bs4 import BeautifulSoup
 
 from .resilience.circuit_breaker import whitehouse_cb
 from .resilience.wiring import circuit_breaker_sync, with_timeout
+
+logger = logging.getLogger(__name__)
 
 # User agent to avoid blocks
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
@@ -135,7 +138,7 @@ def _scrape_listing_page(url: str, source_key: str) -> list[dict]:
     try:
         resp = _fetch_whitehouse_page(url)
     except requests.RequestException as e:
-        print(f"Error fetching {url}: {e}")
+        logger.error("Error fetching %s: %s", url, e)
         return docs
 
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -198,7 +201,7 @@ def _fetch_document_body(url: str) -> tuple[str, str]:
     try:
         resp = _fetch_whitehouse_page(url)
     except requests.RequestException as e:
-        print(f"Error fetching document {url}: {e}")
+        logger.error("Error fetching document %s: %s", url, e)
         return "", ""
 
     soup = BeautifulSoup(resp.text, "html.parser")

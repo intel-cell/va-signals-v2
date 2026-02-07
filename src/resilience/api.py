@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..auth.models import UserRole
 from ..auth.rbac import RoleChecker
 from .circuit_breaker import CircuitBreaker, CircuitState
+from .failure_correlator import get_current_incident, get_recent_incidents
+from .health_score import compute_health_score
 from .rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -161,4 +163,90 @@ async def resilience_summary(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     return {
         "circuits": circuit_summary,
         "rate_limits": limiter_summary,
+    }
+
+
+@router.get("/health-score", summary="Aggregate system health score")
+async def health_score(_: None = Depends(RoleChecker(UserRole.VIEWER))):
+    """Compute aggregate health score (0-100) across four dimensions.
+
+    Dimensions: source freshness (35%), error rate (30%),
+    circuit breaker health (20%), data coverage (15%).
+    Requires VIEWER role.
+    """
+    result = compute_health_score()
+    return {
+        "score": result.score,
+        "grade": result.grade,
+        "dimensions": [
+            {
+                "name": d.name,
+                "score": d.score,
+                "weight": d.weight,
+                "details": d.details,
+            }
+            for d in result.dimensions
+        ],
+        "incidents": [
+            {
+                "incident_type": i.incident_type,
+                "affected_sources": i.affected_sources,
+                "error_count": i.error_count,
+                "window_start": i.window_start.isoformat(),
+                "window_end": i.window_end.isoformat(),
+                "message": i.message,
+                "is_cascade": i.is_cascade,
+            }
+            for i in result.incidents
+        ],
+        "computed_at": result.computed_at.isoformat(),
+    }
+
+
+@router.get("/incidents", summary="Recent correlated incidents")
+async def list_incidents(
+    hours: int = 24,
+    _: None = Depends(RoleChecker(UserRole.VIEWER)),
+):
+    """Get correlated failure incidents from the last N hours.
+
+    Requires VIEWER role.
+    """
+    incidents = get_recent_incidents(hours=hours)
+    return {
+        "incidents": [
+            {
+                "incident_type": i.incident_type,
+                "affected_sources": i.affected_sources,
+                "error_count": i.error_count,
+                "window_start": i.window_start.isoformat(),
+                "window_end": i.window_end.isoformat(),
+                "message": i.message,
+                "is_cascade": i.is_cascade,
+            }
+            for i in incidents
+        ],
+        "count": len(incidents),
+    }
+
+
+@router.get("/incidents/current", summary="Current active incident")
+async def current_incident(_: None = Depends(RoleChecker(UserRole.VIEWER))):
+    """Get the currently active incident, if any.
+
+    Requires VIEWER role.
+    """
+    incident = get_current_incident()
+    if incident is None:
+        return {"incident": None}
+    return {
+        "incident": {
+            "incident_type": incident.incident_type,
+            "affected_sources": incident.affected_sources,
+            "error_count": incident.error_count,
+            "window_start": incident.window_start.isoformat(),
+            "window_end": incident.window_end.isoformat(),
+            "message": incident.message,
+            "is_cascade": incident.is_cascade,
+        }
     }
