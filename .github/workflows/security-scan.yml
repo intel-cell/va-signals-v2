@@ -87,6 +87,11 @@ jobs:
             report_md.md
           retention-days: 30
 
+      # NOTE: continue-on-error is intentional for the SARIF upload step.
+      # The ZAP-generated report_json.json may not conform to the SARIF schema
+      # expected by GitHub Advanced Security (e.g., missing required fields or
+      # version mismatches). The scan results are still captured in the uploaded
+      # artifacts above. This is not a suppression of security findings.
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
