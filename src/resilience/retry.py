@@ -8,10 +8,10 @@ backoff strategies.
 import asyncio
 import logging
 import random
-import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
-from typing import Callable, TypeVar, ParamSpec, Optional, Union
+from typing import ParamSpec, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -22,29 +22,28 @@ T = TypeVar("T")
 @dataclass
 class RetryConfig:
     """Configuration for retry behavior."""
+
     max_attempts: int = 3
-    base_delay: float = 1.0              # Initial delay in seconds
-    max_delay: float = 60.0              # Maximum delay
-    exponential_base: float = 2.0        # Exponential backoff multiplier
-    jitter: bool = True                  # Add randomness to delay
-    jitter_factor: float = 0.1           # Jitter as fraction of delay
+    base_delay: float = 1.0  # Initial delay in seconds
+    max_delay: float = 60.0  # Maximum delay
+    exponential_base: float = 2.0  # Exponential backoff multiplier
+    jitter: bool = True  # Add randomness to delay
+    jitter_factor: float = 0.1  # Jitter as fraction of delay
     retry_exceptions: tuple = (Exception,)  # Exceptions to retry
-    no_retry_exceptions: tuple = ()       # Exceptions to NOT retry
+    no_retry_exceptions: tuple = ()  # Exceptions to NOT retry
 
 
 @dataclass
 class RetryStats:
     """Statistics from a retry operation."""
+
     attempts: int = 0
     total_delay: float = 0.0
     success: bool = False
-    final_exception: Optional[Exception] = None
+    final_exception: Exception | None = None
 
 
-def calculate_delay(
-    attempt: int,
-    config: RetryConfig
-) -> float:
+def calculate_delay(attempt: int, config: RetryConfig) -> float:
     """Calculate delay for a given attempt number."""
     # Exponential backoff
     delay = config.base_delay * (config.exponential_base ** (attempt - 1))
@@ -60,10 +59,7 @@ def calculate_delay(
     return max(0, delay)
 
 
-def should_retry(
-    exc: Exception,
-    config: RetryConfig
-) -> bool:
+def should_retry(exc: Exception, config: RetryConfig) -> bool:
     """Determine if an exception should trigger a retry."""
     # Never retry these
     if config.no_retry_exceptions and isinstance(exc, config.no_retry_exceptions):
@@ -78,7 +74,7 @@ async def retry_with_backoff(
     *args: P.args,
     config: RetryConfig = None,
     on_retry: Callable[[int, Exception, float], None] = None,
-    **kwargs: P.kwargs
+    **kwargs: P.kwargs,
 ) -> T:
     """
     Execute a function with retry and exponential backoff.
@@ -106,7 +102,7 @@ async def retry_with_backoff(
     """
     config = config or RetryConfig()
     stats = RetryStats()
-    last_exception: Optional[Exception] = None
+    last_exception: Exception | None = None
 
     for attempt in range(1, config.max_attempts + 1):
         stats.attempts = attempt
@@ -183,22 +179,27 @@ def retry(
 
     def decorator(func: Callable[P, T]) -> Callable[P, T]:
         if asyncio.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
                 return await retry_with_backoff(func, *args, config=config, **kwargs)
+
             return async_wrapper
         else:
+
             @wraps(func)
             def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
                 return asyncio.get_event_loop().run_until_complete(
                     retry_with_backoff(func, *args, config=config, **kwargs)
                 )
+
             return sync_wrapper
 
     return decorator
 
 
 # Pre-configured retry decorators for common scenarios
+
 
 def retry_api_call(func: Callable[P, T]) -> Callable[P, T]:
     """Retry decorator for external API calls."""

@@ -1,20 +1,19 @@
 """State intelligence signals endpoints."""
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..state.db_helpers import (
-    get_signals_by_state,
-    get_recent_runs,
-    get_signal_count_by_state,
-    get_signal_count_by_severity,
-    get_latest_run,
-)
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from ..state.db_helpers import (
+    get_latest_run,
+    get_recent_runs,
+    get_signal_count_by_severity,
+    get_signal_count_by_state,
+    get_signals_by_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +22,15 @@ router = APIRouter(tags=["State"])
 
 # --- Pydantic Models ---
 
+
 class StateSignal(BaseModel):
     signal_id: str
     state: str
     title: str
     url: str
-    severity: Optional[str] = None
-    program: Optional[str] = None
-    pub_date: Optional[str] = None
+    severity: str | None = None
+    program: str | None = None
+    pub_date: str | None = None
 
 
 class StateSignalsResponse(BaseModel):
@@ -41,12 +41,12 @@ class StateSignalsResponse(BaseModel):
 class StateRun(BaseModel):
     id: int
     run_type: str
-    state: Optional[str] = None
+    state: str | None = None
     status: str
     signals_found: int
     high_severity_count: int
     started_at: str
-    finished_at: Optional[str] = None
+    finished_at: str | None = None
 
 
 class StateRunsResponse(BaseModel):
@@ -58,15 +58,16 @@ class StateStatsResponse(BaseModel):
     total_signals: int
     by_state: dict[str, int]
     by_severity: dict[str, int]
-    last_run: Optional[dict] = None
+    last_run: dict | None = None
 
 
 # --- Endpoints ---
 
+
 @router.get("/api/state/signals", response_model=StateSignalsResponse)
 def get_state_signals_endpoint(
-    state: Optional[str] = Query(None, description="Filter by state code (TX, CA, FL)"),
-    severity: Optional[str] = Query(None, description="Filter by severity (high, medium, low)"),
+    state: str | None = Query(None, description="Filter by state code (TX, CA, FL)"),
+    severity: str | None = Query(None, description="Filter by severity (high, medium, low)"),
     limit: int = Query(50, ge=1, le=500, description="Max signals to return"),
     _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):

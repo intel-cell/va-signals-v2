@@ -7,7 +7,7 @@ Designed to run as a nightly job after pipeline completion.
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..db import connect, execute
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def _utc_now() -> datetime:
     """Get current UTC datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _date_str(dt: datetime) -> str:
@@ -404,7 +404,9 @@ def aggregate_daily_battlefield(target_date: str | None = None) -> dict[str, Any
     con.commit()
     con.close()
 
-    logger.info(f"Aggregated battlefield: {total_vehicles} vehicles, {critical_gates} critical gates")
+    logger.info(
+        f"Aggregated battlefield: {total_vehicles} vehicles, {critical_gates} critical gates"
+    )
     return {
         "date": target_date,
         "total_vehicles": total_vehicles,

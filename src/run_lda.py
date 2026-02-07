@@ -14,9 +14,9 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 from jsonschema import validate
@@ -26,38 +26,36 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .db import init_db, insert_source_run, upsert_lda_filing, insert_lda_alert, get_lda_stats
+from .db import get_lda_stats, init_db, insert_lda_alert, insert_source_run, upsert_lda_filing
 from .fetch_lda import (
-    fetch_filings_since,
-    fetch_registrations_since,
-    fetch_amendments_since,
     evaluate_alerts,
+    fetch_filings_since,
 )
-from .notify_email import send_new_docs_alert, send_error_alert
+from .notify_email import send_error_alert, send_new_docs_alert
 from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
 logger = logging.getLogger(__name__)
 
 
-def load_cfg() -> Dict[str, Any]:
+def load_cfg() -> dict[str, Any]:
     return yaml.safe_load((ROOT / "config" / "approved_sources.yaml").read_text(encoding="utf-8"))
 
 
-def load_run_schema() -> Dict[str, Any]:
+def load_run_schema() -> dict[str, Any]:
     return json.loads((ROOT / "schemas" / "source_run.schema.json").read_text(encoding="utf-8"))
 
 
-def write_run_record(run_record: Dict[str, Any]) -> None:
+def write_run_record(run_record: dict[str, Any]) -> None:
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     (outdir / f"LDA_DAILY_{stamp}.json").write_text(
         json.dumps(run_record, indent=2), encoding="utf-8"
     )
 
 
-def run_lda_daily(since: str = None, dry_run: bool = False) -> Dict[str, Any]:
+def run_lda_daily(since: str = None, dry_run: bool = False) -> dict[str, Any]:
     """
     Run LDA daily delta detection.
 
@@ -75,15 +73,15 @@ def run_lda_daily(since: str = None, dry_run: bool = False) -> Dict[str, Any]:
     init_db()
 
     started_at = utc_now_iso()
-    errors: List[str] = []
+    errors: list[str] = []
     status = "SUCCESS"
     records_fetched = 0
-    new_filings: List[Dict[str, Any]] = []
-    all_alerts: List[Dict[str, Any]] = []
+    new_filings: list[dict[str, Any]] = []
+    all_alerts: list[dict[str, Any]] = []
 
     # Default to yesterday
     if not since:
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        yesterday = datetime.now(UTC) - timedelta(days=1)
         since = yesterday.strftime("%Y-%m-%d")
 
     try:
@@ -98,26 +96,30 @@ def run_lda_daily(since: str = None, dry_run: bool = False) -> Dict[str, Any]:
         else:
             for filing in filings:
                 if dry_run:
-                    new_filings.append({
-                        "filing_uuid": filing["filing_uuid"],
-                        "filing_type": filing["filing_type"],
-                        "registrant_name": filing["registrant_name"],
-                        "client_name": filing["client_name"],
-                        "va_relevance_score": filing["va_relevance_score"],
-                        "source_url": filing["source_url"],
-                    })
+                    new_filings.append(
+                        {
+                            "filing_uuid": filing["filing_uuid"],
+                            "filing_type": filing["filing_type"],
+                            "registrant_name": filing["registrant_name"],
+                            "client_name": filing["client_name"],
+                            "va_relevance_score": filing["va_relevance_score"],
+                            "source_url": filing["source_url"],
+                        }
+                    )
                     continue
 
                 is_new = upsert_lda_filing(filing)
                 if is_new:
-                    new_filings.append({
-                        "filing_uuid": filing["filing_uuid"],
-                        "filing_type": filing["filing_type"],
-                        "registrant_name": filing["registrant_name"],
-                        "client_name": filing["client_name"],
-                        "va_relevance_score": filing["va_relevance_score"],
-                        "source_url": filing["source_url"],
-                    })
+                    new_filings.append(
+                        {
+                            "filing_uuid": filing["filing_uuid"],
+                            "filing_type": filing["filing_type"],
+                            "registrant_name": filing["registrant_name"],
+                            "client_name": filing["client_name"],
+                            "va_relevance_score": filing["va_relevance_score"],
+                            "source_url": filing["source_url"],
+                        }
+                    )
 
                     # Evaluate alert conditions
                     alerts = evaluate_alerts(filing)
@@ -155,20 +157,36 @@ def run_lda_daily(since: str = None, dry_run: bool = False) -> Dict[str, Any]:
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "LDA_LATEST.json").write_text(
-        json.dumps({
-            "retrieved_at": utc_now_iso(),
-            "since": since,
-            "new_filings": new_filings,
-            "alerts": [
-                {"alert_type": a["alert_type"], "severity": a["severity"], "summary": a["summary"]}
-                for a in all_alerts
-            ],
-        }, indent=2),
+        json.dumps(
+            {
+                "retrieved_at": utc_now_iso(),
+                "since": since,
+                "new_filings": new_filings,
+                "alerts": [
+                    {
+                        "alert_type": a["alert_type"],
+                        "severity": a["severity"],
+                        "summary": a["summary"],
+                    }
+                    for a in all_alerts
+                ],
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
     # Print summary
-    print(json.dumps({"run_record": run_record, "new_filings_count": len(new_filings), "alerts_count": len(all_alerts)}, indent=2))
+    print(
+        json.dumps(
+            {
+                "run_record": run_record,
+                "new_filings_count": len(new_filings),
+                "alerts_count": len(all_alerts),
+            },
+            indent=2,
+        )
+    )
 
     # Email notifications
     if not dry_run:
@@ -215,7 +233,9 @@ def show_summary():
 
 def main():
     parser = argparse.ArgumentParser(description="LDA.gov Lobbying Disclosure Delta Detection")
-    parser.add_argument("--mode", default="daily", choices=["daily"], help="Run mode (default: daily)")
+    parser.add_argument(
+        "--mode", default="daily", choices=["daily"], help="Run mode (default: daily)"
+    )
     parser.add_argument("--since", help="Fetch filings since this date (YYYY-MM-DD)")
     parser.add_argument("--dry-run", action="store_true", help="Fetch but don't write to DB")
     parser.add_argument("--summary", action="store_true", help="Show filing stats")

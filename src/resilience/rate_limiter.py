@@ -7,34 +7,34 @@ Provides rate limiting using token bucket algorithm.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional, Dict
+from dataclasses import dataclass
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class RateLimitExceeded(Exception):
     """Raised when rate limit is exceeded."""
+
     def __init__(self, name: str, retry_after: float):
         self.name = name
         self.retry_after = retry_after
-        super().__init__(
-            f"Rate limit exceeded for '{name}'. Retry after {retry_after:.1f}s"
-        )
+        super().__init__(f"Rate limit exceeded for '{name}'. Retry after {retry_after:.1f}s")
 
 
 @dataclass
 class RateLimiterConfig:
     """Configuration for rate limiter."""
-    rate: float             # Tokens per second
-    burst: int              # Maximum bucket capacity
+
+    rate: float  # Tokens per second
+    burst: int  # Maximum bucket capacity
     name: str = "default"
 
 
 @dataclass
 class RateLimiterState:
     """State for a rate limiter."""
+
     tokens: float
     last_update: float
     total_allowed: int = 0
@@ -64,19 +64,11 @@ class RateLimiter:
     """
 
     # Global registry
-    _registry: Dict[str, "RateLimiter"] = {}
+    _registry: dict[str, "RateLimiter"] = {}
 
-    def __init__(
-        self,
-        rate: float,
-        burst: int,
-        name: str = "default"
-    ):
+    def __init__(self, rate: float, burst: int, name: str = "default"):
         self.config = RateLimiterConfig(rate=rate, burst=burst, name=name)
-        self._state = RateLimiterState(
-            tokens=float(burst),
-            last_update=time.time()
-        )
+        self._state = RateLimiterState(tokens=float(burst), last_update=time.time())
         self._lock = asyncio.Lock()
 
         RateLimiter._registry[name] = self
@@ -87,7 +79,7 @@ class RateLimiter:
         return cls._registry.get(name)
 
     @classmethod
-    def all(cls) -> Dict[str, "RateLimiter"]:
+    def all(cls) -> dict[str, "RateLimiter"]:
         """Get all registered rate limiters."""
         return cls._registry.copy()
 
@@ -95,10 +87,7 @@ class RateLimiter:
         """Refill tokens based on elapsed time."""
         now = time.time()
         elapsed = now - self._state.last_update
-        self._state.tokens = min(
-            self.config.burst,
-            self._state.tokens + elapsed * self.config.rate
-        )
+        self._state.tokens = min(self.config.burst, self._state.tokens + elapsed * self.config.rate)
         self._state.last_update = now
 
     def allow(self, tokens: float = 1.0) -> bool:
@@ -185,15 +174,12 @@ class _RateLimitAcquireContext:
             if self.timeout is not None:
                 elapsed = time.time() - self._start_time
                 if elapsed >= self.timeout:
-                    raise RateLimitExceeded(
-                        self.limiter.config.name,
-                        self.limiter.retry_after()
-                    )
+                    raise RateLimitExceeded(self.limiter.config.name, self.limiter.retry_after())
 
             # Wait a bit before trying again
             wait_time = min(
                 self.limiter.retry_after(),
-                0.1  # Check at least every 100ms
+                0.1,  # Check at least every 100ms
             )
             await asyncio.sleep(wait_time)
 
@@ -204,25 +190,25 @@ class _RateLimitAcquireContext:
 # Pre-configured rate limiters for common scenarios
 
 api_rate_limiter = RateLimiter(
-    rate=100,   # 100 requests per second
+    rate=100,  # 100 requests per second
     burst=200,  # Allow bursts up to 200
-    name="api"
+    name="api",
 )
 
 external_api_limiter = RateLimiter(
-    rate=10,    # 10 requests per second to external APIs
+    rate=10,  # 10 requests per second to external APIs
     burst=20,
-    name="external"
+    name="external",
 )
 
 federal_register_limiter = RateLimiter(
-    rate=5,     # Federal Register API rate limit
+    rate=5,  # Federal Register API rate limit
     burst=10,
-    name="federal_register"
+    name="federal_register",
 )
 
 congress_api_limiter = RateLimiter(
-    rate=10,    # Congress.gov API rate limit
+    rate=10,  # Congress.gov API rate limit
     burst=20,
-    name="congress"
+    name="congress",
 )

@@ -1,7 +1,5 @@
 """Bills adapter - transforms bill records to normalized envelopes."""
 
-from typing import Optional
-
 from src.signals.envelope import Envelope
 
 
@@ -70,7 +68,7 @@ class BillsAdapter:
 
         return topics
 
-    def _get_committee_from_committees(self, committees_json: Optional[str]) -> Optional[str]:
+    def _get_committee_from_committees(self, committees_json: str | None) -> str | None:
         """Extract VA committee from committees JSON if present."""
         if not committees_json:
             return None

@@ -1,13 +1,12 @@
 """Compound signals database functions."""
 
 import json
-from typing import Optional
 
 from .core import connect, execute
 from .helpers import _utc_now_iso
 
 
-def insert_compound_signal(data: dict) -> Optional[str]:
+def insert_compound_signal(data: dict) -> str | None:
     """
     Insert a compound signal. Skips if compound_id already exists.
 
@@ -41,7 +40,7 @@ def insert_compound_signal(data: dict) -> Optional[str]:
         con.close()
 
 
-def get_compound_signal(compound_id: str) -> Optional[dict]:
+def get_compound_signal(compound_id: str) -> dict | None:
     """Get a single compound signal by ID."""
     con = connect()
     cur = execute(
@@ -62,8 +61,8 @@ def get_compound_signal(compound_id: str) -> Optional[dict]:
 def get_compound_signals(
     limit: int = 50,
     offset: int = 0,
-    rule_id: Optional[str] = None,
-    min_severity: Optional[float] = None,
+    rule_id: str | None = None,
+    min_severity: float | None = None,
 ) -> list[dict]:
     """Get compound signals with optional filtering."""
     con = connect()

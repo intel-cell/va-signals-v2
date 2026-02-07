@@ -73,7 +73,7 @@ No escalations or pattern deviations detected during this period.
     deviations = sum(1 for e in events if e.get("is_deviation"))
 
     lines = [
-        f"# VA Oversight Weekly Digest",
+        "# VA Oversight Weekly Digest",
         f"## {period_start} to {period_end}",
         "",
         f"**Summary**: {len(events)} significant events",

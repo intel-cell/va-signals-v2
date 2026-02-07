@@ -6,11 +6,9 @@ to fetch deltas from all source tables.
 """
 
 import json
-from datetime import date, datetime, timedelta
-from typing import Optional
+from datetime import date, datetime
 
 from ..db import connect, execute
-
 
 # ============================================================================
 # CEO BRIEF STORAGE
@@ -20,6 +18,7 @@ from ..db import connect, execute
 def ensure_ceo_briefs_table(con=None) -> None:
     """Create CEO briefs table if it doesn't exist."""
     from ..db import init_db
+
     init_db()
 
 
@@ -31,7 +30,7 @@ def insert_ceo_brief(
     objective: str,
     content_json: str,
     markdown_output: str,
-    validation_errors: Optional[list[str]] = None,
+    validation_errors: list[str] | None = None,
     status: str = "draft",
 ) -> bool:
     """
@@ -96,12 +95,14 @@ def update_brief_status(brief_id: str, status: str) -> bool:
     return affected > 0
 
 
-def get_ceo_brief(brief_id: str) -> Optional[dict]:
+def get_ceo_brief(brief_id: str) -> dict | None:
     """Retrieve a CEO brief by ID."""
     con = connect()
     ensure_ceo_briefs_table(con)
 
-    cur = execute(con, "SELECT * FROM ceo_briefs WHERE brief_id = :brief_id", {"brief_id": brief_id})
+    cur = execute(
+        con, "SELECT * FROM ceo_briefs WHERE brief_id = :brief_id", {"brief_id": brief_id}
+    )
     row = cur.fetchone()
     con.close()
 
@@ -123,7 +124,7 @@ def get_ceo_brief(brief_id: str) -> Optional[dict]:
     }
 
 
-def get_latest_brief() -> Optional[dict]:
+def get_latest_brief() -> dict | None:
     """Get the most recently generated CEO brief."""
     con = connect()
     ensure_ceo_briefs_table(con)
@@ -573,7 +574,7 @@ def get_all_deltas(since: datetime, until: datetime) -> dict:
 # ============================================================================
 
 
-def get_evidence_source(source_id: str) -> Optional[dict]:
+def get_evidence_source(source_id: str) -> dict | None:
     """Get an evidence source for citation purposes."""
     con = connect()
     cur = execute(
@@ -611,7 +612,7 @@ def get_evidence_source(source_id: str) -> Optional[dict]:
     }
 
 
-def find_evidence_for_source(source_type: str, source_id: str) -> Optional[dict]:
+def find_evidence_for_source(source_type: str, source_id: str) -> dict | None:
     """
     Find an evidence source matching the given source.
 

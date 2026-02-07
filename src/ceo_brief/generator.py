@@ -7,10 +7,10 @@ citations, validates all claims have sources, and outputs markdown + PDF.
 
 import hashlib
 import json
+import logging
 import os
 from datetime import date, datetime
 from pathlib import Path
-from typing import Optional
 
 from .db_helpers import find_evidence_for_source, insert_ceo_brief
 from .integrations import (
@@ -19,8 +19,6 @@ from .integrations import (
     delta_decision_point_to_ask,
     enrich_citation_from_bravo,
     gather_cross_command_data,
-    get_bravo_citations,
-    validate_claim_with_bravo,
 )
 from .schema import (
     AnalysisResult,
@@ -33,11 +31,8 @@ from .schema import (
     ObjectionResponse,
     RiskOpportunity,
     SourceCitation,
-    SourceType,
     Stakeholder,
 )
-
-import logging
 
 logger = logging.getLogger("ceo_brief.generator")
 
@@ -48,7 +43,9 @@ DEFAULT_OUTPUT_DIR = Path(os.environ.get("CEO_BRIEF_OUTPUT_DIR", "outputs/ceo_br
 def _generate_brief_id(period_start: date, period_end: date) -> str:
     """Generate a unique brief ID."""
     date_str = period_end.strftime("%Y-%m-%d")
-    hash_input = f"{period_start.isoformat()}-{period_end.isoformat()}-{datetime.utcnow().isoformat()}"
+    hash_input = (
+        f"{period_start.isoformat()}-{period_end.isoformat()}-{datetime.utcnow().isoformat()}"
+    )
     short_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:8]
     return f"CEO_BRIEF_{date_str}_{short_hash}"
 
@@ -331,7 +328,7 @@ def _brief_to_dict(brief: CEOBrief) -> dict:
 
 def save_brief(
     brief: CEOBrief,
-    output_dir: Optional[Path] = None,
+    output_dir: Path | None = None,
     save_to_db: bool = True,
 ) -> dict:
     """
@@ -360,7 +357,9 @@ def save_brief(
 
     # Add validation status to markdown
     if validation_errors:
-        markdown_content = f"**VALIDATION WARNINGS:** {len(validation_errors)} issues found\n\n" + markdown_content
+        markdown_content = (
+            f"**VALIDATION WARNINGS:** {len(validation_errors)} issues found\n\n" + markdown_content
+        )
         for err in validation_errors:
             markdown_content = f"- {err}\n" + markdown_content
 
@@ -401,7 +400,7 @@ def generate_and_save_brief(
     analysis: AnalysisResult,
     period_start: date,
     period_end: date,
-    output_dir: Optional[Path] = None,
+    output_dir: Path | None = None,
 ) -> dict:
     """
     Full pipeline: generate brief from analysis and save to files/database.
@@ -566,7 +565,7 @@ def generate_and_save_enhanced_brief(
     analysis: AnalysisResult,
     period_start: date,
     period_end: date,
-    output_dir: Optional[Path] = None,
+    output_dir: Path | None = None,
     use_cross_command: bool = True,
 ) -> dict:
     """

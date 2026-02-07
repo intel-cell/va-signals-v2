@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -41,7 +40,9 @@ class CAOfficialSource(StateSource):
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
-            logger.error("Playwright not installed - run: pip install playwright && playwright install chromium")
+            logger.error(
+                "Playwright not installed - run: pip install playwright && playwright install chromium"
+            )
             return []
 
         try:
@@ -87,9 +88,9 @@ class CAOfficialSource(StateSource):
             try:
                 # Try multiple title selectors
                 title_elem = (
-                    article.select_one("h3 a, h2 a, .title a") or
-                    article.select_one("a[href*='News']") or
-                    article.select_one("a")
+                    article.select_one("h3 a, h2 a, .title a")
+                    or article.select_one("a[href*='News']")
+                    or article.select_one("a")
                 )
                 if not title_elem:
                     continue
@@ -135,7 +136,7 @@ class CAOfficialSource(StateSource):
 
         return signals
 
-    def _parse_date_text(self, text: str) -> Optional[str]:
+    def _parse_date_text(self, text: str) -> str | None:
         """Try to parse date from text like '01/19/2026'."""
         for fmt in ["%m/%d/%Y", "%B %d, %Y", "%b %d, %Y", "%Y-%m-%d"]:
             try:

@@ -2,15 +2,13 @@
 
 import json
 from dataclasses import dataclass
-from typing import Optional
 
 import anthropic
 
-from src.secrets import get_env_or_keychain
-from .baseline import BaselineSummary
-
-
 from src.llm_config import SONNET_MODEL
+from src.secrets import get_env_or_keychain
+
+from .baseline import BaselineSummary
 
 
 @dataclass
@@ -18,7 +16,7 @@ class DeviationResult:
     """Result of deviation classification."""
 
     is_deviation: bool
-    deviation_type: Optional[str]  # new_topic, frequency_spike, tone_shift, escalation, unprecedented
+    deviation_type: str | None  # new_topic, frequency_spike, tone_shift, escalation, unprecedented
     confidence: float
     explanation: str
 
@@ -77,7 +75,7 @@ def check_deviation(
 Baseline for {baseline.source_type} ({baseline.window_start} to {baseline.window_end}):
 - {baseline.event_count} events in baseline period
 - Summary: {baseline.summary}
-- Top topics: {', '.join(f'{k} ({v:.0%})' for k, v in baseline.topic_distribution.items())}
+- Top topics: {", ".join(f"{k} ({v:.0%})" for k, v in baseline.topic_distribution.items())}
 """
 
     prompt = f"""
@@ -122,7 +120,7 @@ def classify_deviation_type(
     event_topics: dict,
     baseline_topics: dict,
     threshold: float = 0.3,
-) -> Optional[str]:
+) -> str | None:
     """
     Quick heuristic classification of deviation type based on topic overlap.
 
@@ -149,10 +147,7 @@ def classify_deviation_type(
         return "new_topic"
 
     # Calculate weighted overlap
-    overlap_score = sum(
-        min(event_topics.get(t, 0), baseline_topics.get(t, 0))
-        for t in overlap
-    )
+    overlap_score = sum(min(event_topics.get(t, 0), baseline_topics.get(t, 0)) for t in overlap)
 
     if overlap_score < threshold:
         return "new_topic"

@@ -12,34 +12,32 @@ Endpoints:
 - GET /api/evidence/search - Search citations by topic
 """
 
-from typing import Optional
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
-
+from ..auth.rbac import RoleChecker
 from .api import (
+    get_citations_for_topic,
     get_evidence_pack,
     get_evidence_pack_by_issue,
-    list_evidence_packs,
     get_source_by_id,
-    get_citations_for_topic,
+    list_evidence_packs,
 )
-
 
 router = APIRouter(prefix="/api/evidence", tags=["evidence"])
 
 
 # --- Response Models ---
 
+
 class EvidencePackSummary(BaseModel):
     pack_id: str
-    issue_id: Optional[str]
+    issue_id: str | None
     title: str
     generated_at: str
     status: str
-    output_path: Optional[str]
+    output_path: str | None
 
 
 class EvidencePackListResponse(BaseModel):
@@ -52,12 +50,12 @@ class EvidenceSourceResponse(BaseModel):
     source_type: str
     title: str
     url: str
-    date_accessed: Optional[str]
-    date_published: Optional[str]
-    fr_citation: Optional[str]
-    bill_number: Optional[str]
-    report_number: Optional[str]
-    citation_string: Optional[str] = None
+    date_accessed: str | None
+    date_published: str | None
+    fr_citation: str | None
+    bill_number: str | None
+    report_number: str | None
+    citation_string: str | None = None
 
 
 class CitationSearchResponse(BaseModel):
@@ -68,10 +66,11 @@ class CitationSearchResponse(BaseModel):
 
 # --- Endpoints ---
 
+
 @router.get("/packs", response_model=EvidencePackListResponse)
 async def list_packs(
-    issue_id: Optional[str] = Query(None, description="Filter by issue ID"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    issue_id: str | None = Query(None, description="Filter by issue ID"),
+    status: str | None = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=200, description="Max packs to return"),
     _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
@@ -200,9 +199,8 @@ async def get_source(source_id: str, _: None = Depends(RoleChecker(UserRole.ANAL
 @router.get("/search", response_model=CitationSearchResponse)
 async def search_citations(
     q: str = Query(..., description="Search query (topic keywords)"),
-    source_types: Optional[str] = Query(
-        None,
-        description="Comma-separated source types (federal_register,bill,hearing)"
+    source_types: str | None = Query(
+        None, description="Comma-separated source types (federal_register,bill,hearing)"
     ),
     limit: int = Query(20, ge=1, le=100, description="Max results"),
     _: None = Depends(RoleChecker(UserRole.ANALYST)),

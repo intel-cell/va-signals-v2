@@ -10,14 +10,13 @@ Fail-closed: If validation cannot be performed, reject the claim.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 from src.evidence.models import (
-    EvidencePack,
-    EvidenceSource,
-    EvidenceClaim,
     ClaimType,
     Confidence,
+    EvidenceClaim,
+    EvidencePack,
+    EvidenceSource,
     PackStatus,
 )
 
@@ -25,14 +24,16 @@ from src.evidence.models import (
 @dataclass
 class ValidationResult:
     """Result of validation check."""
+
     passed: bool
     errors: list[str]
     warnings: list[str]
-    claim_index: Optional[int] = None
+    claim_index: int | None = None
 
 
 class ValidationError(Exception):
     """Raised when validation fails hard."""
+
     def __init__(self, errors: list[str]):
         self.errors = errors
         super().__init__(f"Validation failed: {'; '.join(errors)}")
@@ -66,7 +67,9 @@ def validate_source(source: EvidenceSource) -> ValidationResult:
 
     # Validate URL format (basic check)
     if source.url and not (source.url.startswith("http://") or source.url.startswith("https://")):
-        errors.append(f"Source {source.source_id}: Invalid URL format (must start with http:// or https://)")
+        errors.append(
+            f"Source {source.source_id}: Invalid URL format (must start with http:// or https://)"
+        )
 
     return ValidationResult(
         passed=len(errors) == 0,
@@ -76,9 +79,7 @@ def validate_source(source: EvidenceSource) -> ValidationResult:
 
 
 def validate_claim(
-    claim: EvidenceClaim,
-    available_sources: dict[str, EvidenceSource],
-    claim_index: int = 0
+    claim: EvidenceClaim, available_sources: dict[str, EvidenceSource], claim_index: int = 0
 ) -> ValidationResult:
     """
     Validate a single claim meets evidence requirements.
@@ -104,18 +105,26 @@ def validate_claim(
     # RULE 4: Flag modeled/inferred separately
     if claim.claim_type == ClaimType.MODELED:
         if claim.confidence == Confidence.HIGH:
-            warnings.append(f"Claim {claim_index + 1}: Modeled claim marked high confidence - verify methodology")
+            warnings.append(
+                f"Claim {claim_index + 1}: Modeled claim marked high confidence - verify methodology"
+            )
         # Modeled claims should have explanation in the claim text or metadata
         if "model" not in claim.claim_text.lower() and "calculat" not in claim.claim_text.lower():
-            warnings.append(f"Claim {claim_index + 1}: Modeled claim should indicate calculation methodology")
+            warnings.append(
+                f"Claim {claim_index + 1}: Modeled claim should indicate calculation methodology"
+            )
 
     if claim.claim_type == ClaimType.INFERRED:
         if claim.confidence == Confidence.HIGH:
-            warnings.append(f"Claim {claim_index + 1}: Inferred claim marked high confidence - consider downgrading")
+            warnings.append(
+                f"Claim {claim_index + 1}: Inferred claim marked high confidence - consider downgrading"
+            )
 
     # Low confidence claims should have multiple sources or explicit justification
     if claim.confidence == Confidence.LOW and len(claim.source_ids) == 1:
-        warnings.append(f"Claim {claim_index + 1}: Low confidence with single source - consider adding corroboration")
+        warnings.append(
+            f"Claim {claim_index + 1}: Low confidence with single source - consider adding corroboration"
+        )
 
     return ValidationResult(
         passed=len(errors) == 0,
@@ -149,7 +158,9 @@ def validate_pack(pack: EvidencePack, strict: bool = True) -> ValidationResult:
 
         # RULE 2: Citations must be dated
         if not source.date_published and not source.date_accessed:
-            all_errors.append(f"Source {source_id}: Must have either publication date or access date")
+            all_errors.append(
+                f"Source {source_id}: Must have either publication date or access date"
+            )
 
         # RULE 3: Citations must link to primary source
         if not source.url:
@@ -208,9 +219,7 @@ def require_valid_pack(pack: EvidencePack, strict: bool = False) -> EvidencePack
 
 
 def validate_claim_text_has_source(
-    claim_text: str,
-    source_ids: list[str],
-    available_sources: dict[str, EvidenceSource]
+    claim_text: str, source_ids: list[str], available_sources: dict[str, EvidenceSource]
 ) -> tuple[bool, list[str]]:
     """
     Quick validation that a claim text has valid supporting sources.
@@ -239,9 +248,7 @@ def validate_claim_text_has_source(
 
 
 def classify_claim_type(
-    claim_text: str,
-    has_direct_quote: bool = False,
-    has_calculation: bool = False
+    claim_text: str, has_direct_quote: bool = False, has_calculation: bool = False
 ) -> ClaimType:
     """
     Suggest claim type based on claim characteristics.
@@ -258,14 +265,28 @@ def classify_claim_type(
 
     # Indicators of modeled claims
     modeling_indicators = [
-        "estimated", "projected", "forecast", "model", "calculated",
-        "approximately", "likely to", "expected to", "predicted"
+        "estimated",
+        "projected",
+        "forecast",
+        "model",
+        "calculated",
+        "approximately",
+        "likely to",
+        "expected to",
+        "predicted",
     ]
 
     # Indicators of inferred claims
     inference_indicators = [
-        "suggests", "implies", "indicates", "appears to", "seems to",
-        "therefore", "consequently", "as a result", "based on this"
+        "suggests",
+        "implies",
+        "indicates",
+        "appears to",
+        "seems to",
+        "therefore",
+        "consequently",
+        "as a result",
+        "based on this",
     ]
 
     if has_calculation or any(ind in text_lower for ind in modeling_indicators):
@@ -278,9 +299,7 @@ def classify_claim_type(
 
 
 def suggest_confidence(
-    num_sources: int,
-    claim_type: ClaimType,
-    sources_are_primary: bool = True
+    num_sources: int, claim_type: ClaimType, sources_are_primary: bool = True
 ) -> Confidence:
     """
     Suggest confidence level based on evidence characteristics.

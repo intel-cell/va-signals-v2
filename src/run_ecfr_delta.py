@@ -1,16 +1,16 @@
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import requests
 import yaml
 from jsonschema import validate
 
-from .provenance import utc_now_iso
 from .db import init_db, insert_source_run, upsert_ecfr_seen
 from .notify_email import send_error_alert
+from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,19 +35,25 @@ TITLES = {
     },
 }
 
-def load_cfg() -> Dict[str, Any]:
+
+def load_cfg() -> dict[str, Any]:
     return yaml.safe_load((ROOT / "config" / "approved_sources.yaml").read_text(encoding="utf-8"))
 
-def load_run_schema() -> Dict[str, Any]:
+
+def load_run_schema() -> dict[str, Any]:
     return json.loads((ROOT / "schemas" / "source_run.schema.json").read_text(encoding="utf-8"))
 
-def write_run_record(run_record: Dict[str, Any], title_num: str) -> None:
+
+def write_run_record(run_record: dict[str, Any], title_num: str) -> None:
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    (outdir / f"ECFR_T{title_num}_{stamp}.json").write_text(json.dumps(run_record, indent=2), encoding="utf-8")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    (outdir / f"ECFR_T{title_num}_{stamp}.json").write_text(
+        json.dumps(run_record, indent=2), encoding="utf-8"
+    )
 
-def run_ecfr_delta(title_num: str = "38") -> Dict[str, Any]:
+
+def run_ecfr_delta(title_num: str = "38") -> dict[str, Any]:
     title_info = TITLES[title_num]
     cfg = load_cfg()
     source = next(s for s in cfg["approved_sources"] if s["id"] == title_info["source_id"])
@@ -57,7 +63,7 @@ def run_ecfr_delta(title_num: str = "38") -> Dict[str, Any]:
     init_db()
 
     started_at = utc_now_iso()
-    errors: List[str] = []
+    errors: list[str] = []
     status = "SUCCESS"
     records_fetched = 0
 
@@ -110,16 +116,36 @@ def run_ecfr_delta(title_num: str = "38") -> Dict[str, Any]:
     if final_status == "ERROR" and errors:
         send_error_alert(source["id"], errors, run_record)
 
-    print(json.dumps({"run_record": run_record, "changed": changed, "last_modified": last_modified, "etag": etag}, indent=2))
+    print(
+        json.dumps(
+            {
+                "run_record": run_record,
+                "changed": changed,
+                "last_modified": last_modified,
+                "etag": etag,
+            },
+            indent=2,
+        )
+    )
     return run_record
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run eCFR delta check for one or all CFR titles")
-    parser.add_argument("--title", choices=list(TITLES.keys()), default="38",
-                        help="CFR title number to check (default: 38)")
-    parser.add_argument("--all", action="store_true", dest="all_titles",
-                        help="Run delta check for all configured titles")
+    parser.add_argument(
+        "--title",
+        choices=list(TITLES.keys()),
+        default="38",
+        help="CFR title number to check (default: 38)",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        dest="all_titles",
+        help="Run delta check for all configured titles",
+    )
     return parser
+
 
 if __name__ == "__main__":
     parser = build_parser()

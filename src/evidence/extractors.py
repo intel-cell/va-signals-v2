@@ -4,23 +4,20 @@ Extractors query the database and build EvidenceSource objects with proper
 citations, dates, and provenance information.
 """
 
-import hashlib
 import json
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from src.db import connect, execute
 from src.evidence.models import (
     EvidenceSource,
-    EvidenceExcerpt,
     SourceType,
 )
 
 
 def utc_now_iso() -> str:
     """Get current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # =============================================================================
@@ -29,16 +26,15 @@ def utc_now_iso() -> str:
 
 FR_CITATION_PATTERN = re.compile(r"(\d{2})\s*FR\s*(\d+)", re.IGNORECASE)
 FR_EFFECTIVE_DATE_PATTERN = re.compile(
-    r"(?:effective\s+(?:date|on)?:?\s*)(\w+\s+\d{1,2},?\s+\d{4})",
-    re.IGNORECASE
+    r"(?:effective\s+(?:date|on)?:?\s*)(\w+\s+\d{1,2},?\s+\d{4})", re.IGNORECASE
 )
 FR_COMMENT_DEADLINE_PATTERN = re.compile(
     r"(?:comment[s]?\s+(?:must\s+be\s+)?(?:received\s+)?(?:by|deadline):?\s*)(\w+\s+\d{1,2},?\s+\d{4})",
-    re.IGNORECASE
+    re.IGNORECASE,
 )
 
 
-def extract_fr_citation(doc_number: str) -> Optional[EvidenceSource]:
+def extract_fr_citation(doc_number: str) -> EvidenceSource | None:
     """
     Extract Federal Register citation from a document.
 
@@ -57,7 +53,7 @@ def extract_fr_citation(doc_number: str) -> Optional[EvidenceSource]:
             FROM fr_seen
             WHERE doc_id = :doc_id
             """,
-            {"doc_id": doc_number}
+            {"doc_id": doc_number},
         )
         row = cur.fetchone()
 
@@ -74,7 +70,7 @@ def extract_fr_citation(doc_number: str) -> Optional[EvidenceSource]:
             FROM fr_summaries
             WHERE doc_id = :doc_id
             """,
-            {"doc_id": doc_number}
+            {"doc_id": doc_number},
         )
         summary_row = cur.fetchone()
 
@@ -89,10 +85,7 @@ def extract_fr_citation(doc_number: str) -> Optional[EvidenceSource]:
             metadata["bullet_points"] = summary_row[1]
             metadata["veteran_impact"] = summary_row[2]
 
-        source_id = EvidenceSource.generate_source_id(
-            SourceType.FEDERAL_REGISTER,
-            doc_number
-        )
+        source_id = EvidenceSource.generate_source_id(SourceType.FEDERAL_REGISTER, doc_number)
 
         return EvidenceSource(
             source_id=source_id,
@@ -132,34 +125,33 @@ def extract_fr_citations_by_date(start_date: str, end_date: str) -> list[Evidenc
             WHERE published_date >= :start_date AND published_date <= :end_date
             ORDER BY published_date DESC
             """,
-            {"start_date": start_date, "end_date": end_date}
+            {"start_date": start_date, "end_date": end_date},
         )
 
         sources = []
         for row in cur.fetchall():
             doc_id, published_date, source_url = row
-            source_id = EvidenceSource.generate_source_id(
-                SourceType.FEDERAL_REGISTER,
-                doc_id
+            source_id = EvidenceSource.generate_source_id(SourceType.FEDERAL_REGISTER, doc_id)
+            sources.append(
+                EvidenceSource(
+                    source_id=source_id,
+                    source_type=SourceType.FEDERAL_REGISTER,
+                    title=f"Federal Register Document {doc_id}",
+                    url=source_url,
+                    date_published=published_date,
+                    date_accessed=utc_now_iso(),
+                    fr_doc_number=doc_id,
+                    fr_citation=f"FR Doc. {doc_id}",
+                    issuing_agency="Federal Register",
+                )
             )
-            sources.append(EvidenceSource(
-                source_id=source_id,
-                source_type=SourceType.FEDERAL_REGISTER,
-                title=f"Federal Register Document {doc_id}",
-                url=source_url,
-                date_published=published_date,
-                date_accessed=utc_now_iso(),
-                fr_doc_number=doc_id,
-                fr_citation=f"FR Doc. {doc_id}",
-                issuing_agency="Federal Register",
-            ))
 
         return sources
     finally:
         con.close()
 
 
-def extract_fr_effective_date(text: str) -> Optional[str]:
+def extract_fr_effective_date(text: str) -> str | None:
     """Extract effective date from FR document text."""
     match = FR_EFFECTIVE_DATE_PATTERN.search(text)
     if match:
@@ -167,7 +159,7 @@ def extract_fr_effective_date(text: str) -> Optional[str]:
     return None
 
 
-def extract_fr_comment_deadline(text: str) -> Optional[str]:
+def extract_fr_comment_deadline(text: str) -> str | None:
     """Extract comment deadline from FR document text."""
     match = FR_COMMENT_DEADLINE_PATTERN.search(text)
     if match:
@@ -180,12 +172,11 @@ def extract_fr_comment_deadline(text: str) -> Optional[str]:
 # =============================================================================
 
 BILL_SECTION_PATTERN = re.compile(
-    r"(?:SEC(?:TION)?\.?\s*)?(\d+)\s*[.\(]\s*([a-z])\s*[.\)]",
-    re.IGNORECASE
+    r"(?:SEC(?:TION)?\.?\s*)?(\d+)\s*[.\(]\s*([a-z])\s*[.\)]", re.IGNORECASE
 )
 
 
-def extract_bill_citation(bill_id: str) -> Optional[EvidenceSource]:
+def extract_bill_citation(bill_id: str) -> EvidenceSource | None:
     """
     Extract bill citation from database.
 
@@ -208,24 +199,38 @@ def extract_bill_citation(bill_id: str) -> Optional[EvidenceSource]:
             FROM bills
             WHERE bill_id = :bill_id
             """,
-            {"bill_id": bill_id}
+            {"bill_id": bill_id},
         )
         row = cur.fetchone()
 
         if not row:
             return None
 
-        (bill_id, congress, bill_type, bill_number, title,
-         sponsor_name, sponsor_party, sponsor_state,
-         introduced_date, latest_action_date, latest_action_text,
-         policy_area, committees_json, cosponsors_count) = row
+        (
+            bill_id,
+            congress,
+            bill_type,
+            bill_number,
+            title,
+            sponsor_name,
+            sponsor_party,
+            sponsor_state,
+            introduced_date,
+            latest_action_date,
+            latest_action_text,
+            policy_area,
+            committees_json,
+            cosponsors_count,
+        ) = row
 
         # Build standard bill number format
         bill_type_upper = bill_type.upper().replace(".", "")
         bill_num_str = f"{bill_type_upper}{bill_number}"
 
         # Build Congress.gov URL
-        url = f"https://www.congress.gov/bill/{congress}th-congress/{bill_type.lower()}/{bill_number}"
+        url = (
+            f"https://www.congress.gov/bill/{congress}th-congress/{bill_type.lower()}/{bill_number}"
+        )
 
         metadata = {
             "sponsor_name": sponsor_name,
@@ -280,16 +285,18 @@ def extract_bill_actions(bill_id: str) -> list[dict]:
             WHERE bill_id = :bill_id
             ORDER BY action_date DESC
             """,
-            {"bill_id": bill_id}
+            {"bill_id": bill_id},
         )
 
         actions = []
         for row in cur.fetchall():
-            actions.append({
-                "date": row[0],
-                "text": row[1],
-                "type": row[2],
-            })
+            actions.append(
+                {
+                    "date": row[0],
+                    "text": row[1],
+                    "type": row[2],
+                }
+            )
 
         return actions
     finally:
@@ -318,7 +325,7 @@ def extract_bills_by_congress(congress: int) -> list[EvidenceSource]:
             WHERE congress = :congress
             ORDER BY latest_action_date DESC
             """,
-            {"congress": congress}
+            {"congress": congress},
         )
 
         sources = []
@@ -328,17 +335,19 @@ def extract_bills_by_congress(congress: int) -> list[EvidenceSource]:
             url = f"https://www.congress.gov/bill/{congress}th-congress/{bill_type.lower()}/{bill_number}"
 
             source_id = EvidenceSource.generate_source_id(SourceType.BILL, bill_id)
-            sources.append(EvidenceSource(
-                source_id=source_id,
-                source_type=SourceType.BILL,
-                title=title,
-                url=url,
-                date_published=introduced_date,
-                date_accessed=utc_now_iso(),
-                bill_number=bill_num_str,
-                bill_congress=congress,
-                issuing_agency="U.S. Congress",
-            ))
+            sources.append(
+                EvidenceSource(
+                    source_id=source_id,
+                    source_type=SourceType.BILL,
+                    title=title,
+                    url=url,
+                    date_published=introduced_date,
+                    date_accessed=utc_now_iso(),
+                    bill_number=bill_num_str,
+                    bill_congress=congress,
+                    issuing_agency="U.S. Congress",
+                )
+            )
 
         return sources
     finally:
@@ -355,7 +364,7 @@ OIG_PATTERN = re.compile(r"(\d{2})-(\d{5})-(\d+)", re.IGNORECASE)
 CRS_PATTERN = re.compile(r"(R\d{5}|RL\d{5}|RS\d{5})", re.IGNORECASE)
 
 
-def extract_oversight_citation(event_id: str) -> Optional[EvidenceSource]:
+def extract_oversight_citation(event_id: str) -> EvidenceSource | None:
     """
     Extract oversight report citation from om_events.
 
@@ -377,16 +386,27 @@ def extract_oversight_citation(event_id: str) -> Optional[EvidenceSource]:
             FROM om_events
             WHERE event_id = :event_id
             """,
-            {"event_id": event_id}
+            {"event_id": event_id},
         )
         row = cur.fetchone()
 
         if not row:
             return None
 
-        (event_id, event_type, theme, source_type, url,
-         pub_timestamp, pub_precision, pub_source,
-         title, summary, canonical_refs, fetched_at) = row
+        (
+            event_id,
+            event_type,
+            theme,
+            source_type,
+            url,
+            pub_timestamp,
+            pub_precision,
+            pub_source,
+            title,
+            summary,
+            canonical_refs,
+            fetched_at,
+        ) = row
 
         # Determine source type
         st = SourceType.GAO_REPORT
@@ -402,7 +422,9 @@ def extract_oversight_citation(event_id: str) -> Optional[EvidenceSource]:
         if canonical_refs:
             try:
                 refs = json.loads(canonical_refs)
-                report_number = refs.get("gao_report") or refs.get("oig_report") or refs.get("crs_report")
+                report_number = (
+                    refs.get("gao_report") or refs.get("oig_report") or refs.get("crs_report")
+                )
             except json.JSONDecodeError:
                 pass
 
@@ -451,10 +473,7 @@ def extract_oversight_citation(event_id: str) -> Optional[EvidenceSource]:
         con.close()
 
 
-def extract_oversight_citations_by_type(
-    source_type: str,
-    limit: int = 50
-) -> list[EvidenceSource]:
+def extract_oversight_citations_by_type(source_type: str, limit: int = 50) -> list[EvidenceSource]:
     """
     Extract oversight citations by source type.
 
@@ -478,7 +497,7 @@ def extract_oversight_citations_by_type(
             ORDER BY pub_timestamp DESC
             LIMIT :limit
             """,
-            {"source_type": source_type, "limit": limit}
+            {"source_type": source_type, "limit": limit},
         )
 
         sources = []
@@ -495,21 +514,25 @@ def extract_oversight_citations_by_type(
             if canonical_refs:
                 try:
                     refs = json.loads(canonical_refs)
-                    report_number = refs.get("gao_report") or refs.get("oig_report") or refs.get("crs_report")
+                    report_number = (
+                        refs.get("gao_report") or refs.get("oig_report") or refs.get("crs_report")
+                    )
                 except json.JSONDecodeError:
                     pass
 
             source_id = EvidenceSource.generate_source_id(st, event_id)
-            sources.append(EvidenceSource(
-                source_id=source_id,
-                source_type=st,
-                title=title,
-                url=url,
-                date_published=pub_ts,
-                date_accessed=utc_now_iso(),
-                report_number=report_number,
-                issuing_agency=src_type.upper() if src_type else None,
-            ))
+            sources.append(
+                EvidenceSource(
+                    source_id=source_id,
+                    source_type=st,
+                    title=title,
+                    url=url,
+                    date_published=pub_ts,
+                    date_accessed=utc_now_iso(),
+                    report_number=report_number,
+                    issuing_agency=src_type.upper() if src_type else None,
+                )
+            )
 
         return sources
     finally:
@@ -540,7 +563,7 @@ def extract_oversight_by_theme(theme: str, limit: int = 50) -> list[EvidenceSour
             ORDER BY pub_timestamp DESC
             LIMIT :limit
             """,
-            {"theme_pattern": f"%{theme}%", "limit": limit}
+            {"theme_pattern": f"%{theme}%", "limit": limit},
         )
 
         sources = []
@@ -554,15 +577,17 @@ def extract_oversight_by_theme(theme: str, limit: int = 50) -> list[EvidenceSour
                 st = SourceType.CRS_REPORT
 
             source_id = EvidenceSource.generate_source_id(st, event_id)
-            sources.append(EvidenceSource(
-                source_id=source_id,
-                source_type=st,
-                title=title,
-                url=url,
-                date_published=pub_ts,
-                date_accessed=utc_now_iso(),
-                issuing_agency=src_type.upper() if src_type else None,
-            ))
+            sources.append(
+                EvidenceSource(
+                    source_id=source_id,
+                    source_type=st,
+                    title=title,
+                    url=url,
+                    date_published=pub_ts,
+                    date_accessed=utc_now_iso(),
+                    issuing_agency=src_type.upper() if src_type else None,
+                )
+            )
 
         return sources
     finally:
@@ -573,7 +598,8 @@ def extract_oversight_by_theme(theme: str, limit: int = 50) -> list[EvidenceSour
 # HEARING EXTRACTOR
 # =============================================================================
 
-def extract_hearing_citation(event_id: str) -> Optional[EvidenceSource]:
+
+def extract_hearing_citation(event_id: str) -> EvidenceSource | None:
     """
     Extract hearing citation from database.
 
@@ -595,16 +621,28 @@ def extract_hearing_citation(event_id: str) -> Optional[EvidenceSource]:
             FROM hearings
             WHERE event_id = :event_id
             """,
-            {"event_id": event_id}
+            {"event_id": event_id},
         )
         row = cur.fetchone()
 
         if not row:
             return None
 
-        (event_id, congress, chamber, committee_code, committee_name,
-         hearing_date, hearing_time, title, meeting_type, status,
-         location, url, witnesses_json) = row
+        (
+            event_id,
+            congress,
+            chamber,
+            committee_code,
+            committee_name,
+            hearing_date,
+            hearing_time,
+            title,
+            meeting_type,
+            status,
+            location,
+            url,
+            witnesses_json,
+        ) = row
 
         metadata = {
             "chamber": chamber,
@@ -643,7 +681,8 @@ def extract_hearing_citation(event_id: str) -> Optional[EvidenceSource]:
 # AUTHORITY DOCUMENT EXTRACTOR
 # =============================================================================
 
-def extract_authority_doc_citation(doc_id: str) -> Optional[EvidenceSource]:
+
+def extract_authority_doc_citation(doc_id: str) -> EvidenceSource | None:
     """
     Extract authority document citation.
 
@@ -665,16 +704,24 @@ def extract_authority_doc_citation(doc_id: str) -> Optional[EvidenceSource]:
             FROM authority_docs
             WHERE doc_id = :doc_id
             """,
-            {"doc_id": doc_id}
+            {"doc_id": doc_id},
         )
         row = cur.fetchone()
 
         if not row:
             return None
 
-        (doc_id, authority_source, authority_type, title,
-         published_at, source_url, content_hash, version,
-         metadata_json) = row
+        (
+            doc_id,
+            authority_source,
+            authority_type,
+            title,
+            published_at,
+            source_url,
+            content_hash,
+            version,
+            metadata_json,
+        ) = row
 
         metadata = {}
         if metadata_json:
@@ -716,10 +763,9 @@ def extract_authority_doc_citation(doc_id: str) -> Optional[EvidenceSource]:
 # TOPIC-BASED SEARCH
 # =============================================================================
 
+
 def search_citations_by_keyword(
-    keyword: str,
-    source_types: Optional[list[SourceType]] = None,
-    limit: int = 20
+    keyword: str, source_types: list[SourceType] | None = None, limit: int = 20
 ) -> list[EvidenceSource]:
     """
     Search for citations containing a keyword across all source types.
@@ -751,21 +797,23 @@ def search_citations_by_keyword(
                 ORDER BY fs.published_date DESC
                 LIMIT :limit
                 """,
-                {"pattern": pattern, "limit": limit}
+                {"pattern": pattern, "limit": limit},
             )
             for row in cur.fetchall():
                 doc_id, pub_date, url, summary = row
                 source_id = EvidenceSource.generate_source_id(SourceType.FEDERAL_REGISTER, doc_id)
-                results.append(EvidenceSource(
-                    source_id=source_id,
-                    source_type=SourceType.FEDERAL_REGISTER,
-                    title=f"FR Doc. {doc_id}",
-                    url=url,
-                    date_published=pub_date,
-                    date_accessed=utc_now_iso(),
-                    fr_doc_number=doc_id,
-                    metadata={"summary": summary} if summary else {},
-                ))
+                results.append(
+                    EvidenceSource(
+                        source_id=source_id,
+                        source_type=SourceType.FEDERAL_REGISTER,
+                        title=f"FR Doc. {doc_id}",
+                        url=url,
+                        date_published=pub_date,
+                        date_accessed=utc_now_iso(),
+                        fr_doc_number=doc_id,
+                        metadata={"summary": summary} if summary else {},
+                    )
+                )
 
         # Search Bills
         if not source_types or SourceType.BILL in source_types:
@@ -780,26 +828,31 @@ def search_citations_by_keyword(
                 ORDER BY latest_action_date DESC
                 LIMIT :limit
                 """,
-                {"pattern": pattern, "limit": limit}
+                {"pattern": pattern, "limit": limit},
             )
             for row in cur.fetchall():
                 bill_id, congress, bill_type, bill_number, title, intro_date = row
                 bill_num_str = f"{bill_type.upper().replace('.', '')}{bill_number}"
                 url = f"https://www.congress.gov/bill/{congress}th-congress/{bill_type.lower()}/{bill_number}"
                 source_id = EvidenceSource.generate_source_id(SourceType.BILL, bill_id)
-                results.append(EvidenceSource(
-                    source_id=source_id,
-                    source_type=SourceType.BILL,
-                    title=title,
-                    url=url,
-                    date_published=intro_date,
-                    date_accessed=utc_now_iso(),
-                    bill_number=bill_num_str,
-                    bill_congress=congress,
-                ))
+                results.append(
+                    EvidenceSource(
+                        source_id=source_id,
+                        source_type=SourceType.BILL,
+                        title=title,
+                        url=url,
+                        date_published=intro_date,
+                        date_accessed=utc_now_iso(),
+                        bill_number=bill_num_str,
+                        bill_congress=congress,
+                    )
+                )
 
         # Search Oversight events
-        if not source_types or any(st in (source_types or []) for st in [SourceType.GAO_REPORT, SourceType.OIG_REPORT, SourceType.CRS_REPORT]):
+        if not source_types or any(
+            st in (source_types or [])
+            for st in [SourceType.GAO_REPORT, SourceType.OIG_REPORT, SourceType.CRS_REPORT]
+        ):
             cur = execute(
                 con,
                 """
@@ -811,7 +864,7 @@ def search_citations_by_keyword(
                 ORDER BY pub_timestamp DESC
                 LIMIT :limit
                 """,
-                {"pattern": pattern, "limit": limit}
+                {"pattern": pattern, "limit": limit},
             )
             for row in cur.fetchall():
                 event_id, src_type, url, pub_ts, title, summary = row
@@ -821,15 +874,17 @@ def search_citations_by_keyword(
                 elif src_type == "crs":
                     st = SourceType.CRS_REPORT
                 source_id = EvidenceSource.generate_source_id(st, event_id)
-                results.append(EvidenceSource(
-                    source_id=source_id,
-                    source_type=st,
-                    title=title,
-                    url=url,
-                    date_published=pub_ts,
-                    date_accessed=utc_now_iso(),
-                    metadata={"summary": summary} if summary else {},
-                ))
+                results.append(
+                    EvidenceSource(
+                        source_id=source_id,
+                        source_type=st,
+                        title=title,
+                        url=url,
+                        date_published=pub_ts,
+                        date_accessed=utc_now_iso(),
+                        metadata={"summary": summary} if summary else {},
+                    )
+                )
 
         return results
     finally:

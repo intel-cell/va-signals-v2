@@ -8,10 +8,9 @@ import json
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
-from ..db import connect, execute as db_execute, table_exists
-
+from ..db import connect
+from ..db import execute as db_execute
 
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
@@ -19,9 +18,11 @@ SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 def _execute(sql: str, params: dict | None = None) -> list[dict]:
     """Execute a query and return results as list of dicts."""
     conn = connect()
-    conn.row_factory = lambda cursor, row: dict(
-        (col[0], row[idx]) for idx, col in enumerate(cursor.description)
-    ) if cursor.description else {}
+    conn.row_factory = lambda cursor, row: (
+        {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+        if cursor.description
+        else {}
+    )
     cursor = db_execute(conn, sql, params)
     try:
         results = cursor.fetchall()
@@ -40,6 +41,7 @@ def _execute_write(sql: str, params: dict | None = None) -> None:
 def init_battlefield_tables() -> None:
     """Initialize battlefield tables from schema.sql."""
     from ..db import init_db
+
     init_db()
 
 
@@ -50,6 +52,7 @@ def generate_id(prefix: str = "bf") -> str:
 
 # --- Vehicle Operations ---
 
+
 def upsert_vehicle(
     vehicle_id: str,
     vehicle_type: str,
@@ -57,18 +60,18 @@ def upsert_vehicle(
     identifier: str,
     current_stage: str,
     status_date: str,
-    status_text: Optional[str] = None,
+    status_text: str | None = None,
     our_posture: str = "monitor",
-    attack_surface: Optional[str] = None,
-    owner_internal: Optional[str] = None,
-    lobbyist_task: Optional[str] = None,
-    heat_score: Optional[float] = None,
-    evidence_pack_id: Optional[str] = None,
-    last_action: Optional[str] = None,
-    last_action_date: Optional[str] = None,
-    source_type: Optional[str] = None,
-    source_id: Optional[str] = None,
-    source_url: Optional[str] = None,
+    attack_surface: str | None = None,
+    owner_internal: str | None = None,
+    lobbyist_task: str | None = None,
+    heat_score: float | None = None,
+    evidence_pack_id: str | None = None,
+    last_action: str | None = None,
+    last_action_date: str | None = None,
+    source_type: str | None = None,
+    source_id: str | None = None,
+    source_url: str | None = None,
 ) -> str:
     """Insert or update a vehicle."""
     now = datetime.utcnow().isoformat()
@@ -132,7 +135,7 @@ def upsert_vehicle(
     return vehicle_id
 
 
-def get_vehicle(vehicle_id: str) -> Optional[dict]:
+def get_vehicle(vehicle_id: str) -> dict | None:
     """Get a single vehicle by ID."""
     rows = _execute(
         "SELECT * FROM bf_vehicles WHERE vehicle_id = :vehicle_id",
@@ -142,9 +145,9 @@ def get_vehicle(vehicle_id: str) -> Optional[dict]:
 
 
 def get_vehicles(
-    vehicle_type: Optional[str] = None,
-    posture: Optional[str] = None,
-    stage: Optional[str] = None,
+    vehicle_type: str | None = None,
+    posture: str | None = None,
+    stage: str | None = None,
     limit: int = 100,
     order_by: str = "heat_score DESC NULLS LAST, updated_at DESC",
 ) -> list[dict]:
@@ -168,10 +171,7 @@ def get_vehicles(
 
     # SQLite doesn't support NULLS LAST, use COALESCE workaround
     if "NULLS LAST" in order_by:
-        order_by = order_by.replace(
-            "heat_score DESC NULLS LAST",
-            "COALESCE(heat_score, -1) DESC"
-        )
+        order_by = order_by.replace("heat_score DESC NULLS LAST", "COALESCE(heat_score, -1) DESC")
 
     rows = _execute(
         f"SELECT * FROM bf_vehicles {where} ORDER BY {order_by} LIMIT :limit",
@@ -219,18 +219,19 @@ def update_vehicle_evidence_pack(vehicle_id: str, evidence_pack_id: str) -> None
 
 # --- Calendar Event Operations ---
 
+
 def upsert_calendar_event(
     event_id: str,
     vehicle_id: str,
     date: str,
     event_type: str,
     title: str,
-    time: Optional[str] = None,
-    location: Optional[str] = None,
+    time: str | None = None,
+    location: str | None = None,
     importance: str = "watch",
-    prep_required: Optional[str] = None,
-    source_type: Optional[str] = None,
-    source_id: Optional[str] = None,
+    prep_required: str | None = None,
+    source_type: str | None = None,
+    source_id: str | None = None,
 ) -> str:
     """Insert or update a calendar event."""
     now = datetime.utcnow().isoformat()
@@ -277,11 +278,11 @@ def upsert_calendar_event(
 
 
 def get_calendar_events(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    event_type: Optional[str] = None,
-    importance: Optional[str] = None,
-    vehicle_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    event_type: str | None = None,
+    importance: str | None = None,
+    vehicle_id: str | None = None,
     include_passed: bool = False,
     limit: int = 100,
 ) -> list[dict]:
@@ -359,15 +360,16 @@ def mark_event_passed(event_id: str) -> None:
 
 # --- Gate Alert Operations ---
 
+
 def create_gate_alert(
     vehicle_id: str,
     alert_type: str,
     new_value: str,
-    old_value: Optional[str] = None,
-    days_impact: Optional[int] = None,
-    recommended_action: Optional[str] = None,
-    source_event_id: Optional[str] = None,
-    source_type: Optional[str] = None,
+    old_value: str | None = None,
+    days_impact: int | None = None,
+    recommended_action: str | None = None,
+    source_event_id: str | None = None,
+    source_type: str | None = None,
 ) -> str:
     """Create a new gate alert."""
     alert_id = generate_id("alert")
@@ -404,7 +406,7 @@ def create_gate_alert(
     return alert_id
 
 
-def get_recent_alerts(hours: int = 48, acknowledged: Optional[bool] = None) -> list[dict]:
+def get_recent_alerts(hours: int = 48, acknowledged: bool | None = None) -> list[dict]:
     """Get recent gate alerts."""
     cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
     conditions = ["timestamp >= :cutoff"]
@@ -447,6 +449,7 @@ def acknowledge_alert(alert_id: str, acknowledged_by: str) -> None:
 
 # --- Dashboard Stats ---
 
+
 def get_dashboard_stats() -> dict:
     """Get summary statistics for the battlefield dashboard."""
     # Total vehicles by type
@@ -482,9 +485,7 @@ def get_dashboard_stats() -> dict:
     alerts_48h = alerts_rows[0]["count"] if alerts_rows else 0
 
     # Unacknowledged alerts
-    unack_rows = _execute(
-        "SELECT COUNT(*) as count FROM bf_gate_alerts WHERE acknowledged = 0"
-    )
+    unack_rows = _execute("SELECT COUNT(*) as count FROM bf_gate_alerts WHERE acknowledged = 0")
     unacknowledged_alerts = unack_rows[0]["count"] if unack_rows else 0
 
     return {
@@ -498,6 +499,7 @@ def get_dashboard_stats() -> dict:
 
 
 # --- Snapshot Operations ---
+
 
 def save_snapshot() -> int:
     """Save a daily snapshot for trend analysis."""

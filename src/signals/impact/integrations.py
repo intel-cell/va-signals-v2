@@ -8,35 +8,24 @@ Integration interfaces for:
 Per FRAGO 001/002 schema coordination protocol.
 """
 
-import json
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from ...db import connect, execute, table_exists
-
-from .models import (
-    HeatMap,
-    HeatMapIssue,
-    HeatMapQuadrant,
-    ImpactMemo,
-    Objection,
-    RiskLevel,
-    Posture,
-    IssueArea,
-)
 from .db import (
-    get_impact_memos,
     get_high_priority_issues,
+    get_impact_memos,
     get_latest_heat_map,
     get_objections,
 )
-from .heat_map_generator import render_heat_map_for_brief, get_current_heat_map
-from .objection_library import render_objection_for_brief
-
+from .heat_map_generator import get_current_heat_map, render_heat_map_for_brief
+from .models import (
+    HeatMap,
+)
 
 # =============================================================================
 # DELTA COMMAND INTEGRATION - Heat Scores to Battlefield Dashboard
 # =============================================================================
+
 
 def push_heat_scores_to_delta(heat_map: HeatMap) -> dict:
     """Push heat scores from CHARLIE heat map to DELTA battlefield vehicles.
@@ -80,7 +69,7 @@ def push_heat_scores_to_delta(heat_map: HeatMap) -> dict:
                 {
                     "vehicle_id": vehicle_id,
                     "heat_score": issue.score,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 },
             )
 
@@ -128,7 +117,7 @@ def batch_push_heat_scores(scores: list[dict]) -> dict:
     updated = 0
     not_found = 0
     errors = []
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     for score_entry in scores:
         try:
@@ -228,6 +217,7 @@ def _issue_id_to_vehicle_id(issue_id: str) -> str:
 # =============================================================================
 # ALPHA COMMAND INTEGRATION - Impact Content for CEO Brief
 # =============================================================================
+
 
 def get_impact_section_for_brief(limit: int = 5) -> dict:
     """Get impact data formatted for ALPHA CEO Brief.
@@ -335,7 +325,13 @@ def get_objections_for_brief(limit: int = 3) -> list[dict]:
             "objection": obj["objection_text"],
             "response": obj["response_text"],
             "supporting_citations": [
-                {"source_type": "authority_doc", "source_id": ev, "title": ev, "url": "", "date": ""}
+                {
+                    "source_type": "authority_doc",
+                    "source_id": ev,
+                    "title": ev,
+                    "url": "",
+                    "date": "",
+                }
                 for ev in obj.get("supporting_evidence", [])
             ],
         }
@@ -343,7 +339,7 @@ def get_objections_for_brief(limit: int = 3) -> list[dict]:
     ]
 
 
-def _get_memo_for_issue(issue_id: str) -> Optional[dict]:
+def _get_memo_for_issue(issue_id: str) -> dict | None:
     """Get impact memo for an issue."""
     from .db import get_memos_by_issue
 
@@ -406,7 +402,8 @@ def _vehicle_type_to_source_type(vehicle_type: str) -> str:
 # BRAVO COMMAND INTEGRATION - Evidence Pack Enrichment
 # =============================================================================
 
-def enrich_memo_with_evidence(memo_id: str, issue_id: str) -> Optional[dict]:
+
+def enrich_memo_with_evidence(memo_id: str, issue_id: str) -> dict | None:
     """Enrich an impact memo with BRAVO evidence pack.
 
     Per SCHEMA_BRAVO Section 3.2:
@@ -467,13 +464,15 @@ def enrich_memo_with_evidence(memo_id: str, issue_id: str) -> Optional[dict]:
             {"claim_id": claim_id},
         )
         for src in cur.fetchall():
-            sources.append({
-                "source_id": src[0],
-                "source_type": src[1],
-                "title": src[2],
-                "url": src[3],
-                "date": src[4],
-            })
+            sources.append(
+                {
+                    "source_id": src[0],
+                    "source_type": src[1],
+                    "title": src[2],
+                    "url": src[3],
+                    "date": src[4],
+                }
+            )
 
     con.close()
 
@@ -486,7 +485,7 @@ def enrich_memo_with_evidence(memo_id: str, issue_id: str) -> Optional[dict]:
     }
 
 
-def find_evidence_for_source(source_type: str, source_id: str) -> Optional[dict]:
+def find_evidence_for_source(source_type: str, source_id: str) -> dict | None:
     """Find evidence pack citation for a source.
 
     Per SCHEMA_ALPHA Section 3 (BRAVO Integration Interface):
@@ -586,6 +585,7 @@ def get_citations_for_topic(topic: str, limit: int = 10) -> list[dict]:
 # FULL INTEGRATION PIPELINE
 # =============================================================================
 
+
 def run_charlie_integration() -> dict:
     """Run full CHARLIE integration cycle.
 
@@ -599,7 +599,7 @@ def run_charlie_integration() -> dict:
     from .heat_map_generator import generate_heat_map
 
     results = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "delta_sync": None,
         "alpha_content": None,
         "errors": [],
@@ -630,6 +630,7 @@ def run_charlie_integration() -> dict:
 # =============================================================================
 # STATUS CHECK
 # =============================================================================
+
 
 def check_integration_status() -> dict:
     """Check status of all inter-command integrations.

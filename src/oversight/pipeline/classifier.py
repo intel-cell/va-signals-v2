@@ -2,13 +2,11 @@
 
 import json
 from dataclasses import dataclass
-from typing import Optional
 
 import anthropic
 
-from src.secrets import get_env_or_keychain
-
 from src.llm_config import HAIKU_MODEL
+from src.secrets import get_env_or_keychain
 
 
 @dataclass
@@ -17,8 +15,8 @@ class ClassificationResult:
 
     is_va_relevant: bool
     is_dated_action: bool
-    rejection_reason: Optional[str] = None
-    routine_explanation: Optional[str] = None
+    rejection_reason: str | None = None
+    routine_explanation: str | None = None
 
     @property
     def should_process(self) -> bool:

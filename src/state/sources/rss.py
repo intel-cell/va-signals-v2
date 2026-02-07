@@ -2,8 +2,8 @@
 
 import logging
 from datetime import datetime
-from typing import TypedDict
 from time import mktime
+from typing import TypedDict
 
 import feedparser
 
@@ -164,7 +164,9 @@ class RSSSource(StateSource):
         """Parse a single RSS feed and filter for veteran relevance."""
         feed = feedparser.parse(feed_info["url"])
         if feed.bozo:
-            logger.warning(f"Feed parse error for {feed_info['name']}: {getattr(feed, 'bozo_exception', 'unknown error')}")
+            logger.warning(
+                f"Feed parse error for {feed_info['name']}: {getattr(feed, 'bozo_exception', 'unknown error')}"
+            )
             return []
         signals = []
 

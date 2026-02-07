@@ -6,32 +6,30 @@ Compares new utterances against a member's historical baseline centroid.
 """
 
 import math
-import time
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 import requests
 
 from .db import (
     get_ad_embeddings_for_member,
-    insert_ad_baseline,
-    get_latest_ad_baseline,
-    insert_ad_deviation_event,
     get_ad_recent_deviations_for_hearing,
-    get_ad_utterance_by_id,
     get_ad_typical_utterances,
+    get_ad_utterance_by_id,
+    get_latest_ad_baseline,
+    insert_ad_baseline,
+    insert_ad_deviation_event,
 )
 from .secrets import get_env_or_keychain
 
 # Thresholds (tunable)
 DEVIATION_THRESHOLD_DIST = 0.20  # Minimum cosine distance to flag
-DEVIATION_THRESHOLD_Z = 2.0      # Minimum z-score to flag
-DEBOUNCE_K = 3                   # K of M utterances must exceed threshold
-DEBOUNCE_M = 8                   # Window size for debounce
+DEVIATION_THRESHOLD_Z = 2.0  # Minimum z-score to flag
+DEBOUNCE_K = 3  # K of M utterances must exceed threshold
+DEBOUNCE_M = 8  # Window size for debounce
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def cosine_distance(a: list[float], b: list[float]) -> float:
@@ -210,6 +208,7 @@ def detect_with_debounce(
 
 # Claude API config (matches src/summarize.py)
 from src.llm_config import SONNET_MODEL as CLAUDE_MODEL
+
 CLAUDE_MAX_TOKENS = 256
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
@@ -227,7 +226,7 @@ Example output: "This statement focuses on budget cuts, while they typically dis
 """
 
 
-def _get_anthropic_key() -> Optional[str]:
+def _get_anthropic_key() -> str | None:
     """Get Anthropic API key from environment or macOS Keychain."""
     return get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api", allow_missing=True)
 
@@ -237,7 +236,7 @@ def _call_claude_for_explanation(
     user_prompt: str,
     api_key: str,
     timeout: int = 30,
-) -> Optional[str]:
+) -> str | None:
     """
     Make a message request to Claude API for deviation explanation.
 
@@ -280,7 +279,7 @@ def _call_claude_for_explanation(
         return None
 
 
-def explain_deviation(member_id: str, flagged_utterance_id: str) -> Optional[str]:
+def explain_deviation(member_id: str, flagged_utterance_id: str) -> str | None:
     """
     Generate an LLM explanation for why an utterance deviates from a member's baseline.
 
@@ -315,8 +314,9 @@ def explain_deviation(member_id: str, flagged_utterance_id: str) -> Optional[str
     member_name = flagged.get("member_name", member_id)
 
     typical_texts = "\n\n".join(
-        f"Typical statement {i+1}: \"{u['content'][:500]}...\""
-        if len(u["content"]) > 500 else f"Typical statement {i+1}: \"{u['content']}\""
+        f'Typical statement {i + 1}: "{u["content"][:500]}..."'
+        if len(u["content"]) > 500
+        else f'Typical statement {i + 1}: "{u["content"]}"'
         for i, u in enumerate(typical[:5])
     )
 

@@ -6,13 +6,10 @@ classifies by issue area, and ranks by potential impact.
 """
 
 import re
-from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Optional
 
 from .db_helpers import get_all_deltas
 from .schema import AggregatedDelta, AggregationResult, IssueArea, SourceType
-
 
 # Issue area classification patterns
 ISSUE_PATTERNS = {
@@ -173,7 +170,7 @@ SOURCE_AUTHORITY = {
 }
 
 
-def classify_issue_area(title: str, content: Optional[str] = None) -> IssueArea:
+def classify_issue_area(title: str, content: str | None = None) -> IssueArea:
     """
     Classify content into an issue area based on keyword patterns.
 
@@ -384,7 +381,9 @@ def _raw_to_aggregated(delta: dict, period_end: date) -> AggregatedDelta:
 
     # Parse dates
     pub_date_str = delta.get("published_date") or delta.get("pub_date") or delta.get("hearing_date")
-    first_seen_str = delta.get("first_seen_at") or delta.get("fetched_at") or datetime.utcnow().isoformat()
+    first_seen_str = (
+        delta.get("first_seen_at") or delta.get("fetched_at") or datetime.utcnow().isoformat()
+    )
 
     try:
         if pub_date_str and "T" in pub_date_str:
@@ -423,8 +422,8 @@ def _raw_to_aggregated(delta: dict, period_end: date) -> AggregatedDelta:
 
 
 def aggregate_deltas(
-    period_start: Optional[date] = None,
-    period_end: Optional[date] = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
 ) -> AggregationResult:
     """
     Aggregate deltas from all sources for the specified period.

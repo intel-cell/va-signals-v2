@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -139,11 +138,14 @@ class NCOfficialSource(StateSource):
 
         return signals
 
-    def _parse_date_text(self, text: str) -> Optional[str]:
+    def _parse_date_text(self, text: str) -> str | None:
         """Try to parse date from text like 'Thursday, January 29, 2026'."""
         import re
+
         # Strip day-of-week prefix
-        cleaned = re.sub(r"^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*", "", text.strip())
+        cleaned = re.sub(
+            r"^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s*", "", text.strip()
+        )
         for fmt in ["%B %d, %Y", "%b %d, %Y", "%Y-%m-%d", "%m/%d/%Y"]:
             try:
                 dt = datetime.strptime(cleaned.strip(), fmt)

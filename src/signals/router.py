@@ -1,17 +1,17 @@
 """Signals router - routes envelopes through indicators and triggers."""
 
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import dataclass
 
+from src.signals.engine.evaluator import EvaluationResult, evaluate_expression
 from src.signals.envelope import Envelope
-from src.signals.schema.loader import load_category_schema, get_routing_rule
-from src.signals.engine.evaluator import evaluate_expression, EvaluationResult
+from src.signals.schema.loader import get_routing_rule, load_category_schema
 from src.signals.suppression import SuppressionManager
 
 
 @dataclass
 class RouteResult:
     """Result of routing an envelope through a trigger."""
+
     indicator_id: str
     trigger_id: str
     severity: str
@@ -19,7 +19,7 @@ class RouteResult:
     human_review_required: bool
     evaluation: EvaluationResult
     suppressed: bool = False
-    suppression_reason: Optional[str] = None
+    suppression_reason: str | None = None
 
 
 class SignalsRouter:
@@ -63,19 +63,27 @@ class SignalsRouter:
                                 trigger_id=trigger_id,
                                 authority_id=envelope.authority_id,
                                 version=envelope.version,
-                                cooldown_minutes=routing.get("suppression", {}).get("cooldown_minutes", 60),
-                                version_aware=routing.get("suppression", {}).get("version_aware", True),
+                                cooldown_minutes=routing.get("suppression", {}).get(
+                                    "cooldown_minutes", 60
+                                ),
+                                version_aware=routing.get("suppression", {}).get(
+                                    "version_aware", True
+                                ),
                             )
 
-                            results.append(RouteResult(
-                                indicator_id=indicator["indicator_id"],
-                                trigger_id=trigger_id,
-                                severity=routing.get("severity", "medium"),
-                                actions=routing.get("actions", []),
-                                human_review_required=routing.get("human_review_required", False),
-                                evaluation=eval_result,
-                                suppressed=supp.suppressed,
-                                suppression_reason=supp.reason,
-                            ))
+                            results.append(
+                                RouteResult(
+                                    indicator_id=indicator["indicator_id"],
+                                    trigger_id=trigger_id,
+                                    severity=routing.get("severity", "medium"),
+                                    actions=routing.get("actions", []),
+                                    human_review_required=routing.get(
+                                        "human_review_required", False
+                                    ),
+                                    evaluation=eval_result,
+                                    suppressed=supp.suppressed,
+                                    suppression_reason=supp.reason,
+                                )
+                            )
 
         return results

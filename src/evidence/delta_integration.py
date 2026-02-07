@@ -11,24 +11,21 @@ Integration Points:
 """
 
 import logging
-from typing import Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.db import connect, execute
-from src.evidence.models import (
-    EvidencePack,
-    EvidenceSource,
-    EvidenceClaim,
-    SourceType,
-    ClaimType,
-    Confidence,
-)
-from src.evidence.generator import EvidencePackGenerator
 from src.evidence.extractors import (
     extract_bill_citation,
     extract_fr_citation,
-    extract_oversight_citation,
     extract_hearing_citation,
+    extract_oversight_citation,
+)
+from src.evidence.generator import EvidencePackGenerator
+from src.evidence.models import (
+    ClaimType,
+    Confidence,
+    EvidenceSource,
+    SourceType,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,12 +33,13 @@ logger = logging.getLogger(__name__)
 
 def utc_now_iso() -> str:
     """Get current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # ============================================================================
 # DELTA INTEGRATION: Query Vehicles
 # ============================================================================
+
 
 def get_vehicles_needing_evidence_packs(limit: int = 100) -> list[dict]:
     """
@@ -64,20 +62,22 @@ def get_vehicles_needing_evidence_packs(limit: int = 100) -> list[dict]:
             ORDER BY heat_score DESC NULLS LAST, status_date DESC
             LIMIT :limit
             """,
-            {"limit": limit}
+            {"limit": limit},
         )
 
         vehicles = []
         for row in cur.fetchall():
-            vehicles.append({
-                "vehicle_id": row[0],
-                "vehicle_type": row[1],
-                "title": row[2],
-                "identifier": row[3],
-                "source_type": row[4],
-                "source_id": row[5],
-                "source_url": row[6],
-            })
+            vehicles.append(
+                {
+                    "vehicle_id": row[0],
+                    "vehicle_type": row[1],
+                    "title": row[2],
+                    "identifier": row[3],
+                    "source_type": row[4],
+                    "source_id": row[5],
+                    "source_url": row[6],
+                }
+            )
 
         return vehicles
     except Exception as e:
@@ -87,7 +87,7 @@ def get_vehicles_needing_evidence_packs(limit: int = 100) -> list[dict]:
         con.close()
 
 
-def get_vehicle_details(vehicle_id: str) -> Optional[dict]:
+def get_vehicle_details(vehicle_id: str) -> dict | None:
     """
     Get full details for a single vehicle.
 
@@ -106,7 +106,7 @@ def get_vehicle_details(vehicle_id: str) -> Optional[dict]:
             FROM bf_vehicles
             WHERE vehicle_id = :vehicle_id
             """,
-            {"vehicle_id": vehicle_id}
+            {"vehicle_id": vehicle_id},
         )
         row = cur.fetchone()
 
@@ -139,6 +139,7 @@ def get_vehicle_details(vehicle_id: str) -> Optional[dict]:
 # DELTA INTEGRATION: Link Evidence Packs
 # ============================================================================
 
+
 def link_evidence_pack_to_vehicle(
     vehicle_id: str,
     evidence_pack_id: str,
@@ -168,7 +169,7 @@ def link_evidence_pack_to_vehicle(
             {
                 "vehicle_id": vehicle_id,
                 "evidence_pack_id": evidence_pack_id,
-            }
+            },
         )
         con.commit()
         logger.info(f"Linked evidence pack {evidence_pack_id} to vehicle {vehicle_id}")
@@ -215,10 +216,11 @@ def batch_link_evidence_packs(links: list[dict]) -> dict:
 # DELTA INTEGRATION: Generate Evidence Packs for Vehicles
 # ============================================================================
 
+
 def generate_evidence_pack_for_vehicle(
     vehicle_id: str,
     auto_link: bool = True,
-) -> Optional[str]:
+) -> str | None:
     """
     Generate an evidence pack for a battlefield vehicle.
 
@@ -254,7 +256,7 @@ def generate_evidence_pack_for_vehicle(
     pack = generator.create_pack(
         title=f"Evidence Pack: {identifier}",
         issue_id=vehicle_id,
-        summary=f"Evidence supporting {vehicle_type}: {title}"
+        summary=f"Evidence supporting {vehicle_type}: {title}",
     )
 
     # Extract source based on type
@@ -302,7 +304,7 @@ def generate_evidence_pack_for_vehicle(
 
     # Validate and save
     try:
-        filepath = generator.save_pack(pack, validate=True, strict=False)
+        generator.save_pack(pack, validate=True, strict=False)
         logger.info(f"Generated evidence pack {pack.pack_id} for vehicle {vehicle_id}")
 
         # Auto-link to vehicle
@@ -317,7 +319,7 @@ def generate_evidence_pack_for_vehicle(
 
 
 def batch_generate_evidence_packs(
-    vehicle_ids: Optional[list[str]] = None,
+    vehicle_ids: list[str] | None = None,
     limit: int = 10,
     auto_link: bool = True,
 ) -> dict:
@@ -359,7 +361,9 @@ def batch_generate_evidence_packs(
             result["failed"] += 1
             result["errors"].append(f"Failed to generate pack for {vehicle_id}")
 
-    logger.info(f"Batch generation result: {result['generated']} generated, {result['failed']} failed")
+    logger.info(
+        f"Batch generation result: {result['generated']} generated, {result['failed']} failed"
+    )
     return result
 
 
@@ -367,7 +371,8 @@ def batch_generate_evidence_packs(
 # DELTA INTEGRATION: Query Evidence for Vehicle
 # ============================================================================
 
-def get_evidence_for_vehicle(vehicle_id: str) -> Optional[dict]:
+
+def get_evidence_for_vehicle(vehicle_id: str) -> dict | None:
     """
     Get evidence pack details for a vehicle.
 
@@ -413,22 +418,24 @@ def get_vehicles_with_evidence_summary(limit: int = 50) -> list[dict]:
             ORDER BY v.heat_score DESC NULLS LAST
             LIMIT :limit
             """,
-            {"limit": limit}
+            {"limit": limit},
         )
 
         results = []
         for row in cur.fetchall():
-            results.append({
-                "vehicle_id": row[0],
-                "vehicle_type": row[1],
-                "identifier": row[2],
-                "title": row[3],
-                "evidence_pack_id": row[4],
-                "heat_score": row[5],
-                "pack_status": row[6],
-                "pack_generated": row[7],
-                "has_evidence": row[4] is not None,
-            })
+            results.append(
+                {
+                    "vehicle_id": row[0],
+                    "vehicle_type": row[1],
+                    "identifier": row[2],
+                    "title": row[3],
+                    "evidence_pack_id": row[4],
+                    "heat_score": row[5],
+                    "pack_status": row[6],
+                    "pack_generated": row[7],
+                    "has_evidence": row[4] is not None,
+                }
+            )
 
         return results
     except Exception as e:

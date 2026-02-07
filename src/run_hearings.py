@@ -7,7 +7,7 @@ Usage:
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +16,18 @@ from jsonschema import validate
 # Allow running as a script (python src/run_hearings.py) by setting package context
 if __name__ == "__main__" and __package__ is None:
     import sys
+
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .db import init_db, insert_source_run, get_hearing_stats, get_hearings, get_new_hearings_since, get_hearing_changes_since
+from .db import (
+    get_hearing_changes_since,
+    get_hearing_stats,
+    get_hearings,
+    get_new_hearings_since,
+    init_db,
+    insert_source_run,
+)
 from .fetch_hearings import sync_va_hearings
 from .notify_email import send_error_alert
 from .provenance import utc_now_iso
@@ -35,8 +43,10 @@ def load_run_schema() -> dict[str, Any]:
 def write_run_record(run_record: dict[str, Any]) -> None:
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    (outdir / f"HEARINGS_{stamp}.json").write_text(json.dumps(run_record, indent=2), encoding="utf-8")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    (outdir / f"HEARINGS_{stamp}.json").write_text(
+        json.dumps(run_record, indent=2), encoding="utf-8"
+    )
 
 
 def run_hearings_sync(full: bool = False, congress: int = 119) -> dict[str, Any]:
@@ -96,19 +106,22 @@ def run_hearings_sync(full: bool = False, congress: int = 119) -> dict[str, Any]
     write_run_record(run_record)
 
     # Get new items from DB for alerts
-    new_hearings = get_new_hearings_since(started_at) if new_hearings_count else []
-    hearing_changes = get_hearing_changes_since(started_at) if updated_hearings_count else []
+    get_new_hearings_since(started_at) if new_hearings_count else []
+    get_hearing_changes_since(started_at) if updated_hearings_count else []
 
     # Write latest results
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "HEARINGS_LATEST.json").write_text(
-        json.dumps({
-            "retrieved_at": utc_now_iso(),
-            "new_hearings_count": new_hearings_count,
-            "updated_hearings_count": updated_hearings_count,
-            "changes_count": len(changes),
-        }, indent=2),
+        json.dumps(
+            {
+                "retrieved_at": utc_now_iso(),
+                "new_hearings_count": new_hearings_count,
+                "updated_hearings_count": updated_hearings_count,
+                "changes_count": len(changes),
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
@@ -139,14 +152,14 @@ def print_summary():
     print(f"Total hearings tracked: {stats['total']}")
     print(f"Upcoming hearings:      {stats['upcoming']}")
 
-    if stats.get('by_committee'):
-        print(f"\nBy committee:")
-        for code, info in stats['by_committee'].items():
+    if stats.get("by_committee"):
+        print("\nBy committee:")
+        for code, info in stats["by_committee"].items():
             print(f"  {code}: {info['count']} ({info['name']})")
 
-    if stats.get('by_status'):
-        print(f"\nBy status:")
-        for status, count in stats['by_status'].items():
+    if stats.get("by_status"):
+        print("\nBy status:")
+        for status, count in stats["by_status"].items():
             print(f"  {status}: {count}")
 
     if upcoming:
@@ -176,7 +189,9 @@ def print_summary():
 
 def main():
     parser = argparse.ArgumentParser(description="Run VA hearings sync")
-    parser.add_argument("--full", action="store_true", help="Full sync of all VA committee hearings")
+    parser.add_argument(
+        "--full", action="store_true", help="Full sync of all VA committee hearings"
+    )
     parser.add_argument("--summary", action="store_true", help="Show stats only")
     parser.add_argument("--congress", type=int, default=119, help="Congress number (default: 119)")
     args = parser.parse_args()

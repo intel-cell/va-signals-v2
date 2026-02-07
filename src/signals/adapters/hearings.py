@@ -1,9 +1,6 @@
 """Hearings adapter - transforms hearing records to normalized envelopes."""
 
-from typing import Optional
-
 from src.signals.envelope import Envelope
-
 
 # Committee code to standard committee mapping
 COMMITTEE_MAP = {
@@ -85,7 +82,7 @@ class HearingsAdapter:
 
         return topics
 
-    def _build_event_time(self, hearing: dict) -> Optional[str]:
+    def _build_event_time(self, hearing: dict) -> str | None:
         """Build ISO timestamp from hearing date/time."""
         date = hearing.get("hearing_date")
         time = hearing.get("hearing_time", "00:00")

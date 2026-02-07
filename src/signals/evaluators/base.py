@@ -5,13 +5,24 @@ from typing import Any
 
 from src.signals.envelope import Envelope
 
-
 # Field access policy
 ALLOWED_TOP_LEVEL_FIELDS = {
-    "event_id", "authority_id", "authority_source", "authority_type",
-    "committee", "subcommittee", "topics", "title", "body_text",
-    "content_hash", "version", "published_at", "published_at_source",
-    "event_start_at", "source_url", "fetched_at",
+    "event_id",
+    "authority_id",
+    "authority_source",
+    "authority_type",
+    "committee",
+    "subcommittee",
+    "topics",
+    "title",
+    "body_text",
+    "content_hash",
+    "version",
+    "published_at",
+    "published_at_source",
+    "event_start_at",
+    "source_url",
+    "fetched_at",
 }
 ALLOWED_NESTED_PREFIX = "metadata."
 

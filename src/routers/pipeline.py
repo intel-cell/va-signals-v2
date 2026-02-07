@@ -1,15 +1,15 @@
 """Pipeline runs, documents, and errors endpoints."""
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from ..db import connect, execute
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from ..db import connect, execute
 from ._helpers import parse_errors_json
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ router = APIRouter(tags=["Runs", "Documents"])
 
 
 # --- Pydantic Models ---
+
 
 class SourceRun(BaseModel):
     id: int
@@ -72,8 +73,8 @@ class FRDocumentsResponse(BaseModel):
 
 class ECFRDocument(BaseModel):
     doc_id: str
-    last_modified: Optional[str]
-    etag: Optional[str]
+    last_modified: str | None
+    etag: str | None
     first_seen_at: str
     source_url: str
 
@@ -98,10 +99,11 @@ class ErrorsResponse(BaseModel):
 
 # --- Endpoints ---
 
+
 @router.get("/api/runs", response_model=RunsResponse)
 def get_runs(
-    source_id: Optional[str] = Query(None, description="Filter by source ID"),
-    status: Optional[str] = Query(None, description="Filter by status (SUCCESS, NO_DATA, ERROR)"),
+    source_id: str | None = Query(None, description="Filter by source ID"),
+    status: str | None = Query(None, description="Filter by status (SUCCESS, NO_DATA, ERROR)"),
     limit: int = Query(50, ge=1, le=500, description="Number of runs to return"),
     _: None = Depends(RoleChecker(UserRole.ANALYST)),
 ):
@@ -167,7 +169,7 @@ def get_runs_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     runs_by_source = [RunsBySource(source_id=row[0], count=row[1]) for row in cur.fetchall()]
 
     # Runs by day (last 7 days)
-    seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+    seven_days_ago = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
     cur = execute(
         con,
         """
@@ -182,7 +184,7 @@ def get_runs_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     runs_by_day = [RunsByDay(date=row[0], count=row[1]) for row in cur.fetchall()]
 
     # Runs in last 24 hours
-    twenty_four_hours_ago = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    twenty_four_hours_ago = (datetime.now(UTC) - timedelta(hours=24)).isoformat()
     cur = execute(
         con,
         "SELECT COUNT(*) FROM source_runs WHERE ended_at >= :since",
@@ -263,7 +265,7 @@ def get_ecfr_documents(_: None = Depends(RoleChecker(UserRole.ANALYST))):
         SELECT doc_id, last_modified, etag, first_seen_at, source_url
         FROM ecfr_seen
         ORDER BY first_seen_at DESC
-        """
+        """,
     )
     rows = cur.fetchall()
     con.close()

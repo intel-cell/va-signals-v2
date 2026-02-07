@@ -3,22 +3,19 @@ Tenant management API endpoints.
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from .manager import tenant_manager
+from .middleware import get_tenant_context
 from .models import (
     TenantCreateRequest,
-    TenantUpdateRequest,
     TenantInviteRequest,
-    TenantResponse,
     TenantMemberResponse,
-    TenantSettings,
+    TenantResponse,
 )
-from .manager import tenant_manager
-from .middleware import require_tenant_context, get_tenant_context
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +25,13 @@ router = APIRouter(prefix="/api/tenants", tags=["Tenants"])
 @router.post("", response_model=TenantResponse)
 async def create_tenant(
     request: TenantCreateRequest,
-    current_user = Depends(RoleChecker(UserRole.VIEWER)),
+    current_user=Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """
     Create a new tenant organization.
 
     The creating user becomes the owner with COMMANDER role.
     """
-    from fastapi import Request
     # Get user_id from auth context
     # In real implementation, extract from request.state
     user_id = "current_user_id"  # Placeholder
@@ -60,7 +56,7 @@ async def create_tenant(
 
 @router.get("/me", summary="Get user's tenants")
 async def get_my_tenants(
-    current_user = Depends(RoleChecker(UserRole.VIEWER)),
+    current_user=Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """Get all tenants the current user belongs to."""
     user_id = "current_user_id"  # Placeholder - extract from auth
@@ -87,7 +83,7 @@ async def get_current_tenant():
 @router.get("/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(
     tenant_id: str,
-    current_user = Depends(RoleChecker(UserRole.VIEWER)),
+    current_user=Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """Get tenant details by ID."""
     tenant = tenant_manager.get_tenant(tenant_id)
@@ -111,7 +107,7 @@ async def get_tenant(
 @router.get("/{tenant_id}/settings", summary="Get tenant settings")
 async def get_tenant_settings(
     tenant_id: str,
-    current_user = Depends(RoleChecker(UserRole.LEADERSHIP)),
+    current_user=Depends(RoleChecker(UserRole.LEADERSHIP)),
 ):
     """Get tenant settings. Requires LEADERSHIP role."""
     settings = tenant_manager.get_tenant_settings(tenant_id)
@@ -124,7 +120,7 @@ async def get_tenant_settings(
 @router.get("/{tenant_id}/members", summary="List tenant members")
 async def list_tenant_members(
     tenant_id: str,
-    current_user = Depends(RoleChecker(UserRole.ANALYST)),
+    current_user=Depends(RoleChecker(UserRole.ANALYST)),
 ):
     """List all members of a tenant. Requires ANALYST role."""
     members = tenant_manager.get_tenant_members(tenant_id)
@@ -140,7 +136,7 @@ async def list_tenant_members(
             )
             for m in members
         ],
-        "count": len(members)
+        "count": len(members),
     }
 
 
@@ -148,7 +144,7 @@ async def list_tenant_members(
 async def invite_member(
     tenant_id: str,
     request: TenantInviteRequest,
-    current_user = Depends(RoleChecker(UserRole.LEADERSHIP)),
+    current_user=Depends(RoleChecker(UserRole.LEADERSHIP)),
 ):
     """
     Invite a user to the tenant. Requires LEADERSHIP role.
@@ -167,7 +163,7 @@ async def invite_member(
     if settings and len(members) >= settings.max_users:
         raise HTTPException(
             status_code=400,
-            detail=f"Tenant has reached maximum users ({settings.max_users}). Upgrade plan to add more."
+            detail=f"Tenant has reached maximum users ({settings.max_users}). Upgrade plan to add more.",
         )
 
     # In real implementation:
@@ -201,15 +197,14 @@ async def invite_member(
 async def remove_member(
     tenant_id: str,
     user_id: str,
-    current_user = Depends(RoleChecker(UserRole.COMMANDER)),
+    current_user=Depends(RoleChecker(UserRole.COMMANDER)),
 ):
     """Remove a user from the tenant. Requires COMMANDER role."""
     removed = tenant_manager.remove_member(tenant_id, user_id)
 
     if not removed:
         raise HTTPException(
-            status_code=400,
-            detail="Cannot remove user (not found or is primary owner)"
+            status_code=400, detail="Cannot remove user (not found or is primary owner)"
         )
 
     return {"success": True, "message": f"Removed user {user_id} from tenant"}
@@ -220,15 +215,12 @@ async def update_member_role(
     tenant_id: str,
     user_id: str,
     role: str = Query(..., description="New role for the user"),
-    current_user = Depends(RoleChecker(UserRole.COMMANDER)),
+    current_user=Depends(RoleChecker(UserRole.COMMANDER)),
 ):
     """Update a member's role. Requires COMMANDER role."""
     valid_roles = ["commander", "leadership", "analyst", "viewer"]
     if role not in valid_roles:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid role. Must be one of: {valid_roles}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {valid_roles}")
 
     updated = tenant_manager.update_member_role(tenant_id, user_id, role)
 

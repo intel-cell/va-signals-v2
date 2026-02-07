@@ -12,33 +12,26 @@ Functions:
 """
 
 import json
-from typing import Optional
 
 from src.db import connect, execute
-from src.evidence.models import (
-    EvidencePack,
-    EvidenceSource,
-    EvidenceClaim,
-    SourceType,
-    ClaimType,
-    Confidence,
-    PackStatus,
-)
 from src.evidence.extractors import (
     search_citations_by_keyword,
-    extract_fr_citation,
-    extract_bill_citation,
-    extract_oversight_citation,
-    extract_hearing_citation,
-    extract_authority_doc_citation,
+)
+from src.evidence.models import (
+    ClaimType,
+    Confidence,
+    EvidenceClaim,
+    EvidencePack,
+    EvidenceSource,
+    PackStatus,
+    SourceType,
 )
 from src.evidence.validator import (
     validate_claim as _validate_claim,
-    ValidationResult,
 )
 
 
-def get_evidence_pack(pack_id: str) -> Optional[EvidencePack]:
+def get_evidence_pack(pack_id: str) -> EvidencePack | None:
     """
     Retrieve an evidence pack by ID.
 
@@ -59,15 +52,24 @@ def get_evidence_pack(pack_id: str) -> Optional[EvidencePack]:
             FROM evidence_packs
             WHERE pack_id = :pack_id
             """,
-            {"pack_id": pack_id}
+            {"pack_id": pack_id},
         )
         row = cur.fetchone()
 
         if not row:
             return None
 
-        (pack_id, issue_id, title, summary, generated_at, generated_by,
-         status, validation_errors, output_path) = row
+        (
+            pack_id,
+            issue_id,
+            title,
+            summary,
+            generated_at,
+            generated_by,
+            status,
+            validation_errors,
+            output_path,
+        ) = row
 
         pack = EvidencePack(
             pack_id=pack_id,
@@ -89,7 +91,7 @@ def get_evidence_pack(pack_id: str) -> Optional[EvidencePack]:
             FROM evidence_claims
             WHERE pack_id = :pack_id
             """,
-            {"pack_id": pack_id}
+            {"pack_id": pack_id},
         )
 
         claim_rows = cur.fetchall()
@@ -104,7 +106,7 @@ def get_evidence_pack(pack_id: str) -> Optional[EvidencePack]:
                 FROM evidence_claim_sources
                 WHERE claim_id = :claim_id
                 """,
-                {"claim_id": claim_id}
+                {"claim_id": claim_id},
             )
             source_ids = [r[0] for r in cur.fetchall()]
 
@@ -134,15 +136,30 @@ def get_evidence_pack(pack_id: str) -> Optional[EvidencePack]:
                 FROM evidence_sources
                 WHERE source_id = :source_id
                 """,
-                {"source_id": source_id}
+                {"source_id": source_id},
             )
             src_row = cur.fetchone()
 
             if src_row:
-                (source_id, source_type, title, date_published, date_effective,
-                 date_accessed, url, document_hash, version,
-                 fr_citation, fr_doc_number, bill_number, bill_congress,
-                 report_number, issuing_agency, document_type, metadata_json) = src_row
+                (
+                    source_id,
+                    source_type,
+                    title,
+                    date_published,
+                    date_effective,
+                    date_accessed,
+                    url,
+                    document_hash,
+                    version,
+                    fr_citation,
+                    fr_doc_number,
+                    bill_number,
+                    bill_congress,
+                    report_number,
+                    issuing_agency,
+                    document_type,
+                    metadata_json,
+                ) = src_row
 
                 source = EvidenceSource(
                     source_id=source_id,
@@ -170,7 +187,7 @@ def get_evidence_pack(pack_id: str) -> Optional[EvidencePack]:
         con.close()
 
 
-def get_evidence_pack_by_issue(issue_id: str) -> Optional[EvidencePack]:
+def get_evidence_pack_by_issue(issue_id: str) -> EvidencePack | None:
     """
     Retrieve the most recent evidence pack for an issue.
 
@@ -191,7 +208,7 @@ def get_evidence_pack_by_issue(issue_id: str) -> Optional[EvidencePack]:
             ORDER BY generated_at DESC
             LIMIT 1
             """,
-            {"issue_id": issue_id}
+            {"issue_id": issue_id},
         )
         row = cur.fetchone()
 
@@ -203,10 +220,7 @@ def get_evidence_pack_by_issue(issue_id: str) -> Optional[EvidencePack]:
         con.close()
 
 
-def validate_claim(
-    claim_text: str,
-    source_ids: list[str]
-) -> tuple[bool, list[str]]:
+def validate_claim(claim_text: str, source_ids: list[str]) -> tuple[bool, list[str]]:
     """
     Validate that a claim has proper supporting sources.
 
@@ -235,7 +249,7 @@ def validate_claim(
                 FROM evidence_sources
                 WHERE source_id = :source_id
                 """,
-                {"source_id": source_id}
+                {"source_id": source_id},
             )
             row = cur.fetchone()
 
@@ -263,9 +277,7 @@ def validate_claim(
 
 
 def get_citations_for_topic(
-    topic: str,
-    source_types: Optional[list[str]] = None,
-    limit: int = 20
+    topic: str, source_types: list[str] | None = None, limit: int = 20
 ) -> list[dict]:
     """
     Get citations relevant to a topic.
@@ -310,7 +322,7 @@ def get_citations_for_topic(
     ]
 
 
-def get_source_by_id(source_id: str) -> Optional[dict]:
+def get_source_by_id(source_id: str) -> dict | None:
     """
     Get a source by its ID.
 
@@ -331,16 +343,28 @@ def get_source_by_id(source_id: str) -> Optional[dict]:
             FROM evidence_sources
             WHERE source_id = :source_id
             """,
-            {"source_id": source_id}
+            {"source_id": source_id},
         )
         row = cur.fetchone()
 
         if not row:
             return None
 
-        (source_id, source_type, title, url, date_accessed, date_published,
-         fr_citation, fr_doc_number, bill_number, bill_congress,
-         report_number, issuing_agency, document_type) = row
+        (
+            source_id,
+            source_type,
+            title,
+            url,
+            date_accessed,
+            date_published,
+            fr_citation,
+            fr_doc_number,
+            bill_number,
+            bill_congress,
+            report_number,
+            issuing_agency,
+            document_type,
+        ) = row
 
         return {
             "source_id": source_id,
@@ -366,8 +390,8 @@ def register_source(
     title: str,
     url: str,
     date_accessed: str,
-    date_published: Optional[str] = None,
-    **kwargs
+    date_published: str | None = None,
+    **kwargs,
 ) -> str:
     """
     Register a new source in the evidence database.
@@ -387,7 +411,12 @@ def register_source(
         source_id of the registered source
     """
     st = SourceType(source_type)
-    identifier = kwargs.get("fr_doc_number") or kwargs.get("bill_number") or kwargs.get("report_number") or url
+    identifier = (
+        kwargs.get("fr_doc_number")
+        or kwargs.get("bill_number")
+        or kwargs.get("report_number")
+        or url
+    )
     source_id = EvidenceSource.generate_source_id(st, identifier)
 
     con = connect()
@@ -421,7 +450,7 @@ def register_source(
                 "report_number": kwargs.get("report_number"),
                 "issuing_agency": kwargs.get("issuing_agency"),
                 "document_type": kwargs.get("document_type"),
-            }
+            },
         )
         con.commit()
     finally:
@@ -431,9 +460,7 @@ def register_source(
 
 
 def list_evidence_packs(
-    issue_id: Optional[str] = None,
-    status: Optional[str] = None,
-    limit: int = 50
+    issue_id: str | None = None, status: str | None = None, limit: int = 50
 ) -> list[dict]:
     """
     List available evidence packs.
@@ -470,7 +497,7 @@ def list_evidence_packs(
             ORDER BY generated_at DESC
             LIMIT :limit
             """,
-            params
+            params,
         )
 
         return [

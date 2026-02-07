@@ -3,7 +3,7 @@
 import json
 import re
 from dataclasses import dataclass
-from typing import Optional
+from datetime import UTC
 
 from src.db import connect, execute, insert_returning_id
 
@@ -13,7 +13,7 @@ class DeduplicationResult:
     """Result of deduplication check."""
 
     is_duplicate: bool
-    canonical_event_id: Optional[str] = None
+    canonical_event_id: str | None = None
     action: str = "new"  # new, link_coverage, skip
 
 
@@ -76,7 +76,7 @@ def extract_entities(title: str, content: str, url: str) -> dict:
     return entities
 
 
-def find_canonical_event(entities: dict, source_type: str) -> Optional[dict]:
+def find_canonical_event(entities: dict, source_type: str) -> dict | None:
     """
     Find an existing canonical event matching the extracted entities.
 
@@ -93,7 +93,7 @@ def find_canonical_event(entities: dict, source_type: str) -> Optional[dict]:
     con = connect()
 
     # Build query to find events with matching canonical_refs
-    for entity_type, entity_value in entities.items():
+    for _entity_type, entity_value in entities.items():
         # Search for events with this entity in canonical_refs JSON
         cur = execute(
             con,
@@ -129,7 +129,7 @@ def link_related_coverage(
     source_type: str,
     url: str,
     title: str,
-    pub_timestamp: Optional[str] = None,
+    pub_timestamp: str | None = None,
     pub_precision: str = "unknown",
 ) -> int:
     """
@@ -146,9 +146,9 @@ def link_related_coverage(
     Returns:
         Row ID of the new coverage link
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    fetched_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fetched_at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     con = connect()
     row_id = insert_returning_id(
@@ -181,7 +181,7 @@ def deduplicate_event(
     content: str,
     url: str,
     source_type: str,
-    pub_timestamp: Optional[str] = None,
+    pub_timestamp: str | None = None,
 ) -> DeduplicationResult:
     """
     Full deduplication check for an event.

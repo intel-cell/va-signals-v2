@@ -10,7 +10,6 @@ Usage:
 
 import argparse
 import sys
-from typing import Optional
 
 from . import db
 
@@ -52,7 +51,7 @@ def get_embedding_stats() -> dict:
         con,
         """SELECT COUNT(DISTINCT u.member_id)
            FROM ad_utterances u
-           JOIN ad_embeddings e ON u.utterance_id = e.utterance_id"""
+           JOIN ad_embeddings e ON u.utterance_id = e.utterance_id""",
     )
     members_with_embeddings = cur.fetchone()[0]
 
@@ -215,7 +214,7 @@ def main():
     # Show overall stats
     overall = get_embedding_stats()
     print(f"\nTotal embeddings now:  {overall['total_embeddings']}/{overall['total_utterances']}")
-    if overall['pending'] > 0:
+    if overall["pending"] > 0:
         print(f"Still pending:         {overall['pending']}")
 
 

@@ -6,80 +6,88 @@ Pydantic models for users, sessions, and audit records.
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, EmailStr
+
+from pydantic import BaseModel
 
 
 class UserRole(str, Enum):
     """User role hierarchy for RBAC."""
-    COMMANDER = "commander"      # Full access, user management
-    LEADERSHIP = "leadership"    # Read all, write posture/tasks
-    ANALYST = "analyst"          # Read all, generate reports
-    VIEWER = "viewer"            # Read dashboards only
+
+    COMMANDER = "commander"  # Full access, user management
+    LEADERSHIP = "leadership"  # Read all, write posture/tasks
+    ANALYST = "analyst"  # Read all, generate reports
+    VIEWER = "viewer"  # Read dashboards only
 
 
 class User(BaseModel):
     """User account model."""
+
     user_id: str
     email: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     role: UserRole = UserRole.VIEWER
-    created_at: Optional[datetime] = None
-    last_login: Optional[datetime] = None
+    created_at: datetime | None = None
+    last_login: datetime | None = None
     is_active: bool = True
 
 
 class AuthContext(BaseModel):
     """Authentication context passed through middleware."""
+
     user_id: str
     email: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     role: UserRole
     auth_method: str  # "firebase", "iap", "session"
-    token_issued_at: Optional[datetime] = None
-    token_expires_at: Optional[datetime] = None
+    token_issued_at: datetime | None = None
+    token_expires_at: datetime | None = None
 
 
 class Session(BaseModel):
     """User session for cookie-based auth."""
+
     session_id: str
     user_id: str
     created_at: datetime
     expires_at: datetime
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    ip_address: str | None = None
+    user_agent: str | None = None
     is_valid: bool = True
 
 
 class AuditLog(BaseModel):
     """Audit log entry for request tracking."""
+
     log_id: str
     timestamp: datetime
-    user_id: Optional[str] = None
-    user_email: Optional[str] = None
+    user_id: str | None = None
+    user_email: str | None = None
     action: str
-    resource: Optional[str] = None
-    resource_id: Optional[str] = None
+    resource: str | None = None
+    resource_id: str | None = None
     request_method: str
     request_path: str
-    request_body: Optional[str] = None
+    request_body: str | None = None
     response_status: int
-    ip_address: Optional[str] = None
-    user_agent: Optional[str] = None
+    ip_address: str | None = None
+    user_agent: str | None = None
     duration_ms: int
     success: bool
 
 
 # --- API Request/Response Models ---
 
+
 class LoginRequest(BaseModel):
     """Email/password login request."""
+
     email: str
     password: str
 
 
 class LoginResponse(BaseModel):
     """Login response with token."""
+
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -88,43 +96,49 @@ class LoginResponse(BaseModel):
 
 class TokenVerifyRequest(BaseModel):
     """Token verification request."""
+
     token: str
 
 
 class TokenVerifyResponse(BaseModel):
     """Token verification response."""
+
     valid: bool
-    user_id: Optional[str] = None
-    email: Optional[str] = None
-    role: Optional[str] = None
-    expires_at: Optional[str] = None
+    user_id: str | None = None
+    email: str | None = None
+    role: str | None = None
+    expires_at: str | None = None
 
 
 class UserCreateRequest(BaseModel):
     """Request to create/invite a new user."""
+
     email: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     role: UserRole = UserRole.VIEWER
 
 
 class UserUpdateRequest(BaseModel):
     """Request to update user role or status."""
-    role: Optional[UserRole] = None
-    is_active: Optional[bool] = None
-    display_name: Optional[str] = None
+
+    role: UserRole | None = None
+    is_active: bool | None = None
+    display_name: str | None = None
 
 
 class CurrentUserResponse(BaseModel):
     """Response for /auth/me endpoint."""
+
     user_id: str
     email: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     role: str
     permissions: list[str]
 
 
 class SessionCreateRequest(BaseModel):
     """Request to create session from Firebase ID token."""
+
     idToken: str
     provider: str = "google"  # "google" or "email"
     rememberMe: bool = False
@@ -132,9 +146,10 @@ class SessionCreateRequest(BaseModel):
 
 class FirebaseConfigResponse(BaseModel):
     """Firebase client configuration for frontend."""
+
     apiKey: str
     authDomain: str
     projectId: str
-    storageBucket: Optional[str] = None
-    messagingSenderId: Optional[str] = None
-    appId: Optional[str] = None
+    storageBucket: str | None = None
+    messagingSenderId: str | None = None
+    appId: str | None = None

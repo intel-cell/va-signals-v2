@@ -1,7 +1,6 @@
 """Quality gate for oversight events - rejects events without publication timestamps."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 from src.oversight.agents.base import TimestampResult
 
@@ -11,7 +10,7 @@ class QualityGateResult:
     """Result of quality gate check."""
 
     passed: bool
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
 
 
 def check_quality_gate(timestamps: TimestampResult, url: str) -> QualityGateResult:

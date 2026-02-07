@@ -11,13 +11,13 @@ Provides:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from enum import Enum
 from functools import wraps
-from typing import Callable, Optional, Set
 
-from fastapi import HTTPException, Request, Depends
+from fastapi import HTTPException, Request
 
-from .models import UserRole, AuthContext
+from .models import AuthContext, UserRole
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +45,10 @@ def role_includes(user_role: UserRole, required_role: UserRole) -> bool:
 
 # --- Permission Definitions ---
 
+
 class Permission(str, Enum):
     """Granular permissions for resource access."""
+
     # Read permissions
     READ_DASHBOARD = "read:dashboard"
     READ_SIGNALS = "read:signals"
@@ -74,7 +76,7 @@ class Permission(str, Enum):
 
 
 # Role to permissions mapping
-ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {
+ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
     UserRole.COMMANDER: {
         # Full access
         Permission.READ_DASHBOARD,
@@ -122,7 +124,7 @@ ROLE_PERMISSIONS: dict[UserRole, Set[Permission]] = {
 }
 
 
-def get_permissions_for_role(role: UserRole) -> Set[Permission]:
+def get_permissions_for_role(role: UserRole) -> set[Permission]:
     """Get all permissions for a role."""
     return ROLE_PERMISSIONS.get(role, set())
 
@@ -137,19 +139,20 @@ def has_permission(role: UserRole, permission: Permission) -> bool:
     return permission in get_permissions_for_role(role)
 
 
-def has_any_permission(role: UserRole, permissions: Set[Permission]) -> bool:
+def has_any_permission(role: UserRole, permissions: set[Permission]) -> bool:
     """Check if role has any of the specified permissions."""
     role_perms = get_permissions_for_role(role)
     return bool(role_perms & permissions)
 
 
-def has_all_permissions(role: UserRole, permissions: Set[Permission]) -> bool:
+def has_all_permissions(role: UserRole, permissions: set[Permission]) -> bool:
     """Check if role has all of the specified permissions."""
     role_perms = get_permissions_for_role(role)
     return permissions <= role_perms
 
 
 # --- Access Control Decorators ---
+
 
 def require_permission(*permissions: Permission):
     """
@@ -161,6 +164,7 @@ def require_permission(*permissions: Permission):
         async def get_audit(user: AuthContext = Depends(require_auth)):
             ...
     """
+
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -189,7 +193,9 @@ def require_permission(*permissions: Permission):
                 )
 
             return await func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -197,6 +203,7 @@ def require_any_permission(*permissions: Permission):
     """
     Decorator factory requiring any of the specified permissions.
     """
+
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -217,7 +224,9 @@ def require_any_permission(*permissions: Permission):
                 )
 
             return await func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
@@ -231,6 +240,7 @@ def require_minimum_role(minimum_role: UserRole):
         async def create_task(user: AuthContext = Depends(require_auth)):
             ...
     """
+
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -251,11 +261,14 @@ def require_minimum_role(minimum_role: UserRole):
                 )
 
             return await func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
 # --- Resource-Level Access Control ---
+
 
 class ResourceAccess:
     """
@@ -312,6 +325,7 @@ def get_resource_access(user: AuthContext) -> ResourceAccess:
 
 # --- FastAPI Dependencies ---
 
+
 def PermissionChecker(*permissions: Permission):
     """
     FastAPI dependency factory for permission checking.
@@ -324,6 +338,7 @@ def PermissionChecker(*permissions: Permission):
         ):
             ...
     """
+
     async def check_permissions(request: Request):
         from .middleware import get_current_user
 
@@ -355,6 +370,7 @@ def RoleChecker(minimum_role: UserRole):
         ):
             ...
     """
+
     async def check_role(request: Request):
         from .middleware import get_current_user
 

@@ -3,14 +3,14 @@
 from .aggregator import aggregate_deltas, get_top_deltas
 from .analyst import analyze_deltas
 from .generator import (
-    generate_brief,
-    save_brief,
     generate_and_save_brief,
-    generate_enhanced_brief,
     generate_and_save_enhanced_brief,
+    generate_brief,
+    generate_enhanced_brief,
+    save_brief,
 )
 from .integrations import gather_cross_command_data
-from .runner import run_pipeline, PipelineResult
+from .runner import PipelineResult, run_pipeline
 from .schema import (
     AggregatedDelta,
     AggregationResult,

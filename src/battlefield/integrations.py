@@ -10,15 +10,12 @@ to the battlefield dashboard.
 """
 
 import logging
-from typing import Optional
-from datetime import datetime
 
 from .db_helpers import (
     get_vehicle,
     get_vehicles,
-    update_vehicle_heat_score,
     update_vehicle_evidence_pack,
-    _execute_write,
+    update_vehicle_heat_score,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,12 +25,13 @@ logger = logging.getLogger(__name__)
 # CHARLIE INTEGRATION: Heat Scores
 # ============================================================================
 
+
 def receive_heat_score(
     vehicle_id: str,
     heat_score: float,
-    likelihood: Optional[float] = None,
-    impact: Optional[float] = None,
-    urgency: Optional[float] = None,
+    likelihood: float | None = None,
+    impact: float | None = None,
+    urgency: float | None = None,
 ) -> bool:
     """
     Receive heat score from CHARLIE COMMAND.
@@ -107,11 +105,12 @@ def get_vehicles_needing_heat_scores(limit: int = 100) -> list[dict]:
 # BRAVO INTEGRATION: Evidence Packs
 # ============================================================================
 
+
 def receive_evidence_pack_link(
     vehicle_id: str,
     evidence_pack_id: str,
-    pack_type: Optional[str] = None,
-    generated_at: Optional[str] = None,
+    pack_type: str | None = None,
+    generated_at: str | None = None,
 ) -> bool:
     """
     Receive evidence pack link from BRAVO COMMAND.
@@ -182,6 +181,7 @@ def get_vehicles_needing_evidence_packs(limit: int = 100) -> list[dict]:
 # ALPHA INTEGRATION: Decision Points for CEO Brief
 # ============================================================================
 
+
 def get_decision_points_for_brief(days: int = 14) -> list[dict]:
     """
     Get upcoming decision points for ALPHA COMMAND CEO Brief.
@@ -190,6 +190,7 @@ def get_decision_points_for_brief(days: int = 14) -> list[dict]:
         List of critical/important calendar events with vehicle context.
     """
     from .db_helpers import get_critical_gates
+
     return get_critical_gates(days=days)
 
 

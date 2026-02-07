@@ -1,20 +1,19 @@
 """Compound signals API endpoints."""
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
 from ..db.compound import (
-    get_compound_signals,
     get_compound_signal,
-    resolve_compound_signal,
+    get_compound_signals,
     get_compound_stats,
+    resolve_compound_signal,
 )
 from ..signals.correlator import CorrelationEngine
-from ..auth.rbac import RoleChecker
-from ..auth.models import UserRole
 from ._helpers import utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -24,11 +23,12 @@ router = APIRouter(tags=["Compound Signals"])
 
 # --- Pydantic Models ---
 
+
 class MemberEventModel(BaseModel):
     source_type: str
     event_id: str
     title: str
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
 
 class CompoundSignalModel(BaseModel):
@@ -40,7 +40,7 @@ class CompoundSignalModel(BaseModel):
     member_events: list[MemberEventModel]
     topics: list[str]
     created_at: str
-    resolved_at: Optional[str] = None
+    resolved_at: str | None = None
 
 
 class CompoundSignalsResponse(BaseModel):
@@ -60,17 +60,21 @@ class CompoundStatsResponse(BaseModel):
 
 # --- Endpoints ---
 
+
 @router.get("/api/compound/signals", response_model=CompoundSignalsResponse)
 def list_compound_signals(
     limit: int = Query(20, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    rule_id: Optional[str] = Query(None),
-    min_severity: Optional[float] = Query(None, ge=0.0, le=1.0),
+    rule_id: str | None = Query(None),
+    min_severity: float | None = Query(None, ge=0.0, le=1.0),
     _: None = Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """List compound signals with optional filtering."""
     signals = get_compound_signals(
-        limit=limit, offset=offset, rule_id=rule_id, min_severity=min_severity,
+        limit=limit,
+        offset=offset,
+        rule_id=rule_id,
+        min_severity=min_severity,
     )
     return CompoundSignalsResponse(
         signals=[CompoundSignalModel(**s) for s in signals],
@@ -100,7 +104,9 @@ def resolve_signal(
     """Mark a compound signal as resolved. Requires ANALYST role."""
     resolved = resolve_compound_signal(compound_id)
     if not resolved:
-        raise HTTPException(status_code=404, detail=f"Compound signal {compound_id} not found or already resolved")
+        raise HTTPException(
+            status_code=404, detail=f"Compound signal {compound_id} not found or already resolved"
+        )
     return {"resolved": True, "compound_id": compound_id}
 
 

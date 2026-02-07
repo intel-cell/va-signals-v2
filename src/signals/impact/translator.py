@@ -9,22 +9,16 @@ Domain Knowledge Required (per ORDER_CHARLIE_001):
 - Appropriations account structure (MilCon-VA)
 """
 
-import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
 
 from ..envelope import Envelope
 from .models import (
-    ImpactMemo,
-    PolicyHook,
-    WhyItMatters,
-    Posture,
     ConfidenceLevel,
+    ImpactMemo,
+    Posture,
     RiskLevel,
     create_impact_memo,
 )
-
 
 # =============================================================================
 # DOMAIN KNOWLEDGE: VBA OPERATIONAL WORKFLOWS
@@ -127,65 +121,138 @@ VBA_WORKFLOWS = {
 POLICY_WORKFLOW_MAPPINGS = {
     # Claims processing keywords
     "claims_intake": [
-        "fully developed claim", "fdc", "intent to file", "itf",
-        "claim submission", "application form", "va form 21",
-        "ebenefits", "va.gov",
+        "fully developed claim",
+        "fdc",
+        "intent to file",
+        "itf",
+        "claim submission",
+        "application form",
+        "va form 21",
+        "ebenefits",
+        "va.gov",
     ],
     "claims_development": [
-        "duty to assist", "evidence", "medical records", "service treatment",
-        "private medical", "development", "nexus", "buddy statement",
+        "duty to assist",
+        "evidence",
+        "medical records",
+        "service treatment",
+        "private medical",
+        "development",
+        "nexus",
+        "buddy statement",
     ],
     "rating": [
-        "rating", "disability evaluation", "vasrd", "schedule for rating",
-        "percentage", "combined rating", "bilateral factor",
-        "rating decision", "deferred rating",
+        "rating",
+        "disability evaluation",
+        "vasrd",
+        "schedule for rating",
+        "percentage",
+        "combined rating",
+        "bilateral factor",
+        "rating decision",
+        "deferred rating",
     ],
     "notification": [
-        "decision letter", "notification", "appeal rights",
-        "effective date", "retroactive",
+        "decision letter",
+        "notification",
+        "appeal rights",
+        "effective date",
+        "retroactive",
     ],
     "appeals": [
-        "appeal", "higher level review", "hlr", "supplemental claim",
-        "ama", "appeals modernization", "legacy appeal",
-        "notice of disagreement", "nod",
+        "appeal",
+        "higher level review",
+        "hlr",
+        "supplemental claim",
+        "ama",
+        "appeals modernization",
+        "legacy appeal",
+        "notice of disagreement",
+        "nod",
     ],
     "bva": [
-        "board of veterans", "bva", "board hearing", "virtual hearing",
-        "travel board", "video conference", "bvain",
+        "board of veterans",
+        "bva",
+        "board hearing",
+        "virtual hearing",
+        "travel board",
+        "video conference",
+        "bvain",
     ],
     "exam_scheduling": [
-        "c&p exam", "compensation and pension", "examination",
-        "medical opinion", "independent medical", "imo",
-        "ves", "qtc", "lhi",
+        "c&p exam",
+        "compensation and pension",
+        "examination",
+        "medical opinion",
+        "independent medical",
+        "imo",
+        "ves",
+        "qtc",
+        "lhi",
     ],
     "medical_evidence": [
-        "medical evidence", "dbq", "disability benefits questionnaire",
-        "medical nexus", "service connection", "secondary condition",
+        "medical evidence",
+        "dbq",
+        "disability benefits questionnaire",
+        "medical nexus",
+        "service connection",
+        "secondary condition",
     ],
     "accreditation": [
-        "accreditation", "accredited", "representative", "power of attorney",
-        "poa", "38 cfr 14", "ogc", "agent", "claims agent",
+        "accreditation",
+        "accredited",
+        "representative",
+        "power of attorney",
+        "poa",
+        "38 cfr 14",
+        "ogc",
+        "agent",
+        "claims agent",
     ],
     "fee_agreements": [
-        "fee agreement", "attorney fee", "contingency fee",
-        "direct pay", "fee dispute",
+        "fee agreement",
+        "attorney fee",
+        "contingency fee",
+        "direct pay",
+        "fee dispute",
     ],
     "it_systems": [
-        "vbms", "caseflow", "modernization", "digital", "automation",
-        "artificial intelligence", "ai", "machine learning",
-        "robotic process", "rpa",
+        "vbms",
+        "caseflow",
+        "modernization",
+        "digital",
+        "automation",
+        "artificial intelligence",
+        "ai",
+        "machine learning",
+        "robotic process",
+        "rpa",
     ],
     "training": [
-        "training", "certification", "challenge exam", "knowva",
-        "sme", "quality review",
+        "training",
+        "certification",
+        "challenge exam",
+        "knowva",
+        "sme",
+        "quality review",
     ],
     "contracting": [
-        "contractor", "contract", "procurement", "rfp", "task order",
-        "idiq", "contract modification",
+        "contractor",
+        "contract",
+        "procurement",
+        "rfp",
+        "task order",
+        "idiq",
+        "contract modification",
     ],
     "staffing": [
-        "staffing", "fte", "full time equivalent", "hiring",
-        "vacancy", "regional office", "overtime",
+        "staffing",
+        "fte",
+        "full time equivalent",
+        "hiring",
+        "vacancy",
+        "regional office",
+        "overtime",
     ],
 }
 
@@ -205,17 +272,33 @@ STATUS_KEYWORDS = {
 # Risk indicators
 RISK_INDICATORS = {
     "high_compliance": [
-        "mandatory", "shall", "must comply", "required",
-        "enforcement", "penalty", "violation",
+        "mandatory",
+        "shall",
+        "must comply",
+        "required",
+        "enforcement",
+        "penalty",
+        "violation",
     ],
     "medium_compliance": [
-        "should", "expected to", "encouraged",
-        "guidance", "best practice",
+        "should",
+        "expected to",
+        "encouraged",
+        "guidance",
+        "best practice",
     ],
     "reputational": [
-        "investigation", "audit", "whistleblower",
-        "media", "60 minutes", "news", "report",
-        "vso", "dav", "vfw", "american legion",
+        "investigation",
+        "audit",
+        "whistleblower",
+        "media",
+        "60 minutes",
+        "news",
+        "report",
+        "vso",
+        "dav",
+        "vfw",
+        "american legion",
     ],
 }
 
@@ -224,15 +307,17 @@ RISK_INDICATORS = {
 # TRANSLATOR CLASS
 # =============================================================================
 
+
 @dataclass
 class TranslationContext:
     """Context for policy translation."""
+
     source_type: str  # bill, rule, hearing, report, executive_order
     vehicle_id: str
     title: str
     body_text: str
     source_url: str
-    published_at: Optional[str] = None
+    published_at: str | None = None
     metadata: dict = None
 
     def __post_init__(self):
@@ -297,9 +382,7 @@ class PolicyToOperationsTranslator:
         recommended_action = self._generate_recommended_action(
             posture, compliance_risk, context.source_type
         )
-        decision_trigger = self._generate_decision_trigger(
-            context.source_type, current_status
-        )
+        decision_trigger = self._generate_decision_trigger(context.source_type, current_status)
 
         # Assess confidence
         confidence = self._assess_confidence(context, affected_workflows)
@@ -360,7 +443,9 @@ class PolicyToOperationsTranslator:
         text_lower = text.lower()
 
         high_count = sum(1 for kw in self.risk_indicators["high_compliance"] if kw in text_lower)
-        medium_count = sum(1 for kw in self.risk_indicators["medium_compliance"] if kw in text_lower)
+        medium_count = sum(
+            1 for kw in self.risk_indicators["medium_compliance"] if kw in text_lower
+        )
 
         if high_count >= 3:
             return RiskLevel.CRITICAL
@@ -422,9 +507,7 @@ class PolicyToOperationsTranslator:
 
         return summaries.get(source_type, f"Policy change: {title}")
 
-    def _generate_operational_impact(
-        self, workflows: list[str], title: str, body_text: str
-    ) -> str:
+    def _generate_operational_impact(self, workflows: list[str], title: str, body_text: str) -> str:
         """Generate operational impact description."""
         workflow_names = [self.workflows[w]["name"] for w in workflows if w in self.workflows]
 
@@ -478,13 +561,31 @@ class PolicyToOperationsTranslator:
     def _generate_decision_trigger(self, source_type: str, current_status: str) -> str:
         """Generate decision trigger (if X appears, do Y)."""
         triggers = {
-            ("bill", "introduced"): "If bill advances to committee markup, escalate to leadership for engagement decision.",
-            ("bill", "committee_action"): "If bill passes committee, prepare floor strategy and stakeholder outreach.",
+            (
+                "bill",
+                "introduced",
+            ): "If bill advances to committee markup, escalate to leadership for engagement decision.",
+            (
+                "bill",
+                "committee_action",
+            ): "If bill passes committee, prepare floor strategy and stakeholder outreach.",
             ("bill", "floor_action"): "If bill passes chamber, prepare implementation planning.",
-            ("rule", "proposed_rule"): "If comment period closes, analyze final rule probability; prepare compliance plan.",
-            ("rule", "final_rule"): "If effective date within 90 days, accelerate implementation planning.",
-            ("hearing", "hearing_scheduled"): "If additional hearings scheduled, prepare testimony and talking points.",
-            ("report", "published"): "If follow-up hearings announced, prepare response to findings.",
+            (
+                "rule",
+                "proposed_rule",
+            ): "If comment period closes, analyze final rule probability; prepare compliance plan.",
+            (
+                "rule",
+                "final_rule",
+            ): "If effective date within 90 days, accelerate implementation planning.",
+            (
+                "hearing",
+                "hearing_scheduled",
+            ): "If additional hearings scheduled, prepare testimony and talking points.",
+            (
+                "report",
+                "published",
+            ): "If follow-up hearings announced, prepare response to findings.",
         }
 
         key = (source_type, current_status)
@@ -513,7 +614,7 @@ class PolicyToOperationsTranslator:
                 return ConfidenceLevel.MEDIUM
             return ConfidenceLevel.LOW
 
-    def _estimate_affected_veterans(self, workflows: list[str]) -> Optional[str]:
+    def _estimate_affected_veterans(self, workflows: list[str]) -> str | None:
         """Estimate affected veteran count based on workflows."""
         # High-volume workflows
         high_volume = {"claims_intake", "claims_development", "rating", "notification"}
@@ -536,6 +637,7 @@ class PolicyToOperationsTranslator:
 # =============================================================================
 # CONVENIENCE FUNCTIONS
 # =============================================================================
+
 
 def translate_bill_to_impact(bill: dict) -> ImpactMemo:
     """Translate a bill record to an impact memo."""

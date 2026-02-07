@@ -6,39 +6,40 @@ Orchestrates twice-daily monitoring runs for TX, CA, FL, PA, OH, NY, NC, GA, VA,
 import argparse
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from src.state.classify import classify_by_keywords, classify_by_llm, ClassificationResult
-from src.state.common import RawSignal, generate_signal_id, detect_program
+from src.notify_email import _send_email
+from src.notify_email import is_configured as email_configured
+from src.state.classify import ClassificationResult, classify_by_keywords, classify_by_llm
+from src.state.common import RawSignal, detect_program, generate_signal_id
 from src.state.db_helpers import (
-    insert_state_signal,
-    insert_state_classification,
-    start_state_run,
     finish_state_run,
-    update_source_health,
-    signal_exists,
     get_unnotified_signals,
+    insert_state_classification,
+    insert_state_signal,
     mark_signal_notified,
+    signal_exists,
+    start_state_run,
+    update_source_health,
 )
-from src.state.sources.tx_official import TXOfficialSource
+from src.state.sources.az_official import AZOfficialSource
 from src.state.sources.ca_official import CAOfficialSource
 from src.state.sources.fl_official import FLOfficialSource
-from src.state.sources.pa_official import PAOfficialSource
-from src.state.sources.oh_official import OHOfficialSource
-from src.state.sources.ny_official import NYOfficialSource
-from src.state.sources.nc_official import NCOfficialSource
 from src.state.sources.ga_official import GAOfficialSource
-from src.state.sources.va_official import VAOfficialSource
-from src.state.sources.az_official import AZOfficialSource
+from src.state.sources.nc_official import NCOfficialSource
 from src.state.sources.newsapi import NewsAPISource
+from src.state.sources.ny_official import NYOfficialSource
+from src.state.sources.oh_official import OHOfficialSource
+from src.state.sources.pa_official import PAOfficialSource
 from src.state.sources.rss import RSSSource
-from src.notify_email import is_configured as email_configured, _send_email
+from src.state.sources.tx_official import TXOfficialSource
+from src.state.sources.va_official import VAOfficialSource
 
 logger = logging.getLogger(__name__)
 
 # States we monitor
 MONITORED_STATES = ["TX", "CA", "FL", "PA", "OH", "NY", "NC", "GA", "VA", "AZ"]
+
 
 def _get_official_source(state: str):
     """Get the official source class for a state. Returns None if not supported."""
@@ -59,7 +60,7 @@ def _get_official_source(state: str):
 
 def _get_run_type_from_hour() -> str:
     """Determine run type based on current hour (UTC)."""
-    hour = datetime.now(timezone.utc).hour
+    hour = datetime.now(UTC).hour
     # Morning: 6 AM - 2 PM UTC
     if 6 <= hour < 14:
         return "morning"
@@ -97,7 +98,7 @@ def _classify_signal(signal: RawSignal) -> ClassificationResult:
         return classify_by_llm(signal.title, signal.content, signal.state)
 
 
-def _fetch_from_source(source, source_name: str) -> tuple[list[RawSignal], bool, Optional[str]]:
+def _fetch_from_source(source, source_name: str) -> tuple[list[RawSignal], bool, str | None]:
     """
     Fetch signals from a source with error handling.
 
@@ -124,24 +125,26 @@ def _send_high_severity_notification(signal_data: dict) -> bool:
         return False
 
     try:
-        subject = f"VA Signals - State Alert: {signal_data['state']} - {signal_data['severity'].upper()}"
+        subject = (
+            f"VA Signals - State Alert: {signal_data['state']} - {signal_data['severity'].upper()}"
+        )
 
         html = f"""
         <h2 style="color: #c53030;">State Intelligence Alert</h2>
-        <p><strong>State:</strong> {signal_data['state']}</p>
-        <p><strong>Title:</strong> {signal_data['title']}</p>
-        <p><strong>Severity:</strong> {signal_data['severity'].upper()}</p>
-        <p><strong>Source:</strong> {signal_data['source_id']}</p>
-        <p><strong>URL:</strong> <a href="{signal_data['url']}">{signal_data['url']}</a></p>
+        <p><strong>State:</strong> {signal_data["state"]}</p>
+        <p><strong>Title:</strong> {signal_data["title"]}</p>
+        <p><strong>Severity:</strong> {signal_data["severity"].upper()}</p>
+        <p><strong>Source:</strong> {signal_data["source_id"]}</p>
+        <p><strong>URL:</strong> <a href="{signal_data["url"]}">{signal_data["url"]}</a></p>
         """
 
         text = f"""State Intelligence Alert
 
-State: {signal_data['state']}
-Title: {signal_data['title']}
-Severity: {signal_data['severity'].upper()}
-Source: {signal_data['source_id']}
-URL: {signal_data['url']}
+State: {signal_data["state"]}
+Title: {signal_data["title"]}
+Severity: {signal_data["severity"].upper()}
+Source: {signal_data["source_id"]}
+URL: {signal_data["url"]}
 """
         return _send_email(subject, html, text)
     except Exception as e:
@@ -244,17 +247,19 @@ def _process_single_state(st: str, dry_run: bool = False) -> dict:
         program = detect_program(text)
 
         # Store signal
-        insert_state_signal({
-            "signal_id": sig_id,
-            "state": sig.state,
-            "source_id": sig.source_id,
-            "program": program,
-            "title": sig.title,
-            "content": sig.content,
-            "url": sig.url,
-            "pub_date": sig.pub_date,
-            "event_date": sig.event_date,
-        })
+        insert_state_signal(
+            {
+                "signal_id": sig_id,
+                "state": sig.state,
+                "source_id": sig.source_id,
+                "program": program,
+                "title": sig.title,
+                "content": sig.content,
+                "url": sig.url,
+                "pub_date": sig.pub_date,
+                "event_date": sig.event_date,
+            }
+        )
 
         # Classify signal
         classification = _classify_signal(sig)
@@ -263,7 +268,9 @@ def _process_single_state(st: str, dry_run: bool = False) -> dict:
         if program is None and classification.program is not None:
             program = classification.program
             # Update the stored signal with the LLM-detected program
-            from src.db import connect as db_connect, execute as db_execute
+            from src.db import connect as db_connect
+            from src.db import execute as db_execute
+
             con = db_connect()
             db_execute(
                 con,
@@ -274,13 +281,17 @@ def _process_single_state(st: str, dry_run: bool = False) -> dict:
             con.close()
 
         # Store classification
-        insert_state_classification({
-            "signal_id": sig_id,
-            "severity": classification.severity,
-            "classification_method": classification.method,
-            "keywords_matched": ",".join(classification.keywords_matched) if classification.keywords_matched else None,
-            "llm_reasoning": classification.llm_reasoning,
-        })
+        insert_state_classification(
+            {
+                "signal_id": sig_id,
+                "severity": classification.severity,
+                "classification_method": classification.method,
+                "keywords_matched": ",".join(classification.keywords_matched)
+                if classification.keywords_matched
+                else None,
+                "llm_reasoning": classification.llm_reasoning,
+            }
+        )
 
         # Track high severity
         if classification.severity == "high":
@@ -299,7 +310,7 @@ def _process_single_state(st: str, dry_run: bool = False) -> dict:
 
 def run_state_monitor(
     run_type: str,
-    state: Optional[str] = None,
+    state: str | None = None,
     dry_run: bool = False,
 ) -> dict:
     """
@@ -318,7 +329,9 @@ def run_state_monitor(
 
     # Record run start
     run_id = start_state_run(run_type=run_type, state=state)
-    logger.info(f"Started state monitor run {run_id} (type={run_type}, state={state or 'all'}, dry_run={dry_run})")
+    logger.info(
+        f"Started state monitor run {run_id} (type={run_type}, state={state or 'all'}, dry_run={dry_run})"
+    )
 
     # Process states: parallel for multi-state, direct call for single state
     total_signals_found = 0
@@ -336,8 +349,7 @@ def run_state_monitor(
         max_workers = min(len(states_to_process), 6)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                st: executor.submit(_process_single_state, st, dry_run)
-                for st in states_to_process
+                st: executor.submit(_process_single_state, st, dry_run) for st in states_to_process
             }
             # Collect results in deterministic (MONITORED_STATES) order
             state_results = [futures[st].result() for st in states_to_process]
@@ -399,15 +411,15 @@ def run_state_monitor(
         "dry_run": dry_run,
     }
 
-    logger.info(f"Completed run {run_id}: status={status}, new={new_signals_count}, high={high_severity_count}")
+    logger.info(
+        f"Completed run {run_id}: status={status}, new={new_signals_count}, high={high_severity_count}"
+    )
     return summary
 
 
 def main():
     """CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="State Intelligence monitoring runner"
-    )
+    parser = argparse.ArgumentParser(description="State Intelligence monitoring runner")
     parser.add_argument(
         "--run-type",
         choices=["morning", "evening"],
@@ -426,7 +438,8 @@ def main():
         help="Log but don't send notifications.",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable verbose logging.",
     )
@@ -451,7 +464,7 @@ def main():
     )
 
     # Print summary
-    print(f"\n=== State Monitor Run Summary ===")
+    print("\n=== State Monitor Run Summary ===")
     print(f"Run ID:            {summary['run_id']}")
     print(f"Run Type:          {summary['run_type']}")
     print(f"State:             {summary['state'] or 'all'}")
@@ -464,7 +477,7 @@ def main():
     print(f"Dry Run:           {summary['dry_run']}")
 
     if summary["errors"]:
-        print(f"\nErrors:")
+        print("\nErrors:")
         for err in summary["errors"]:
             print(f"  - {err}")
 

@@ -8,17 +8,17 @@ not the policy details.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
-
 
 # =============================================================================
 # ENUMERATIONS
 # =============================================================================
 
+
 class Posture(str, Enum):
     """Our organization's posture on an issue."""
+
     SUPPORT = "support"
     OPPOSE = "oppose"
     MONITOR = "monitor"
@@ -27,6 +27,7 @@ class Posture(str, Enum):
 
 class ConfidenceLevel(str, Enum):
     """Confidence in impact assessment."""
+
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
@@ -34,6 +35,7 @@ class ConfidenceLevel(str, Enum):
 
 class RiskLevel(str, Enum):
     """Compliance or operational risk level."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -43,6 +45,7 @@ class RiskLevel(str, Enum):
 
 class IssueArea(str, Enum):
     """Primary issue domain for objections."""
+
     BENEFITS = "benefits"
     ACCREDITATION = "accreditation"
     APPROPRIATIONS = "appropriations"
@@ -53,6 +56,7 @@ class IssueArea(str, Enum):
 
 class SourceType(str, Enum):
     """Source of objection/pushback."""
+
     STAFF = "staff"
     VSO = "vso"
     INDUSTRY = "industry"
@@ -63,15 +67,17 @@ class SourceType(str, Enum):
 
 class HeatMapQuadrant(str, Enum):
     """Heat map quadrant classification."""
+
     HIGH_PRIORITY = "high_priority"  # High likelihood + High impact
-    WATCH = "watch"                   # Low likelihood + High impact
-    MONITOR = "monitor"               # High likelihood + Low impact
-    LOW = "low"                       # Low likelihood + Low impact
+    WATCH = "watch"  # Low likelihood + High impact
+    MONITOR = "monitor"  # High likelihood + Low impact
+    LOW = "low"  # Low likelihood + Low impact
 
 
 # =============================================================================
 # IMPACT MEMO COMPONENTS
 # =============================================================================
+
 
 @dataclass
 class PolicyHook:
@@ -79,12 +85,13 @@ class PolicyHook:
 
     The policy_hook answers: "What exactly changed in what vehicle?"
     """
-    vehicle: str                      # Bill number (H.R. 1234), rule docket (RIN 2900-AQ66), etc.
-    vehicle_type: str                 # bill, rule, hearing, report, executive_order
-    section_reference: Optional[str]  # Specific section/paragraph if applicable
-    current_status: str               # introduced, proposed_rule, final_rule, markup, etc.
-    source_url: str                   # Link to primary source
-    effective_date: Optional[str]     # ISO date when change takes effect (if known)
+
+    vehicle: str  # Bill number (H.R. 1234), rule docket (RIN 2900-AQ66), etc.
+    vehicle_type: str  # bill, rule, hearing, report, executive_order
+    section_reference: str | None  # Specific section/paragraph if applicable
+    current_status: str  # introduced, proposed_rule, final_rule, markup, etc.
+    source_url: str  # Link to primary source
+    effective_date: str | None  # ISO date when change takes effect (if known)
 
 
 @dataclass
@@ -94,28 +101,30 @@ class WhyItMatters:
     Translates policy change into business terms CEOs understand.
     Quantify when possible (even ranges: "could affect 10K-50K claims").
     """
+
     # Operational Impact
-    operational_impact: str           # Plain language: claims volume, cycle time, staffing
-    affected_workflows: list[str]     # claims_intake, rating, appeals, exam_scheduling, etc.
-    affected_veteran_count: Optional[str]  # Estimate or range ("~100K", "50K-200K")
+    operational_impact: str  # Plain language: claims volume, cycle time, staffing
+    affected_workflows: list[str]  # claims_intake, rating, appeals, exam_scheduling, etc.
+    affected_veteran_count: str | None  # Estimate or range ("~100K", "50K-200K")
 
     # Compliance Exposure
     compliance_exposure: RiskLevel
-    enforcement_mechanism: Optional[str]  # OIG audit, GAO review, court challenge, etc.
-    compliance_deadline: Optional[str]    # ISO date if regulatory deadline
+    enforcement_mechanism: str | None  # OIG audit, GAO review, court challenge, etc.
+    compliance_deadline: str | None  # ISO date if regulatory deadline
 
     # Cost Impact
-    cost_impact: Optional[str]        # Quantified if possible: "$2-5M annual", "TBD"
-    cost_type: Optional[str]          # staffing, IT, contracts, benefits_increase
+    cost_impact: str | None  # Quantified if possible: "$2-5M annual", "TBD"
+    cost_type: str | None  # staffing, IT, contracts, benefits_increase
 
     # Reputational Risk
     reputational_risk: RiskLevel
-    narrative_vulnerability: Optional[str]  # How media/VSOs might frame this
+    narrative_vulnerability: str | None  # How media/VSOs might frame this
 
 
 # =============================================================================
 # IMPACT MEMO - MAIN SCHEMA
 # =============================================================================
+
 
 @dataclass
 class ImpactMemo:
@@ -134,6 +143,7 @@ class ImpactMemo:
     - confidence_level: high|medium|low
     - sources: Links to evidence pack
     """
+
     memo_id: str
     issue_id: str
     generated_date: str  # ISO datetime
@@ -199,6 +209,7 @@ class ImpactMemo:
 # HEAT MAP SCHEMA
 # =============================================================================
 
+
 @dataclass
 class HeatMapIssue:
     """Single issue in the heat map.
@@ -206,14 +217,15 @@ class HeatMapIssue:
     Score = likelihood x impact x urgency_factor
     Urgency factor increases as decision point approaches.
     """
+
     issue_id: str
     title: str
     likelihood: int  # 1-5 scale
-    impact: int      # 1-5 scale
+    impact: int  # 1-5 scale
     urgency_days: int  # Days to next decision point
-    score: float     # Calculated: likelihood * impact * urgency_factor
+    score: float  # Calculated: likelihood * impact * urgency_factor
     quadrant: HeatMapQuadrant
-    memo_id: Optional[str] = None  # Link to impact memo if exists
+    memo_id: str | None = None  # Link to impact memo if exists
 
     @classmethod
     def calculate_score(cls, likelihood: int, impact: int, urgency_days: int) -> float:
@@ -240,15 +252,15 @@ class HeatMapIssue:
     def determine_quadrant(cls, likelihood: int, impact: int) -> HeatMapQuadrant:
         """Determine heat map quadrant based on likelihood and impact.
 
-                   HIGH IMPACT
-                      |
-            WATCH    |  HIGH PRIORITY
-                     |
-          <----------+---------->  HIGH LIKELIHOOD
-                     |
-            LOW      |  MONITOR
-                      |
-                   LOW IMPACT
+                 HIGH IMPACT
+                    |
+          WATCH    |  HIGH PRIORITY
+                   |
+        <----------+---------->  HIGH LIKELIHOOD
+                   |
+          LOW      |  MONITOR
+                    |
+                 LOW IMPACT
         """
         high_likelihood = likelihood >= 3
         high_impact = impact >= 3
@@ -271,6 +283,7 @@ class HeatMap:
     - generated_date
     - issues[]: list of HeatMapIssue
     """
+
     heat_map_id: str
     generated_date: str  # ISO datetime
     issues: list[HeatMapIssue]
@@ -280,7 +293,7 @@ class HeatMap:
         return sorted(
             [i for i in self.issues if i.quadrant == HeatMapQuadrant.HIGH_PRIORITY],
             key=lambda x: x.score,
-            reverse=True
+            reverse=True,
         )
 
     def get_watch_list(self) -> list[HeatMapIssue]:
@@ -288,7 +301,7 @@ class HeatMap:
         return sorted(
             [i for i in self.issues if i.quadrant == HeatMapQuadrant.WATCH],
             key=lambda x: x.score,
-            reverse=True
+            reverse=True,
         )
 
     def to_dict(self) -> dict:
@@ -313,7 +326,7 @@ class HeatMap:
                 "total_issues": len(self.issues),
                 "high_priority_count": len(self.get_high_priority()),
                 "watch_count": len(self.get_watch_list()),
-            }
+            },
         }
 
     def render_ascii(self) -> str:
@@ -368,6 +381,7 @@ Generated: {self.generated_date}
 # OBJECTION LIBRARY SCHEMA
 # =============================================================================
 
+
 @dataclass
 class Objection:
     """Staff pushback response entry.
@@ -382,14 +396,15 @@ class Objection:
     - last_used_date
     - effectiveness_rating
     """
+
     objection_id: str
     issue_area: IssueArea
     source_type: SourceType
-    objection_text: str        # What they'll say
-    response_text: str         # 1-2 sentence reply
+    objection_text: str  # What they'll say
+    response_text: str  # 1-2 sentence reply
     supporting_evidence: list[str]  # Links to evidence pack
-    last_used_date: Optional[str] = None  # ISO datetime
-    effectiveness_rating: Optional[int] = None  # 1-5 scale, updated based on feedback
+    last_used_date: str | None = None  # ISO datetime
+    effectiveness_rating: int | None = None  # 1-5 scale, updated based on feedback
     tags: list[str] = field(default_factory=list)  # Additional categorization
 
     def to_dict(self) -> dict:
@@ -411,6 +426,7 @@ class Objection:
 # FACTORY FUNCTIONS
 # =============================================================================
 
+
 def create_impact_memo(
     issue_id: str,
     vehicle: str,
@@ -427,20 +443,19 @@ def create_impact_memo(
     decision_trigger: str,
     confidence: ConfidenceLevel,
     sources: list[str],
-    section_reference: Optional[str] = None,
-    effective_date: Optional[str] = None,
-    affected_veteran_count: Optional[str] = None,
-    enforcement_mechanism: Optional[str] = None,
-    compliance_deadline: Optional[str] = None,
-    cost_impact: Optional[str] = None,
-    cost_type: Optional[str] = None,
-    narrative_vulnerability: Optional[str] = None,
+    section_reference: str | None = None,
+    effective_date: str | None = None,
+    affected_veteran_count: str | None = None,
+    enforcement_mechanism: str | None = None,
+    compliance_deadline: str | None = None,
+    cost_impact: str | None = None,
+    cost_type: str | None = None,
+    narrative_vulnerability: str | None = None,
 ) -> ImpactMemo:
     """Factory function to create Impact Memo with sensible defaults."""
     import uuid
-    from datetime import datetime, timezone
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     memo_id = f"MEMO-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 
     policy_hook = PolicyHook(
@@ -486,7 +501,7 @@ def create_heat_map_issue(
     likelihood: int,
     impact: int,
     urgency_days: int,
-    memo_id: Optional[str] = None,
+    memo_id: str | None = None,
 ) -> HeatMapIssue:
     """Factory function to create HeatMapIssue with calculated fields."""
     score = HeatMapIssue.calculate_score(likelihood, impact, urgency_days)

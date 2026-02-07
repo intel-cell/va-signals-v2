@@ -7,7 +7,7 @@ Usage:
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +16,18 @@ from jsonschema import validate
 # Allow running as a script (python src/run_bills.py) by setting package context
 if __name__ == "__main__" and __package__ is None:
     import sys
+
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .db import init_db, insert_source_run, get_bill_stats, get_bills, get_new_bills_since, get_new_actions_since
+from .db import (
+    get_bill_stats,
+    get_bills,
+    get_new_actions_since,
+    get_new_bills_since,
+    init_db,
+    insert_source_run,
+)
 from .fetch_bills import sync_va_bills
 from .notify_email import send_error_alert
 from .provenance import utc_now_iso
@@ -35,7 +43,7 @@ def load_run_schema() -> dict[str, Any]:
 def write_run_record(run_record: dict[str, Any]) -> None:
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     (outdir / f"BILLS_{stamp}.json").write_text(json.dumps(run_record, indent=2), encoding="utf-8")
 
 
@@ -92,18 +100,21 @@ def run_bills_sync(full: bool = False, congress: int = 118) -> dict[str, Any]:
     write_run_record(run_record)
 
     # Get new items from DB for alerts
-    new_bills = get_new_bills_since(started_at) if new_bills_count else []
-    new_actions = get_new_actions_since(started_at) if new_actions_count else []
+    get_new_bills_since(started_at) if new_bills_count else []
+    get_new_actions_since(started_at) if new_actions_count else []
 
     # Write latest results
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "BILLS_LATEST.json").write_text(
-        json.dumps({
-            "retrieved_at": utc_now_iso(),
-            "new_bills_count": new_bills_count,
-            "new_actions_count": new_actions_count,
-        }, indent=2),
+        json.dumps(
+            {
+                "retrieved_at": utc_now_iso(),
+                "new_bills_count": new_bills_count,
+                "new_actions_count": new_actions_count,
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
@@ -133,7 +144,7 @@ def print_summary():
     print("=" * 60)
     print(f"Total bills tracked:  {stats['total_bills']}")
     print(f"Total actions logged: {stats['total_actions']}")
-    if stats.get('by_congress'):
+    if stats.get("by_congress"):
         print(f"By congress:          {stats['by_congress']}")
 
     if recent:

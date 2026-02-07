@@ -1,8 +1,8 @@
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 import threading
-from typing import Any, Dict, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import UTC, datetime
+from typing import Any
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -34,7 +34,7 @@ def _get_session() -> requests.Session:
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _to_json_listing_url(bulk_url: str) -> str:
@@ -49,33 +49,37 @@ def _to_bulk_url(json_or_bulk_url: str) -> str:
     return json_or_bulk_url.replace("/bulkdata/json/", "/bulkdata/", 1)
 
 
-def fetch_bulk_listing_json(bulk_url: str, timeout: int = 30) -> Dict[str, Any]:
+def fetch_bulk_listing_json(bulk_url: str, timeout: int = 30) -> dict[str, Any]:
     url = _to_json_listing_url(bulk_url)
     r = _get_session().get(url, timeout=timeout)
     r.raise_for_status()
     return r.json()
 
 
-def list_folder_children(bulk_url: str, timeout: int = 30) -> List[Dict[str, Any]]:
+def list_folder_children(bulk_url: str, timeout: int = 30) -> list[dict[str, Any]]:
     data = fetch_bulk_listing_json(bulk_url, timeout=timeout)
     files = data.get("files") or data.get("file") or []
     return list(files) if isinstance(files, (list, tuple)) else []
 
 
-def _is_folder(item: Dict[str, Any]) -> bool:
+def _is_folder(item: dict[str, Any]) -> bool:
     return bool(item.get("folder"))
 
 
-def _label(item: Dict[str, Any]) -> str:
+def _label(item: dict[str, Any]) -> str:
     return str(item.get("displayLabel") or item.get("name") or "").strip()
 
 
-def list_latest_month_folders(fr_root_bulk_url: str, max_months: int = 3, timeout: int = 30) -> List[Tuple[str, str]]:
+def list_latest_month_folders(
+    fr_root_bulk_url: str, max_months: int = 3, timeout: int = 30
+) -> list[tuple[str, str]]:
     """Return newest-first list of (YYYY-MM, month_bulk_url)."""
-    out: List[Tuple[str, str]] = []
+    out: list[tuple[str, str]] = []
 
-    years_items = [i for i in list_folder_children(fr_root_bulk_url, timeout=timeout) if _is_folder(i)]
-    years: List[Tuple[str, str]] = []
+    years_items = [
+        i for i in list_folder_children(fr_root_bulk_url, timeout=timeout) if _is_folder(i)
+    ]
+    years: list[tuple[str, str]] = []
     for it in years_items:
         lab = _label(it)
         link = it.get("link")
@@ -87,8 +91,10 @@ def list_latest_month_folders(fr_root_bulk_url: str, max_months: int = 3, timeou
         if len(out) >= max_months:
             break
 
-        months_items = [i for i in list_folder_children(year_link, timeout=timeout) if _is_folder(i)]
-        months: List[Tuple[str, str]] = []
+        months_items = [
+            i for i in list_folder_children(year_link, timeout=timeout) if _is_folder(i)
+        ]
+        months: list[tuple[str, str]] = []
         for it in months_items:
             lab = _label(it)
             link = it.get("link")
@@ -104,38 +110,37 @@ def list_latest_month_folders(fr_root_bulk_url: str, max_months: int = 3, timeou
     return out
 
 
-def list_month_packages(month_bulk_url: str, timeout: int = 30) -> List[Dict[str, str]]:
+def list_month_packages(month_bulk_url: str, timeout: int = 30) -> list[dict[str, str]]:
     """Return FR package IDs in a month folder (FR-YYYY-MM-DD*)."""
     items = list_folder_children(month_bulk_url, timeout=timeout)
-    out: List[Dict[str, str]] = []
+    out: list[dict[str, str]] = []
     for it in items:
         lab = _label(it)
         link = it.get("link") or ""
         m = re.match(r"^FR-(\d{4})-(\d{2})-(\d{2})", lab)
         if m:
             published_date = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-            out.append({
-                "doc_id": lab.strip("/"),
-                "published_date": published_date,
-                "source_url": link or month_bulk_url,
-            })
+            out.append(
+                {
+                    "doc_id": lab.strip("/"),
+                    "published_date": published_date,
+                    "source_url": link or month_bulk_url,
+                }
+            )
     return out
 
 
 def list_all_packages_parallel(
-    month_folders: List[Tuple[str, str]], timeout: int = 30, max_workers: int = 4
-) -> List[Dict[str, str]]:
+    month_folders: list[tuple[str, str]], timeout: int = 30, max_workers: int = 4
+) -> list[dict[str, str]]:
     """Fetch packages from multiple month folders in parallel."""
-    all_packages: List[Dict[str, str]] = []
+    all_packages: list[dict[str, str]] = []
 
-    def fetch_month(month_url: str) -> List[Dict[str, str]]:
+    def fetch_month(month_url: str) -> list[dict[str, str]]:
         return list_month_packages(month_url, timeout=timeout)
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_month = {
-            executor.submit(fetch_month, url): label
-            for label, url in month_folders
-        }
+        future_to_month = {executor.submit(fetch_month, url): label for label, url in month_folders}
         for future in as_completed(future_to_month):
             pkgs = future.result()  # Propagate exceptions for fail-closed
             all_packages.extend(pkgs)

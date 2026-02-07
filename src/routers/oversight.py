@@ -1,15 +1,14 @@
 """Oversight monitor endpoints."""
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from ..db import connect, table_exists
-from ..oversight.db_helpers import get_oversight_stats, get_oversight_events
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from ..db import connect, table_exists
+from ..oversight.db_helpers import get_oversight_events, get_oversight_stats
 
 logger = logging.getLogger(__name__)
 
@@ -18,16 +17,17 @@ router = APIRouter(tags=["Oversight"])
 
 # --- Pydantic Models ---
 
+
 class OversightEvent(BaseModel):
     event_id: str
     title: str
     primary_source_type: str
     primary_url: str
-    pub_timestamp: Optional[str]
+    pub_timestamp: str | None
     is_escalation: bool
     is_deviation: bool
     surfaced: bool
-    surfaced_at: Optional[str]
+    surfaced_at: str | None
     fetched_at: str
 
 
@@ -41,11 +41,12 @@ class OversightStatsResponse(BaseModel):
     escalations: int
     deviations: int
     surfaced: int
-    last_event_at: Optional[str]
+    last_event_at: str | None
     by_source: dict[str, int]
 
 
 # --- Endpoints ---
+
 
 @router.get("/api/oversight/stats", response_model=OversightStatsResponse)
 def get_oversight_stats_endpoint(_: None = Depends(RoleChecker(UserRole.VIEWER))):
@@ -69,7 +70,7 @@ def get_oversight_stats_endpoint(_: None = Depends(RoleChecker(UserRole.VIEWER))
 @router.get("/api/oversight/events", response_model=OversightEventsResponse)
 def get_oversight_events_endpoint(
     limit: int = Query(50, ge=1, le=500, description="Max events to return"),
-    source_type: Optional[str] = Query(None, description="Filter by source type"),
+    source_type: str | None = Query(None, description="Filter by source type"),
     escalations_only: bool = Query(False, description="Only escalation events"),
     deviations_only: bool = Query(False, description="Only deviation events"),
     surfaced_only: bool = Query(False, description="Only surfaced events"),

@@ -4,18 +4,18 @@ Trend Analysis API Router
 Provides REST endpoints for accessing historical trend data.
 """
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, Query
 
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
 from .queries import (
-    get_signal_trends,
-    get_signal_trends_summary,
-    get_source_health_trends,
-    get_source_health_summary,
-    get_oversight_trends,
     get_battlefield_trends,
     get_battlefield_trends_summary,
+    get_oversight_trends,
+    get_signal_trends,
+    get_signal_trends_summary,
+    get_source_health_summary,
+    get_source_health_trends,
 )
 
 router = APIRouter(prefix="/api/trends", tags=["Trends"])

@@ -6,18 +6,18 @@ using rule-based and ML ensemble approaches.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional, Any
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
-from .models import (
-    PredictionType,
-    PredictionResult,
-    PredictionConfig,
-    RiskLevel,
-    FeatureSet,
-)
 from .features import FeatureExtractor
+from .models import (
+    FeatureSet,
+    PredictionConfig,
+    PredictionResult,
+    PredictionType,
+    RiskLevel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ScoringResult:
     """Aggregated scoring result across all prediction types."""
+
     signal_id: str
     importance_score: float
     impact_score: float
@@ -97,7 +98,7 @@ class SignalScorer:
             overall_score=round(overall, 3),
             confidence=round(confidence, 3),
             recommendations=recommendations,
-            scored_at=datetime.now(timezone.utc),
+            scored_at=datetime.now(UTC),
         )
 
     def score_importance(self, signal: dict[str, Any]) -> PredictionResult:
@@ -110,10 +111,22 @@ class SignalScorer:
 
         factors = [
             {"factor": "keyword_density", "value": features.keyword_density, "weight": 0.25},
-            {"factor": "source_reliability", "value": features.source_reliability_score, "weight": 0.20},
+            {
+                "factor": "source_reliability",
+                "value": features.source_reliability_score,
+                "weight": 0.20,
+            },
             {"factor": "complexity", "value": features.complexity_score, "weight": 0.15},
-            {"factor": "entity_count", "value": min(1.0, features.entity_count / 10), "weight": 0.20},
-            {"factor": "regulation_citations", "value": min(1.0, features.regulation_citations / 5), "weight": 0.20},
+            {
+                "factor": "entity_count",
+                "value": min(1.0, features.entity_count / 10),
+                "weight": 0.20,
+            },
+            {
+                "factor": "regulation_citations",
+                "value": min(1.0, features.regulation_citations / 5),
+                "weight": 0.20,
+            },
         ]
 
         explanation = self._explain_importance(score, features)
@@ -256,12 +269,7 @@ class SignalScorer:
         return min(1.0, confidence)
 
     def _generate_recommendations(
-        self,
-        signal: dict,
-        features: FeatureSet,
-        importance: float,
-        impact: float,
-        urgency: float
+        self, signal: dict, features: FeatureSet, importance: float, impact: float, urgency: float
     ) -> list[str]:
         """Generate actionable recommendations based on scores."""
         recommendations = []
@@ -283,7 +291,9 @@ class SignalScorer:
         if impact > 0.6:
             recommendations.append("📊 High impact potential. Brief leadership team.")
             if features.regulation_citations > 2:
-                recommendations.append("📋 Multiple regulatory references. Legal review recommended.")
+                recommendations.append(
+                    "📋 Multiple regulatory references. Legal review recommended."
+                )
 
         # Importance-based recommendations
         if importance > 0.7:

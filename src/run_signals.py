@@ -13,6 +13,7 @@ Usage:
 # Allow running as a script (python src/run_signals.py) by setting package context
 if __name__ == "__main__" and __package__ is None:
     import sys
+
     sys.path.append(str(__import__("pathlib").Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
@@ -20,12 +21,12 @@ import argparse
 import logging
 from pathlib import Path
 
-from .db import init_db, connect, insert_source_run, execute
+from .db import connect, execute, init_db, insert_source_run
 from .provenance import utc_now_iso
-from .signals.router import SignalsRouter, RouteResult
+from .signals.adapters import BillsAdapter, HearingsAdapter, OMEventsAdapter
 from .signals.envelope import Envelope
-from .signals.adapters import HearingsAdapter, BillsAdapter, OMEventsAdapter
 from .signals.output.audit_log import write_audit_log
+from .signals.router import RouteResult, SignalsRouter
 from .signals.schema.loader import get_routing_rule
 
 logging.basicConfig(
@@ -343,25 +344,27 @@ def cmd_status(args):
         """SELECT trigger_id, severity, authority_id, fired_at, suppressed
            FROM signal_audit_log
            ORDER BY fired_at DESC
-           LIMIT 10"""
+           LIMIT 10""",
     )
     recent_fires = cur.fetchall()
 
     print(f"\nRecent Trigger Fires: {len(recent_fires)}")
     for trigger_id, severity, authority_id, fired_at, suppressed in recent_fires:
         supp_mark = " (suppressed)" if suppressed else ""
-        print(f"  [{severity.upper()}] {trigger_id} - {authority_id[:30]} @ {fired_at[:19]}{supp_mark}")
+        print(
+            f"  [{severity.upper()}] {trigger_id} - {authority_id[:30]} @ {fired_at[:19]}{supp_mark}"
+        )
 
     # Counts by severity
     cur = execute(
         con,
         """SELECT severity, COUNT(*) FROM signal_audit_log
            WHERE suppressed = 0
-           GROUP BY severity"""
+           GROUP BY severity""",
     )
     by_severity = dict(cur.fetchall())
 
-    print(f"\nFires by Severity:")
+    print("\nFires by Severity:")
     for sev in ["critical", "high", "medium", "low"]:
         count = by_severity.get(sev, 0)
         if count > 0:
@@ -374,8 +377,7 @@ def cmd_status(args):
            FROM signal_suppression
            WHERE cooldown_until > :now
            ORDER BY cooldown_until DESC
-           LIMIT 10"""
-        ,
+           LIMIT 10""",
         {"now": utc_now_iso()},
     )
     active_suppressions = cur.fetchall()
@@ -411,7 +413,7 @@ def cmd_test_envelope(args):
         source_url="https://veterans.house.gov/hearings/test-hearing",
     )
 
-    print(f"\nTest Envelope:")
+    print("\nTest Envelope:")
     print(f"  Event ID: {test_envelope.event_id}")
     print(f"  Authority: {test_envelope.authority_source} / {test_envelope.authority_type}")
     print(f"  Title: {test_envelope.title}")
@@ -427,7 +429,7 @@ def cmd_test_envelope(args):
     router = SignalsRouter(categories=categories)
     results = router.route(test_envelope)
 
-    print(f"\n--- Routing Results ---")
+    print("\n--- Routing Results ---")
     print(f"Total triggers matched: {len(results)}")
 
     for result in results:
@@ -445,7 +447,9 @@ def cmd_test_envelope(args):
             if result.evaluation.matched_terms:
                 print(f"    Matched terms: {', '.join(result.evaluation.matched_terms[:5])}")
             if result.evaluation.matched_discriminators:
-                print(f"    Discriminators: {', '.join(result.evaluation.matched_discriminators[:3])}")
+                print(
+                    f"    Discriminators: {', '.join(result.evaluation.matched_discriminators[:3])}"
+                )
 
     if not results:
         print("\n  No triggers matched for this envelope.")

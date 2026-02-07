@@ -11,57 +11,54 @@ Generates 1-page evidence packs from issues/claims by:
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
-from src.db import connect, execute, insert_returning_id
-from src.evidence.models import (
-    EvidencePack,
-    EvidenceSource,
-    EvidenceClaim,
-    EvidenceExcerpt,
-    SourceType,
-    ClaimType,
-    Confidence,
-    PackStatus,
-)
+from src.db import connect, execute
 from src.evidence.extractors import (
-    extract_fr_citation,
-    extract_bill_citation,
-    extract_oversight_citation,
-    extract_hearing_citation,
     extract_authority_doc_citation,
+    extract_bill_citation,
+    extract_fr_citation,
+    extract_hearing_citation,
+    extract_oversight_citation,
     search_citations_by_keyword,
 )
+from src.evidence.models import (
+    ClaimType,
+    Confidence,
+    EvidenceClaim,
+    EvidencePack,
+    EvidenceSource,
+    PackStatus,
+    SourceType,
+)
 from src.evidence.validator import (
-    validate_pack,
     require_valid_pack,
-    ValidationError,
 )
 
-
 # Output directory for evidence packs
-EVIDENCE_PACK_OUTPUT_DIR = Path(os.environ.get("EVIDENCE_PACK_OUTPUT_DIR", "outputs/evidence_packs"))
+EVIDENCE_PACK_OUTPUT_DIR = Path(
+    os.environ.get("EVIDENCE_PACK_OUTPUT_DIR", "outputs/evidence_packs")
+)
 
 
 def utc_now_iso() -> str:
     """Get current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class EvidencePackGenerator:
     """Generates evidence packs from issues and claims."""
 
-    def __init__(self, output_dir: Optional[Path] = None, generated_by: str = "bravo_command"):
+    def __init__(self, output_dir: Path | None = None, generated_by: str = "bravo_command"):
         self.output_dir = output_dir or EVIDENCE_PACK_OUTPUT_DIR
         self.generated_by = generated_by
 
     def create_pack(
         self,
         title: str,
-        issue_id: Optional[str] = None,
-        summary: Optional[str] = None,
+        issue_id: str | None = None,
+        summary: str | None = None,
     ) -> EvidencePack:
         """
         Create a new empty evidence pack.
@@ -85,11 +82,8 @@ class EvidencePackGenerator:
         )
 
     def add_source_by_id(
-        self,
-        pack: EvidencePack,
-        source_type: SourceType,
-        identifier: str
-    ) -> Optional[EvidenceSource]:
+        self, pack: EvidencePack, source_type: SourceType, identifier: str
+    ) -> EvidenceSource | None:
         """
         Add a source to the pack by looking it up in the database.
 
@@ -154,8 +148,8 @@ class EvidencePackGenerator:
         self,
         pack: EvidencePack,
         keywords: list[str],
-        source_types: Optional[list[SourceType]] = None,
-        limit_per_type: int = 10
+        source_types: list[SourceType] | None = None,
+        limit_per_type: int = 10,
     ) -> list[EvidenceSource]:
         """
         Automatically find and add relevant sources based on keywords.
@@ -173,9 +167,7 @@ class EvidencePackGenerator:
 
         for keyword in keywords:
             sources = search_citations_by_keyword(
-                keyword,
-                source_types=source_types,
-                limit=limit_per_type
+                keyword, source_types=source_types, limit=limit_per_type
             )
             for source in sources:
                 if source.source_id not in pack.sources:
@@ -196,12 +188,7 @@ class EvidencePackGenerator:
         """
         return pack.to_markdown()
 
-    def save_pack(
-        self,
-        pack: EvidencePack,
-        validate: bool = True,
-        strict: bool = False
-    ) -> Path:
+    def save_pack(self, pack: EvidencePack, validate: bool = True, strict: bool = False) -> Path:
         """
         Save evidence pack to file and database.
 
@@ -269,9 +256,11 @@ class EvidencePackGenerator:
                     "generated_by": pack.generated_by,
                     "status": pack.status.value,
                     "validation_passed": 1 if pack.status == PackStatus.VALIDATED else 0,
-                    "validation_errors": json.dumps(pack.validation_errors) if pack.validation_errors else None,
+                    "validation_errors": json.dumps(pack.validation_errors)
+                    if pack.validation_errors
+                    else None,
                     "output_path": pack.output_path,
-                }
+                },
             )
 
             # Insert sources
@@ -312,11 +301,11 @@ class EvidencePackGenerator:
                         "issuing_agency": source.issuing_agency,
                         "document_type": source.document_type,
                         "metadata_json": json.dumps(source.metadata) if source.metadata else None,
-                    }
+                    },
                 )
 
             # Insert claims
-            for i, claim in enumerate(pack.claims):
+            for _i, claim in enumerate(pack.claims):
                 cur = execute(
                     con,
                     """
@@ -332,7 +321,7 @@ class EvidencePackGenerator:
                         "claim_type": claim.claim_type.value,
                         "confidence": claim.confidence.value,
                         "last_verified": claim.last_verified,
-                    }
+                    },
                 )
 
                 # Get claim ID
@@ -352,7 +341,7 @@ class EvidencePackGenerator:
                         {
                             "claim_id": claim_id,
                             "source_id": source_id,
-                        }
+                        },
                     )
 
             con.commit()
@@ -364,9 +353,9 @@ def generate_evidence_pack_for_issue(
     issue_id: str,
     title: str,
     claims_with_sources: list[dict],
-    summary: Optional[str] = None,
+    summary: str | None = None,
     validate: bool = True,
-    output_dir: Optional[Path] = None,
+    output_dir: Path | None = None,
 ) -> Path:
     """
     High-level function to generate an evidence pack for an issue.
@@ -437,7 +426,7 @@ def generate_evidence_pack_for_issue(
 def generate_quick_evidence_pack(
     topic: str,
     keywords: list[str],
-    output_dir: Optional[Path] = None,
+    output_dir: Path | None = None,
 ) -> Path:
     """
     Generate a quick evidence pack by searching for sources matching keywords.
@@ -455,8 +444,7 @@ def generate_quick_evidence_pack(
     """
     generator = EvidencePackGenerator(output_dir=output_dir)
     pack = generator.create_pack(
-        title=f"Evidence Pack: {topic}",
-        summary=f"Auto-generated evidence pack for topic: {topic}"
+        title=f"Evidence Pack: {topic}", summary=f"Auto-generated evidence pack for topic: {topic}"
     )
 
     # Find sources

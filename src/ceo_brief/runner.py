@@ -10,17 +10,16 @@ import json
 import logging
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
 
 from .aggregator import aggregate_deltas
 from .analyst import analyze_deltas
 from .db_helpers import get_latest_brief, list_briefs
 from .generator import (
+    DEFAULT_OUTPUT_DIR,
     generate_and_save_brief,
     generate_and_save_enhanced_brief,
-    DEFAULT_OUTPUT_DIR,
 )
 
 # Configure logging
@@ -37,12 +36,12 @@ class PipelineResult:
     """Result of a full pipeline run."""
 
     success: bool
-    brief_id: Optional[str]
-    markdown_path: Optional[str]
-    json_path: Optional[str]
+    brief_id: str | None
+    markdown_path: str | None
+    json_path: str | None
     validation_errors: list[str]
     stats: dict
-    error: Optional[str] = None
+    error: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -57,9 +56,9 @@ class PipelineResult:
 
 
 def run_pipeline(
-    period_start: Optional[date] = None,
-    period_end: Optional[date] = None,
-    output_dir: Optional[Path] = None,
+    period_start: date | None = None,
+    period_end: date | None = None,
+    output_dir: Path | None = None,
     dry_run: bool = False,
     enhanced: bool = True,
 ) -> PipelineResult:
@@ -238,7 +237,8 @@ Examples:
         help="Output results as JSON",
     )
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose logging",
     )
@@ -274,7 +274,7 @@ Examples:
 
             if status["latest_brief"]:
                 latest = status["latest_brief"]
-                print(f"\nLatest Brief:")
+                print("\nLatest Brief:")
                 print(f"  ID: {latest['brief_id']}")
                 print(f"  Generated: {latest['generated_at']}")
                 print(f"  Period: {latest['period_start']} to {latest['period_end']}")
@@ -322,13 +322,15 @@ Examples:
     else:
         print("\n=== CEO Brief Pipeline Result ===\n")
         if result.success:
-            print(f"Status: SUCCESS")
+            print("Status: SUCCESS")
             if result.brief_id:
                 print(f"Brief ID: {result.brief_id}")
                 print(f"Markdown: {result.markdown_path}")
                 print(f"JSON: {result.json_path}")
-            print(f"\nStats:")
-            print(f"  Period: {result.stats.get('period_start')} to {result.stats.get('period_end')}")
+            print("\nStats:")
+            print(
+                f"  Period: {result.stats.get('period_start')} to {result.stats.get('period_end')}"
+            )
             print(f"  Total Deltas: {result.stats.get('total_deltas', 0)}")
             print(f"  Top Issues: {result.stats.get('top_issues', 0)}")
 
@@ -337,7 +339,7 @@ Examples:
                 for err in result.validation_errors:
                     print(f"  - {err}")
         else:
-            print(f"Status: FAILED")
+            print("Status: FAILED")
             print(f"Error: {result.error}")
 
     return 0 if result.success else 1

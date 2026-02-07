@@ -3,7 +3,6 @@
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.oversight.db_helpers import get_active_escalation_signals
 
@@ -17,15 +16,16 @@ class EscalationResult:
     is_escalation: bool
     matched_signals: list[str] = field(default_factory=list)
     severity: str = "none"  # critical, high, medium, none
-    ml_score: Optional[float] = None
-    ml_risk_level: Optional[str] = None
-    ml_confidence: Optional[float] = None
+    ml_score: float | None = None
+    ml_risk_level: str | None = None
+    ml_confidence: float | None = None
 
 
-def _try_ml_score(title: str, content: str) -> tuple[Optional[float], Optional[str], Optional[float]]:
+def _try_ml_score(title: str, content: str) -> tuple[float | None, str | None, float | None]:
     """Attempt ML scoring. Returns (score, risk_level, confidence) or (None, None, None)."""
     try:
         from src.ml import SignalScorer
+
         scorer = SignalScorer()
         result = scorer.score({"title": title, "content": content, "source_type": "oversight"})
         return result.overall_score, result.overall_risk.value, result.confidence

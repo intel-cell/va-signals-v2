@@ -9,23 +9,19 @@ Seed with top 10 predictable pushbacks per issue area:
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
 
-from .models import (
-    Objection,
-    IssueArea,
-    SourceType,
-)
 from .db import (
-    insert_objection,
-    get_objection,
+    get_objection_stats,
     get_objections,
+    insert_objection,
     search_objections,
     update_objection_usage,
-    get_objection_stats,
 )
-
+from .models import (
+    IssueArea,
+    Objection,
+    SourceType,
+)
 
 # =============================================================================
 # SEED DATA: BENEFITS OBJECTIONS
@@ -265,6 +261,7 @@ APPROPRIATIONS_OBJECTIONS = [
 # OBJECTION LIBRARY CLASS
 # =============================================================================
 
+
 class ObjectionLibrary:
     """Manages the structured objection/response database."""
 
@@ -347,8 +344,8 @@ class ObjectionLibrary:
     def find_response(
         self,
         objection_text: str,
-        issue_area: Optional[IssueArea] = None,
-    ) -> Optional[dict]:
+        issue_area: IssueArea | None = None,
+    ) -> dict | None:
         """Find the best matching response for an objection.
 
         Args:
@@ -379,7 +376,7 @@ class ObjectionLibrary:
     def record_usage(
         self,
         objection_id: str,
-        effectiveness: Optional[int] = None,
+        effectiveness: int | None = None,
     ) -> None:
         """Record that an objection response was used.
 
@@ -437,6 +434,7 @@ class ObjectionLibrary:
 # CONVENIENCE FUNCTIONS
 # =============================================================================
 
+
 def seed_objection_library(force: bool = False) -> int:
     """Seed the objection library with initial entries."""
     library = ObjectionLibrary()
@@ -445,8 +443,8 @@ def seed_objection_library(force: bool = False) -> int:
 
 def find_objection_response(
     objection_text: str,
-    issue_area: Optional[IssueArea] = None,
-) -> Optional[dict]:
+    issue_area: IssueArea | None = None,
+) -> dict | None:
     """Find the best matching response for an objection."""
     library = ObjectionLibrary()
     return library.find_response(objection_text, issue_area)
@@ -460,9 +458,9 @@ def get_objections_for_area(issue_area: IssueArea, limit: int = 10) -> list[dict
 
 def render_objection_for_brief(objection: dict) -> str:
     """Render an objection for inclusion in CEO Brief."""
-    return f"""**Objection:** "{objection['objection_text']}"
+    return f"""**Objection:** "{objection["objection_text"]}"
 
-**Response:** {objection['response_text']}
+**Response:** {objection["response_text"]}
 
-_Source: {objection['source_type'].upper()} | Area: {objection['issue_area'].upper()}_
+_Source: {objection["source_type"].upper()} | Area: {objection["issue_area"].upper()}_
 """

@@ -11,11 +11,11 @@ Integration Points:
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
-from typing import Optional
+from datetime import date
 
 from src.db import connect, execute
-from src.evidence.models import EvidenceSource, SourceType as BravoSourceType
+from src.evidence.models import EvidenceSource
+from src.evidence.models import SourceType as BravoSourceType
 
 
 # ALPHA's SourceType enum values (mirror for compatibility)
@@ -54,13 +54,14 @@ class SourceCitationForAlpha:
 
     This matches ALPHA's SourceCitation dataclass exactly.
     """
+
     source_type: str  # AlphaSourceType value
     source_id: str
     title: str
     url: str
     date: date
-    excerpt: Optional[str] = None
-    section_ref: Optional[str] = None
+    excerpt: str | None = None
+    section_ref: str | None = None
 
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
@@ -77,8 +78,8 @@ class SourceCitationForAlpha:
 
 def evidence_source_to_alpha_citation(
     source: EvidenceSource,
-    excerpt: Optional[str] = None,
-    section_ref: Optional[str] = None,
+    excerpt: str | None = None,
+    section_ref: str | None = None,
 ) -> SourceCitationForAlpha:
     """
     Convert BRAVO EvidenceSource to ALPHA SourceCitation format.
@@ -94,7 +95,7 @@ def evidence_source_to_alpha_citation(
     # Map source type
     alpha_type = BRAVO_TO_ALPHA_SOURCE_TYPE.get(
         source.source_type,
-        AlphaSourceType.OVERSIGHT  # Default fallback
+        AlphaSourceType.OVERSIGHT,  # Default fallback
     )
 
     # Parse date from ISO string
@@ -111,10 +112,10 @@ def evidence_source_to_alpha_citation(
 
     # Determine source_id for ALPHA (use identifier not hash)
     source_id = (
-        source.fr_doc_number or
-        source.bill_number or
-        source.report_number or
-        source.source_id[:12]  # Fallback to truncated hash
+        source.fr_doc_number
+        or source.bill_number
+        or source.report_number
+        or source.source_id[:12]  # Fallback to truncated hash
     )
 
     return SourceCitationForAlpha(
@@ -131,7 +132,7 @@ def evidence_source_to_alpha_citation(
 def find_evidence_for_source(
     source_type: str,
     source_id: str,
-) -> Optional[SourceCitationForAlpha]:
+) -> SourceCitationForAlpha | None:
     """
     Find evidence pack citation for a source.
 
@@ -163,15 +164,23 @@ def find_evidence_for_source(
             {
                 "source_id": source_id,
                 "source_id_pattern": f"{source_id}%",
-            }
+            },
         )
         row = cur.fetchone()
 
         if not row:
             return None
 
-        (db_source_id, db_source_type, title, url, date_published,
-         fr_doc_number, bill_number, report_number) = row
+        (
+            db_source_id,
+            db_source_type,
+            title,
+            url,
+            date_published,
+            fr_doc_number,
+            bill_number,
+            report_number,
+        ) = row
 
         # Parse date
         pub_date = None
@@ -253,7 +262,7 @@ def validate_brief_citations(
         for i, citation in enumerate(citations):
             source_id = citation.get("source_id")
             if not source_id:
-                errors.append(f"Citation {i+1}: Missing source_id")
+                errors.append(f"Citation {i + 1}: Missing source_id")
                 continue
 
             # Check if source exists
@@ -270,11 +279,13 @@ def validate_brief_citations(
                 {
                     "source_id": source_id,
                     "source_id_pattern": f"{source_id}%",
-                }
+                },
             )
 
             if not cur.fetchone():
-                errors.append(f"Citation {i+1}: Source '{source_id}' not found in evidence database")
+                errors.append(
+                    f"Citation {i + 1}: Source '{source_id}' not found in evidence database"
+                )
 
     finally:
         con.close()

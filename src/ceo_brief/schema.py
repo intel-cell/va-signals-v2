@@ -9,7 +9,6 @@ maps, and specific asks for the lobbying team.
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
 
 
 class IssueArea(str, Enum):
@@ -71,8 +70,8 @@ class SourceCitation:
     title: str
     url: str
     date: date
-    excerpt: Optional[str] = None  # Relevant text snippet
-    section_ref: Optional[str] = None  # e.g., "Section 3(a)", "38 CFR 21.4250"
+    excerpt: str | None = None  # Relevant text snippet
+    section_ref: str | None = None  # e.g., "Section 3(a)", "38 CFR 21.4250"
 
 
 @dataclass
@@ -99,7 +98,7 @@ class Stakeholder:
     name: str  # Person or organization name
     role: str  # Title or position
     why_they_care: str  # Their interest/stake in the issue
-    relationship_note: Optional[str] = None  # Any existing relationship context
+    relationship_note: str | None = None  # Any existing relationship context
     priority: Likelihood = Likelihood.MEDIUM  # How important to engage
 
 
@@ -115,7 +114,7 @@ class RiskOpportunity:
     is_risk: bool  # True = risk, False = opportunity
     likelihood: Likelihood
     impact: Impact
-    mitigation_or_action: Optional[str] = None  # What to do about it
+    mitigation_or_action: str | None = None  # What to do about it
     supporting_citations: list[SourceCitation] = field(default_factory=list)
 
 
@@ -129,7 +128,7 @@ class AskItem:
 
     action: str  # What specifically to do
     target: str  # Who to target (person/organization)
-    deadline: Optional[date] = None  # When it needs to happen
+    deadline: date | None = None  # When it needs to happen
     rationale: str = ""  # Why this matters now
     priority: Likelihood = Likelihood.MEDIUM
 
@@ -233,9 +232,7 @@ class CEOBrief:
 
         # Stakeholder count
         if not (5 <= len(self.stakeholder_map) <= 10):
-            errors.append(
-                f"Expected 5-10 stakeholders, got {len(self.stakeholder_map)}"
-            )
+            errors.append(f"Expected 5-10 stakeholders, got {len(self.stakeholder_map)}")
 
         # Ask list count
         if not (3 <= len(self.ask_list) <= 7):
@@ -243,9 +240,7 @@ class CEOBrief:
 
         # Issue snapshot count
         if len(self.issue_snapshots) > 3:
-            errors.append(
-                f"Expected max 3 issue snapshots, got {len(self.issue_snapshots)}"
-            )
+            errors.append(f"Expected max 3 issue snapshots, got {len(self.issue_snapshots)}")
 
         # Objection-response count
         if len(self.objections_responses) < 3:
@@ -270,7 +265,7 @@ class CEOBrief:
         lines = []
 
         # Header
-        lines.append(f"# CEO Lobbyist Brief")
+        lines.append("# CEO Lobbyist Brief")
         lines.append(f"**Generated:** {self.generated_at.strftime('%Y-%m-%d %H:%M UTC')}")
         lines.append(f"**Period:** {self.period_start} to {self.period_end}")
         lines.append("")
@@ -286,18 +281,14 @@ class CEOBrief:
             lines.append(f"### {i}. {msg.text}")
             lines.append(f"*Context: {msg.context}*")
             if msg.supporting_citations:
-                refs = ", ".join(
-                    f"[{c.source_id}]({c.url})" for c in msg.supporting_citations
-                )
+                refs = ", ".join(f"[{c.source_id}]({c.url})" for c in msg.supporting_citations)
                 lines.append(f"Sources: {refs}")
             lines.append("")
 
         # Stakeholder Map
         lines.append("## Stakeholder Map")
         for s in self.stakeholder_map:
-            priority_marker = {"high": "!!!", "medium": "!!", "low": "!"}.get(
-                s.priority.value, ""
-            )
+            priority_marker = {"high": "!!!", "medium": "!!", "low": "!"}.get(s.priority.value, "")
             lines.append(f"- **{s.name}** ({s.role}) {priority_marker}")
             lines.append(f"  - Why they care: {s.why_they_care}")
             if s.relationship_note:
@@ -308,9 +299,7 @@ class CEOBrief:
         if self.deltas:
             lines.append("## What Changed This Week")
             for d in self.deltas:
-                lines.append(
-                    f"- [{d.change_date}] **{d.issue_area.value}**: {d.description}"
-                )
+                lines.append(f"- [{d.change_date}] **{d.issue_area.value}**: {d.description}")
             lines.append("")
 
         # Risks & Opportunities
@@ -358,8 +347,7 @@ class CEOBrief:
                 lines.append(f"**Our line ({action}):** {snapshot.line_we_want}")
                 if snapshot.supporting_citations:
                     refs = ", ".join(
-                        f"[{c.source_id}]({c.url})"
-                        for c in snapshot.supporting_citations
+                        f"[{c.source_id}]({c.url})" for c in snapshot.supporting_citations
                     )
                     lines.append(f"*Sources: {refs}*")
                 lines.append("")
@@ -367,12 +355,10 @@ class CEOBrief:
         # Objections & Responses
         lines.append("## Anticipated Objections")
         for i, obj in enumerate(self.objections_responses, 1):
-            lines.append(f"### {i}. \"{obj.objection}\"")
+            lines.append(f'### {i}. "{obj.objection}"')
             lines.append(f"**Response:** {obj.response}")
             if obj.supporting_citations:
-                refs = ", ".join(
-                    f"[{c.source_id}]({c.url})" for c in obj.supporting_citations
-                )
+                refs = ", ".join(f"[{c.source_id}]({c.url})" for c in obj.supporting_citations)
                 lines.append(f"*Sources: {refs}*")
             lines.append("")
 
@@ -400,8 +386,8 @@ class AggregatedDelta:
     published_date: date
     first_seen_at: datetime
     issue_area: IssueArea
-    raw_content: Optional[str] = None
-    summary: Optional[str] = None
+    raw_content: str | None = None
+    summary: str | None = None
     metadata: dict = field(default_factory=dict)
 
     # Scoring for prioritization

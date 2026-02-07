@@ -2,14 +2,13 @@
 
 import json
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..db import connect, execute, table_exists
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from ..db import connect, execute, table_exists
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +17,7 @@ router = APIRouter(tags=["Summaries"])
 
 # --- Pydantic Models ---
 
+
 class FRSummary(BaseModel):
     doc_id: str
     summary: str
@@ -25,7 +25,7 @@ class FRSummary(BaseModel):
     veteran_impact: str
     tags: list[str]
     summarized_at: str
-    source_url: Optional[str] = None
+    source_url: str | None = None
 
 
 class SummariesResponse(BaseModel):
@@ -34,6 +34,7 @@ class SummariesResponse(BaseModel):
 
 
 # --- Endpoints ---
+
 
 @router.get("/api/summaries", response_model=SummariesResponse)
 def get_summaries(
@@ -65,7 +66,15 @@ def get_summaries(
 
     summaries = []
     for row in rows:
-        doc_id, summary, bullet_points_json, veteran_impact, tags_json, summarized_at, source_url = row
+        (
+            doc_id,
+            summary,
+            bullet_points_json,
+            veteran_impact,
+            tags_json,
+            summarized_at,
+            source_url,
+        ) = row
         try:
             bullet_points = json.loads(bullet_points_json) if bullet_points_json else []
         except (json.JSONDecodeError, TypeError):

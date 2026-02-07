@@ -14,18 +14,17 @@ Usage:
 
 import argparse
 import logging
-import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
+from .db import init_db
 from .oversight.runner import (
+    AGENT_REGISTRY,
+    generate_digest,
+    init_oversight,
     run_agent,
     run_all_agents,
     run_backfill,
-    generate_digest,
-    init_oversight,
-    AGENT_REGISTRY,
 )
-from .db import init_db
 
 logging.basicConfig(
     level=logging.INFO,
@@ -41,7 +40,7 @@ def cmd_run(args):
 
     since = None
     if args.since:
-        since = datetime.fromisoformat(args.since).replace(tzinfo=timezone.utc)
+        since = datetime.fromisoformat(args.since).replace(tzinfo=UTC)
 
     if args.agent:
         result = run_agent(args.agent, since=since)
@@ -56,7 +55,9 @@ def cmd_run(args):
         print("\n=== Oversight Monitor Run Complete ===")
         for r in results:
             status_icon = "✓" if r.status == "SUCCESS" else "○" if r.status == "NO_DATA" else "✗"
-            print(f"{status_icon} {r.agent}: {r.events_processed} processed, {r.escalations} escalations")
+            print(
+                f"{status_icon} {r.agent}: {r.events_processed} processed, {r.escalations} escalations"
+            )
 
 
 def cmd_backfill(args):
@@ -96,7 +97,7 @@ def cmd_baseline(args):
     """Build baselines for oversight sources."""
     init_db()
 
-    from .oversight.pipeline.baseline import build_baseline, build_all_baselines
+    from .oversight.pipeline.baseline import build_all_baselines, build_baseline
 
     window_days = args.window_days
 
@@ -112,9 +113,7 @@ def cmd_baseline(args):
             print(f"    Window: {baseline.window_start} → {baseline.window_end}")
             print(f"    Summary: {baseline.summary}")
             if baseline.topic_distribution:
-                topics = ", ".join(
-                    f"{k} ({v:.0%})" for k, v in baseline.topic_distribution.items()
-                )
+                topics = ", ".join(f"{k} ({v:.0%})" for k, v in baseline.topic_distribution.items())
                 print(f"    Topics: {topics}")
         else:
             print(f"  ○ {args.source}: no events in {window_days}-day window")
@@ -122,14 +121,14 @@ def cmd_baseline(args):
         print(f"\nBuilding {window_days}-day baselines for all sources...")
         baselines = build_all_baselines(window_days=window_days, save=True)
 
-        print(f"\n=== Baseline Computation Complete ===")
+        print("\n=== Baseline Computation Complete ===")
         print(f"Sources with baselines: {len(baselines)}")
         for bl in baselines:
-            print(f"  ✓ {bl.source_type}: {bl.event_count} events ({bl.window_start} → {bl.window_end})")
+            print(
+                f"  ✓ {bl.source_type}: {bl.event_count} events ({bl.window_start} → {bl.window_end})"
+            )
             if bl.topic_distribution:
-                topics = ", ".join(
-                    f"{k} ({v:.0%})" for k, v in bl.topic_distribution.items()
-                )
+                topics = ", ".join(f"{k} ({v:.0%})" for k, v in bl.topic_distribution.items())
                 print(f"    Topics: {topics}")
 
         if not baselines:
@@ -180,20 +179,22 @@ def cmd_status(args):
     print("\n=== Oversight Monitor Status ===")
     print(f"Total events: {event_count}")
     print(f"Escalations: {escalation_count}")
-    print(f"\nBy source:")
+    print("\nBy source:")
     for source, count in by_source.items():
         print(f"  {source}: {count}")
     print(f"\nRegistered agents: {', '.join(AGENT_REGISTRY.keys())}")
-    print(f"\nRecent events:")
-    for eid, title, ts in recent:
+    print("\nRecent events:")
+    for _eid, title, ts in recent:
         print(f"  [{ts[:10]}] {title[:60]}")
 
     if baselines:
         print(f"\nBaselines ({len(baselines)} sources):")
         for source_type, event_count_bl, w_start, w_end, built_at in baselines:
-            print(f"  {source_type}: {event_count_bl} events ({w_start} → {w_end}) built {built_at[:10]}")
+            print(
+                f"  {source_type}: {event_count_bl} events ({w_start} → {w_end}) built {built_at[:10]}"
+            )
     else:
-        print(f"\nBaselines: none computed (run: python -m src.run_oversight baseline)")
+        print("\nBaselines: none computed (run: python -m src.run_oversight baseline)")
 
 
 def main():

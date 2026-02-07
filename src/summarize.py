@@ -9,7 +9,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 
@@ -18,15 +18,15 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .provenance import utc_now_iso
-from .secrets import get_env_or_keychain
-from .db import connect, execute
-
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
-
 from src.llm_config import SONNET_MODEL as CLAUDE_MODEL
+
+from .db import connect, execute
+from .provenance import utc_now_iso
+from .secrets import get_env_or_keychain
+
 CLAUDE_MAX_TOKENS = 1024
 CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
 
@@ -37,20 +37,22 @@ RATE_LIMIT_DELAY = 0.5
 FR_API_BASE = "https://www.federalregister.gov/api/v1/documents"
 
 # Predefined tags for categorization
-VALID_TAGS = frozenset([
-    "benefits",
-    "healthcare",
-    "disability",
-    "claims",
-    "appeals",
-    "housing",
-    "education",
-    "employment",
-    "mental-health",
-    "caregivers",
-    "women-veterans",
-    "rural-veterans",
-])
+VALID_TAGS = frozenset(
+    [
+        "benefits",
+        "healthcare",
+        "disability",
+        "claims",
+        "appeals",
+        "housing",
+        "education",
+        "employment",
+        "mental-health",
+        "caregivers",
+        "women-veterans",
+        "rural-veterans",
+    ]
+)
 
 # System prompt for veteran-focused summarization
 SYSTEM_PROMPT = """You are an expert analyst specializing in veterans affairs policy and federal regulations. Your role is to summarize Federal Register documents in a way that is clear, accurate, and focused on impact to veterans and their families.
@@ -82,12 +84,12 @@ def is_configured() -> bool:
     return bool(get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api", allow_missing=True))
 
 
-def _get_anthropic_key() -> Optional[str]:
+def _get_anthropic_key() -> str | None:
     """Get Anthropic API key from environment or Keychain."""
     return get_env_or_keychain("ANTHROPIC_API_KEY", "claude-api", allow_missing=True)
 
 
-def fetch_document_content(doc_id: str, timeout: int = 30) -> Optional[Dict[str, Any]]:
+def fetch_document_content(doc_id: str, timeout: int = 30) -> dict[str, Any] | None:
     """
     Fetch document content. First tries to get source_url from database,
     then fetches and parses the XML.
@@ -122,6 +124,7 @@ def fetch_document_content(doc_id: str, timeout: int = 30) -> Optional[Dict[str,
 
         # Parse XML to extract key information
         from lxml import etree
+
         root = etree.fromstring(r.content)
 
         # Extract document titles and agencies from the FR XML
@@ -129,14 +132,14 @@ def fetch_document_content(doc_id: str, timeout: int = 30) -> Optional[Dict[str,
         agencies = set()
 
         # FR bulk XML structure: look for RULE, NOTICE, PRORULE elements
-        for doc_type in ['RULE', 'NOTICE', 'PRORULE', 'PRESDOC']:
-            for doc in root.findall(f'.//{doc_type}'):
+        for doc_type in ["RULE", "NOTICE", "PRORULE", "PRESDOC"]:
+            for doc in root.findall(f".//{doc_type}"):
                 # Get subject/title
-                subject = doc.find('.//SUBJECT')
+                subject = doc.find(".//SUBJECT")
                 if subject is not None and subject.text:
                     titles.append(subject.text.strip())
                 # Get agency
-                agency = doc.find('.//AGENCY')
+                agency = doc.find(".//AGENCY")
                 if agency is not None and agency.text:
                     agencies.add(agency.text.strip())
 
@@ -162,7 +165,7 @@ def fetch_document_content(doc_id: str, timeout: int = 30) -> Optional[Dict[str,
         return None
 
 
-def _fetch_full_text(raw_text_url: str, timeout: int = 60) -> Optional[str]:
+def _fetch_full_text(raw_text_url: str, timeout: int = 60) -> str | None:
     """
     Fetch full text content from Federal Register.
 
@@ -208,7 +211,7 @@ def _init_summaries_table() -> None:
     con.close()
 
 
-def _save_summary(summary_record: Dict[str, Any]) -> None:
+def _save_summary(summary_record: dict[str, Any]) -> None:
     """Save summary to database."""
     con = connect()
     execute(
@@ -235,7 +238,7 @@ def _save_summary(summary_record: Dict[str, Any]) -> None:
     con.close()
 
 
-def get_summary(doc_id: str) -> Optional[Dict[str, Any]]:
+def get_summary(doc_id: str) -> dict[str, Any] | None:
     """
     Retrieve a saved summary from database.
 
@@ -268,7 +271,7 @@ def get_summary(doc_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
-def get_unsummarized_doc_ids(limit: int = 100) -> List[str]:
+def get_unsummarized_doc_ids(limit: int = 100) -> list[str]:
     """
     Get doc_ids from fr_seen that don't have summaries yet.
 
@@ -299,7 +302,7 @@ def get_unsummarized_doc_ids(limit: int = 100) -> List[str]:
 # -----------------------------------------------------------------------------
 
 
-def _extract_json(text: str) -> Optional[Dict[str, Any]]:
+def _extract_json(text: str) -> dict[str, Any] | None:
     """
     Extract JSON from text, handling cases where Claude adds extra text.
     """
@@ -311,7 +314,8 @@ def _extract_json(text: str) -> Optional[Dict[str, Any]]:
 
     # Try to find JSON object in the text
     import re
-    json_match = re.search(r'\{[\s\S]*\}', text)
+
+    json_match = re.search(r"\{[\s\S]*\}", text)
     if json_match:
         try:
             return json.loads(json_match.group())
@@ -327,7 +331,7 @@ def _call_claude(
     api_key: str,
     timeout: int = 60,
     retries: int = 2,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     """
     Make a message request to Claude API with retry logic.
 
@@ -375,7 +379,10 @@ def _call_claude(
                 payload["messages"] = [
                     {"role": "user", "content": user_prompt},
                     {"role": "assistant", "content": content},
-                    {"role": "user", "content": "Please respond with ONLY valid JSON, no other text."},
+                    {
+                        "role": "user",
+                        "content": "Please respond with ONLY valid JSON, no other text.",
+                    },
                 ]
                 time.sleep(0.5)
 
@@ -392,7 +399,7 @@ def _call_claude(
     return None
 
 
-def _build_user_prompt(title: str, abstract: str, full_text: Optional[str] = None) -> str:
+def _build_user_prompt(title: str, abstract: str, full_text: str | None = None) -> str:
     """Build the user prompt for summarization."""
     parts = [f"Title: {title}"]
 
@@ -407,7 +414,7 @@ def _build_user_prompt(title: str, abstract: str, full_text: Optional[str] = Non
     return "\n".join(parts)
 
 
-def _validate_tags(tags: List[str]) -> List[str]:
+def _validate_tags(tags: list[str]) -> list[str]:
     """Filter tags to only include valid predefined tags."""
     return [t.lower() for t in tags if t.lower() in VALID_TAGS]
 
@@ -416,8 +423,8 @@ def summarize_document(
     doc_id: str,
     title: str,
     abstract: str,
-    full_text: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    full_text: str | None = None,
+) -> dict[str, Any] | None:
     """
     Generate a veteran-focused summary of a Federal Register document.
 
@@ -472,8 +479,8 @@ def summarize_and_store(
     doc_id: str,
     title: str,
     abstract: str,
-    full_text: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
+    full_text: str | None = None,
+) -> dict[str, Any] | None:
     """
     Summarize a document and store the result in the database.
 
@@ -497,10 +504,10 @@ def summarize_and_store(
 
 
 def summarize_batch(
-    docs: List[Dict[str, Any]],
+    docs: list[dict[str, Any]],
     fetch_content: bool = True,
     store: bool = True,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """
     Summarize multiple documents with rate limiting.
 
@@ -516,7 +523,7 @@ def summarize_batch(
         return []
 
     _init_summaries_table()
-    results: List[Dict[str, Any]] = []
+    results: list[dict[str, Any]] = []
 
     for i, doc in enumerate(docs):
         doc_id = doc.get("doc_id", "")
@@ -543,9 +550,9 @@ def summarize_batch(
 
         if summary:
             results.append(summary)
-            print(f"[{i+1}/{len(docs)}] Summarized: {doc_id}")
+            print(f"[{i + 1}/{len(docs)}] Summarized: {doc_id}")
         else:
-            print(f"[{i+1}/{len(docs)}] Failed: {doc_id}")
+            print(f"[{i + 1}/{len(docs)}] Failed: {doc_id}")
 
         # Rate limiting delay (skip on last item)
         if i < len(docs) - 1:

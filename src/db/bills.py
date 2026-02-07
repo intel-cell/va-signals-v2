@@ -1,7 +1,5 @@
 """Bills database functions."""
 
-from typing import Any
-
 from .core import connect, execute
 from .helpers import _utc_now_iso
 
@@ -16,7 +14,9 @@ def upsert_bill(bill: dict) -> bool:
     """
     con = connect()
     now = _utc_now_iso()
-    cur = execute(con, "SELECT bill_id FROM bills WHERE bill_id = :bill_id", {"bill_id": bill["bill_id"]})
+    cur = execute(
+        con, "SELECT bill_id FROM bills WHERE bill_id = :bill_id", {"bill_id": bill["bill_id"]}
+    )
     exists = cur.fetchone() is not None
 
     if not exists:
@@ -314,7 +314,9 @@ def get_bill_stats() -> dict:
     total_bills = cur.fetchone()[0]
 
     # Bills by congress
-    cur = execute(con, "SELECT congress, COUNT(*) FROM bills GROUP BY congress ORDER BY congress DESC")
+    cur = execute(
+        con, "SELECT congress, COUNT(*) FROM bills GROUP BY congress ORDER BY congress DESC"
+    )
     by_congress = {r[0]: r[1] for r in cur.fetchall()}
 
     # Total actions
@@ -334,7 +336,9 @@ def get_bill_stats() -> dict:
         "SELECT bill_id, title, latest_action_date FROM bills ORDER BY latest_action_date DESC LIMIT 1",
     )
     row = cur.fetchone()
-    most_recent = {"bill_id": row[0], "title": row[1], "latest_action_date": row[2]} if row else None
+    most_recent = (
+        {"bill_id": row[0], "title": row[1], "latest_action_date": row[2]} if row else None
+    )
 
     con.close()
     return {

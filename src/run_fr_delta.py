@@ -1,7 +1,7 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml
 from jsonschema import validate
@@ -13,30 +13,32 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .notify_email import send_new_docs_alert, send_error_alert
-from .provenance import utc_now_iso
 from .db import init_db, insert_source_run, upsert_fr_seen
 from .fr_bulk import list_latest_month_folders, list_month_packages
+from .notify_email import send_error_alert, send_new_docs_alert
+from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_cfg() -> Dict[str, Any]:
+def load_cfg() -> dict[str, Any]:
     return yaml.safe_load((ROOT / "config" / "approved_sources.yaml").read_text(encoding="utf-8"))
 
 
-def load_run_schema() -> Dict[str, Any]:
+def load_run_schema() -> dict[str, Any]:
     return json.loads((ROOT / "schemas" / "source_run.schema.json").read_text(encoding="utf-8"))
 
 
-def write_run_record(run_record: Dict[str, Any]) -> None:
+def write_run_record(run_record: dict[str, Any]) -> None:
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    (outdir / f"FR_DELTA_{stamp}.json").write_text(json.dumps(run_record, indent=2), encoding="utf-8")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    (outdir / f"FR_DELTA_{stamp}.json").write_text(
+        json.dumps(run_record, indent=2), encoding="utf-8"
+    )
 
 
-def run_fr_delta(max_months: int = 3) -> Dict[str, Any]:
+def run_fr_delta(max_months: int = 3) -> dict[str, Any]:
     cfg = load_cfg()
     source = next(s for s in cfg["approved_sources"] if s["id"] == "govinfo_fr_bulk")
     endpoint = source["endpoints"][0]
@@ -45,10 +47,10 @@ def run_fr_delta(max_months: int = 3) -> Dict[str, Any]:
     init_db()
 
     started_at = utc_now_iso()
-    errors: List[str] = []
+    errors: list[str] = []
     status = "SUCCESS"
     records_fetched = 0
-    new_docs: List[Dict[str, str]] = []
+    new_docs: list[dict[str, str]] = []
 
     try:
         month_folders = list_latest_month_folders(endpoint, max_months=max_months)
@@ -63,12 +65,14 @@ def run_fr_delta(max_months: int = 3) -> Dict[str, Any]:
                     first_seen_at = utc_now_iso()
                     source_url = pkg["source_url"]
                     if upsert_fr_seen(doc_id, published_date, first_seen_at, source_url):
-                        new_docs.append({
-                            "doc_id": doc_id,
-                            "published_date": published_date,
-                            "source_url": source_url,
-                            "retrieved_at": first_seen_at
-                        })
+                        new_docs.append(
+                            {
+                                "doc_id": doc_id,
+                                "published_date": published_date,
+                                "source_url": source_url,
+                                "retrieved_at": first_seen_at,
+                            }
+                        )
     except Exception as e:
         status = "ERROR"
         errors.append(f"EXCEPTION: {repr(e)}")

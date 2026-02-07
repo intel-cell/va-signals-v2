@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 
 @dataclass
@@ -14,7 +13,7 @@ class RawEvent:
     title: str
     raw_html: str
     fetched_at: str
-    excerpt: Optional[str] = None
+    excerpt: str | None = None
     metadata: dict = field(default_factory=dict)
 
 
@@ -22,12 +21,12 @@ class RawEvent:
 class TimestampResult:
     """Result of timestamp extraction."""
 
-    pub_timestamp: Optional[str]
+    pub_timestamp: str | None
     pub_precision: str  # datetime, date, month, unknown
     pub_source: str  # extracted, inferred, missing
-    event_timestamp: Optional[str] = None
-    event_precision: Optional[str] = None
-    event_source: Optional[str] = None
+    event_timestamp: str | None = None
+    event_precision: str | None = None
+    event_source: str | None = None
 
 
 class OversightAgent(ABC):
@@ -36,7 +35,7 @@ class OversightAgent(ABC):
     source_type: str = "unknown"
 
     @abstractmethod
-    def fetch_new(self, since: Optional[datetime]) -> list[RawEvent]:
+    def fetch_new(self, since: datetime | None) -> list[RawEvent]:
         """
         Fetch events since last run.
 

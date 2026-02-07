@@ -11,9 +11,10 @@ Required env vars for email sending:
 import os
 import smtplib
 import ssl
+from datetime import UTC
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import certifi
 
@@ -27,7 +28,7 @@ GRAY_TEXT = "#666666"
 GRAY_BORDER = "#e2e8f0"
 
 
-def _get_config() -> Dict[str, Any]:
+def _get_config() -> dict[str, Any]:
     """Get email configuration from environment variables."""
     return {
         "host": os.environ.get("SMTP_HOST", ""),
@@ -157,13 +158,14 @@ def _format_timestamp(iso_str: str) -> str:
         # Handle both Z suffix and +00:00 format
         clean = iso_str.replace("Z", "+00:00")
         from datetime import datetime
+
         dt = datetime.fromisoformat(clean)
         return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
     except Exception:
         return iso_str
 
 
-def send_error_alert(source_id: str, errors: List[str], run_record: Dict[str, Any]) -> bool:
+def send_error_alert(source_id: str, errors: list[str], run_record: dict[str, Any]) -> bool:
     """
     Send an error alert email.
 
@@ -179,8 +181,7 @@ def send_error_alert(source_id: str, errors: List[str], run_record: Dict[str, An
 
     # Build error list HTML
     error_items = "".join(
-        f'<li style="margin-bottom: 8px; color: {ERROR_RED};">{err}</li>'
-        for err in errors
+        f'<li style="margin-bottom: 8px; color: {ERROR_RED};">{err}</li>' for err in errors
     )
 
     started = _format_timestamp(run_record.get("started_at", ""))
@@ -240,7 +241,9 @@ VA Signals Notification System
     return _send_email(subject, html, text)
 
 
-def send_new_docs_alert(source_id: str, docs: List[Dict[str, Any]], run_record: Dict[str, Any]) -> bool:
+def send_new_docs_alert(
+    source_id: str, docs: list[dict[str, Any]], run_record: dict[str, Any]
+) -> bool:
     """
     Send a new documents alert email.
 
@@ -352,9 +355,9 @@ VA Signals Notification System
 
 
 def send_daily_digest(
-    runs: List[Dict[str, Any]],
-    new_docs_by_source: Dict[str, List[Dict[str, Any]]],
-    date_label: str = ""
+    runs: list[dict[str, Any]],
+    new_docs_by_source: dict[str, list[dict[str, Any]]],
+    date_label: str = "",
 ) -> bool:
     """
     Send a daily digest email summarizing the day's runs.
@@ -370,9 +373,10 @@ def send_daily_digest(
     if not runs:
         return False
 
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     if not date_label:
-        date_label = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_label = datetime.now(UTC).strftime("%Y-%m-%d")
 
     subject = f"VA Signals — Daily Digest for {date_label}"
 
@@ -391,7 +395,11 @@ def send_daily_digest(
         records = run.get("records_fetched", 0)
         new_count = len(new_docs_by_source.get(source, []))
 
-        status_color = SUCCESS_GREEN if status == "SUCCESS" else (ERROR_RED if status == "ERROR" else GRAY_TEXT)
+        status_color = (
+            SUCCESS_GREEN
+            if status == "SUCCESS"
+            else (ERROR_RED if status == "ERROR" else GRAY_TEXT)
+        )
 
         run_rows += f"""
             <tr style="border-bottom: 1px solid {GRAY_BORDER};">

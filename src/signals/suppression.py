@@ -1,8 +1,7 @@
 """Suppression manager for signal triggers."""
 
 from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from src.db import connect, execute
 
@@ -10,8 +9,9 @@ from src.db import connect, execute
 @dataclass
 class SuppressionResult:
     """Result of suppression check."""
+
     suppressed: bool
-    reason: Optional[str] = None  # "cooldown" | "dedupe" | None
+    reason: str | None = None  # "cooldown" | "dedupe" | None
 
 
 class SuppressionManager:
@@ -31,7 +31,7 @@ class SuppressionManager:
     ) -> SuppressionResult:
         """Check if a trigger fire should be suppressed."""
         dedupe_key = self._make_dedupe_key(trigger_id, authority_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         con = connect()
         cur = execute(
@@ -67,7 +67,7 @@ class SuppressionManager:
     ) -> None:
         """Record a trigger fire for suppression tracking."""
         dedupe_key = self._make_dedupe_key(trigger_id, authority_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cooldown_until = now + timedelta(minutes=cooldown_minutes)
 
         con = connect()

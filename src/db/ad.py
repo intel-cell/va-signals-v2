@@ -2,14 +2,18 @@
 
 import json
 
-from .core import connect, execute, insert_returning_id, _count_inserted_rows
+from .core import _count_inserted_rows, connect, execute, insert_returning_id
 from .helpers import _utc_now_iso
 
 
 def upsert_ad_member(member_id: str, name: str, party: str = None, committee: str = None) -> bool:
     """Insert or update member. Returns True if new."""
     con = connect()
-    cur = execute(con, "SELECT member_id FROM ad_members WHERE member_id = :member_id", {"member_id": member_id})
+    cur = execute(
+        con,
+        "SELECT member_id FROM ad_members WHERE member_id = :member_id",
+        {"member_id": member_id},
+    )
     exists = cur.fetchone() is not None
     if not exists:
         execute(
@@ -77,7 +81,13 @@ def get_ad_utterances_for_member(member_id: str, limit: int = 500) -> list[dict]
     rows = cur.fetchall()
     con.close()
     return [
-        {"utterance_id": r[0], "hearing_id": r[1], "chunk_ix": r[2], "content": r[3], "spoken_at": r[4]}
+        {
+            "utterance_id": r[0],
+            "hearing_id": r[1],
+            "chunk_ix": r[2],
+            "content": r[3],
+            "spoken_at": r[4],
+        }
         for r in rows
     ]
 
@@ -123,7 +133,9 @@ def upsert_ad_embedding(utterance_id: str, vec: list[float], model_id: str) -> b
     return not exists
 
 
-def get_ad_embeddings_for_member(member_id: str, min_content_length: int = 100) -> list[tuple[str, list[float]]]:
+def get_ad_embeddings_for_member(
+    member_id: str, min_content_length: int = 100
+) -> list[tuple[str, list[float]]]:
     """Get all embeddings for a member's utterances. Returns [(utterance_id, vec), ...].
 
     Filters out short utterances (< min_content_length chars) to exclude
@@ -143,7 +155,9 @@ def get_ad_embeddings_for_member(member_id: str, min_content_length: int = 100) 
     return [(r[0], json.loads(r[1])) for r in rows]
 
 
-def insert_ad_baseline(member_id: str, vec_mean: list[float], mu: float, sigma: float, n: int) -> int:
+def insert_ad_baseline(
+    member_id: str, vec_mean: list[float], mu: float, sigma: float, n: int
+) -> int:
     """Insert baseline, return id."""
     con = connect()
     baseline_id = insert_returning_id(
@@ -274,7 +288,9 @@ def get_ad_member_deviation_history(member_id: str, limit: int = 20) -> list[dic
     ]
 
 
-def get_ad_recent_deviations_for_hearing(member_id: str, hearing_id: str, limit: int = 8) -> list[dict]:
+def get_ad_recent_deviations_for_hearing(
+    member_id: str, hearing_id: str, limit: int = 8
+) -> list[dict]:
     """Get recent deviations for K-of-M debounce check."""
     con = connect()
     cur = execute(
@@ -314,7 +330,9 @@ def get_ad_utterance_by_id(utterance_id: str) -> dict | None:
     }
 
 
-def get_ad_typical_utterances(member_id: str, exclude_utterance_id: str = None, limit: int = 5) -> list[dict]:
+def get_ad_typical_utterances(
+    member_id: str, exclude_utterance_id: str = None, limit: int = 5
+) -> list[dict]:
     """
     Get typical utterances for a member (ones closest to their baseline centroid).
     Excludes the specified utterance if provided.
@@ -353,10 +371,7 @@ def get_ad_typical_utterances(member_id: str, exclude_utterance_id: str = None, 
 
     rows = cur.fetchall()
     con.close()
-    return [
-        {"utterance_id": row[0], "content": row[1], "spoken_at": row[2]}
-        for row in rows
-    ]
+    return [{"utterance_id": row[0], "content": row[1], "spoken_at": row[2]} for row in rows]
 
 
 def update_ad_deviation_note(event_id: int, note: str) -> None:

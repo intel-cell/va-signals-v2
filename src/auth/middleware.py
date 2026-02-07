@@ -8,21 +8,20 @@ Provides:
 - Request context injection
 """
 
+import logging
 import os
 import secrets
-import logging
-from typing import Optional, Callable
-from functools import wraps
+from datetime import UTC
 
-from fastapi import Request, Response, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import HTTPException, Request, Response
+from fastapi.security import HTTPBearer
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .firebase_config import (
+    init_firebase,
     verify_firebase_token,
     verify_iap_token,
     verify_session_token,
-    init_firebase,
 )
 from .models import AuthContext, UserRole
 
@@ -121,7 +120,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return True
         return False
 
-    async def _authenticate(self, request: Request) -> Optional[AuthContext]:
+    async def _authenticate(self, request: Request) -> AuthContext | None:
         """Try all authentication methods."""
 
         # Method 1: Firebase Bearer token
@@ -150,7 +149,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def _build_auth_context(self, claims: dict, auth_method: str) -> AuthContext:
         """Build AuthContext from token claims."""
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         # Look up user role from database
         role = await self._get_user_role(claims.get("user_id"), claims.get("email"))
@@ -161,11 +160,15 @@ class AuthMiddleware(BaseHTTPMiddleware):
             display_name=claims.get("display_name"),
             role=role,
             auth_method=auth_method,
-            token_issued_at=datetime.fromtimestamp(claims["iat"], tz=timezone.utc) if claims.get("iat") else None,
-            token_expires_at=datetime.fromtimestamp(claims["exp"], tz=timezone.utc) if claims.get("exp") else None,
+            token_issued_at=datetime.fromtimestamp(claims["iat"], tz=UTC)
+            if claims.get("iat")
+            else None,
+            token_expires_at=datetime.fromtimestamp(claims["exp"], tz=UTC)
+            if claims.get("exp")
+            else None,
         )
 
-    async def _get_user_role(self, user_id: Optional[str], email: Optional[str]) -> UserRole:
+    async def _get_user_role(self, user_id: str | None, email: str | None) -> UserRole:
         """Look up user role from database."""
         if not user_id and not email:
             return UserRole.VIEWER
@@ -179,7 +182,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 """SELECT role FROM users
                    WHERE user_id = :user_id OR email = :email
                    LIMIT 1""",
-                {"user_id": user_id, "email": email}
+                {"user_id": user_id, "email": email},
             )
             row = cur.fetchone()
             con.close()
@@ -204,7 +207,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return secrets.compare_digest(csrf_cookie, csrf_header)
 
 
-def get_current_user(request: Request) -> Optional[AuthContext]:
+def get_current_user(request: Request) -> AuthContext | None:
     """
     Dependency to get current authenticated user.
 
@@ -246,6 +249,7 @@ def require_role(*roles: UserRole):
         async def admin(user: AuthContext = Depends(require_role(UserRole.COMMANDER))):
             return {"admin": True}
     """
+
     def dependency(request: Request) -> AuthContext:
         auth_context = require_auth(request)
         if auth_context.role not in roles:
@@ -254,6 +258,7 @@ def require_role(*roles: UserRole):
                 detail=f"Requires one of roles: {[r.value for r in roles]}",
             )
         return auth_context
+
     return dependency
 
 

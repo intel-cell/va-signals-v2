@@ -1,10 +1,9 @@
 """Evaluator registry with whitelist enforcement."""
 
-from src.signals.evaluators.text import ContainsAnyEvaluator
-from src.signals.evaluators.field_match import FieldInEvaluator, FieldIntersectsEvaluator
 from src.signals.evaluators.comparison import EqualsEvaluator, GtEvaluator
 from src.signals.evaluators.existence import FieldExistsEvaluator, NestedFieldInEvaluator
-
+from src.signals.evaluators.field_match import FieldInEvaluator, FieldIntersectsEvaluator
+from src.signals.evaluators.text import ContainsAnyEvaluator
 
 # Whitelist of allowed evaluators
 EVALUATOR_WHITELIST = [

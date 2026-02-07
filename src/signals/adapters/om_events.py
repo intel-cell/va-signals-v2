@@ -1,9 +1,6 @@
 """OM Events adapter - transforms oversight monitor events to normalized envelopes."""
 
-from typing import Optional
-
 from src.signals.envelope import Envelope
-
 
 # Source type to authority source mapping
 SOURCE_TYPE_MAP = {
@@ -48,9 +45,7 @@ class OMEventsAdapter:
 
         # Extract topics from title, summary, and theme
         topics = self._extract_topics(
-            event.get("title", ""),
-            event.get("summary", ""),
-            event.get("theme", "")
+            event.get("title", ""), event.get("summary", ""), event.get("theme", "")
         )
 
         return Envelope(

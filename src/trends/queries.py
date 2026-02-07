@@ -6,7 +6,7 @@ Provides query interfaces for retrieving historical trend data.
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from ..db import connect, execute
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def _date_range(days: int) -> tuple[str, str]:
     """Get date range for last N days."""
-    end_date = datetime.now(timezone.utc).date()
+    end_date = datetime.now(UTC).date()
     start_date = end_date - timedelta(days=days)
     return start_date.isoformat(), end_date.isoformat()
 
@@ -124,7 +124,9 @@ def get_signal_trends_summary(days: int = 30) -> dict[str, Any]:
         "total_signals": total_signals,
         "total_suppressed": total_suppressed,
         "avg_daily_signals": round(avg_daily, 1),
-        "suppression_rate": round(total_suppressed / total_signals * 100, 1) if total_signals > 0 else 0,
+        "suppression_rate": round(total_suppressed / total_signals * 100, 1)
+        if total_signals > 0
+        else 0,
         "top_triggers": top_triggers,
     }
 
@@ -202,14 +204,16 @@ def get_source_health_summary(days: int = 30) -> dict[str, Any]:
 
     sources = []
     for row in cur.fetchall():
-        sources.append({
-            "source_id": row[0],
-            "total_runs": row[1] or 0,
-            "successes": row[2] or 0,
-            "errors": row[3] or 0,
-            "docs_fetched": row[4] or 0,
-            "avg_success_rate": round(row[5] or 0, 1),
-        })
+        sources.append(
+            {
+                "source_id": row[0],
+                "total_runs": row[1] or 0,
+                "successes": row[2] or 0,
+                "errors": row[3] or 0,
+                "docs_fetched": row[4] or 0,
+                "avg_success_rate": round(row[5] or 0, 1),
+            }
+        )
 
     con.close()
 

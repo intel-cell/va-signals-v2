@@ -4,8 +4,7 @@ import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from src.db import connect, execute, insert_returning_id
 
@@ -15,7 +14,7 @@ class BaselineSummary:
     """Summary of baseline period for a source/theme."""
 
     source_type: str
-    theme: Optional[str]
+    theme: str | None
     window_start: str
     window_end: str
     event_count: int
@@ -25,7 +24,7 @@ class BaselineSummary:
 
 def _get_events_in_window(
     source_type: str,
-    theme: Optional[str],
+    theme: str | None,
     window_start: str,
     window_end: str,
 ) -> list[dict]:
@@ -95,10 +94,7 @@ def compute_topic_distribution(events: list[dict]) -> dict:
     }
 
     # Combine all text
-    all_text = " ".join(
-        f"{e.get('title', '')} {e.get('summary', '')}".lower()
-        for e in events
-    )
+    all_text = " ".join(f"{e.get('title', '')} {e.get('summary', '')}".lower() for e in events)
 
     # Count topic occurrences
     topic_counts = Counter()
@@ -113,13 +109,11 @@ def compute_topic_distribution(events: list[dict]) -> dict:
         return {}
 
     return {
-        topic: round(count / total, 3)
-        for topic, count in topic_counts.most_common(5)
-        if count > 0
+        topic: round(count / total, 3) for topic, count in topic_counts.most_common(5) if count > 0
     }
 
 
-def _generate_summary(events: list[dict], source_type: str, theme: Optional[str]) -> str:
+def _generate_summary(events: list[dict], source_type: str, theme: str | None) -> str:
     """Generate a text summary of the baseline period."""
     count = len(events)
     if count == 0:
@@ -140,10 +134,10 @@ def _generate_summary(events: list[dict], source_type: str, theme: Optional[str]
 
 def build_baseline(
     source_type: str,
-    theme: Optional[str] = None,
+    theme: str | None = None,
     window_days: int = 90,
     save: bool = False,
-) -> Optional[BaselineSummary]:
+) -> BaselineSummary | None:
     """
     Build a baseline summary for a source/theme.
 
@@ -157,7 +151,7 @@ def build_baseline(
         BaselineSummary or None if no events
     """
     # Calculate window
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     window_end = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     window_start = (now - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -211,7 +205,7 @@ def _save_baseline(baseline: BaselineSummary) -> int:
             "event_count": baseline.event_count,
             "summary": baseline.summary,
             "topic_distribution": json.dumps(baseline.topic_distribution),
-            "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "built_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         },
     )
     con.commit()
@@ -219,7 +213,7 @@ def _save_baseline(baseline: BaselineSummary) -> int:
     return row_id
 
 
-def get_latest_baseline(source_type: str, theme: Optional[str] = None) -> Optional[dict]:
+def get_latest_baseline(source_type: str, theme: str | None = None) -> dict | None:
     """
     Get the most recent baseline for a source/theme.
 

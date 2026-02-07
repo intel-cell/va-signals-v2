@@ -1,7 +1,7 @@
 """Shared helpers used across multiple routers."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def parse_errors_json(errors_json: str) -> list[str]:
@@ -14,4 +14,4 @@ def parse_errors_json(errors_json: str) -> list[str]:
 
 
 def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")

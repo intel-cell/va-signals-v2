@@ -11,28 +11,27 @@ Endpoints:
 - POST /api/ceo-brief/generate - Generate new brief (async)
 """
 
-from typing import Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Query, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
 from .db_helpers import get_ceo_brief, get_latest_brief, list_briefs
-
 
 router = APIRouter(prefix="/api/ceo-brief", tags=["ceo-brief"])
 
 
 # --- Response Models ---
 
+
 class BriefSummary(BaseModel):
     brief_id: str
     generated_at: str
     period_start: str
     period_end: str
-    objective: Optional[str] = None
+    objective: str | None = None
     status: str
 
 
@@ -44,10 +43,11 @@ class BriefListResponse(BaseModel):
 class GenerateResponse(BaseModel):
     status: str
     message: str
-    brief_id: Optional[str] = None
+    brief_id: str | None = None
 
 
 # --- Endpoints ---
+
 
 @router.get("/briefs", response_model=BriefListResponse)
 async def list_ceo_briefs(
@@ -129,7 +129,7 @@ async def trigger_brief_generation(
     from .runner import run_pipeline
 
     # Generate brief ID
-    brief_id = f"brief_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    brief_id = f"brief_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
 
     # Queue background task
     background_tasks.add_task(run_pipeline)

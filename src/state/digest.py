@@ -6,6 +6,7 @@ Usage:
 
 import argparse
 import logging
+from datetime import UTC
 
 logger = logging.getLogger(__name__)
 
@@ -62,29 +63,34 @@ def _send_digest_email(digest_text: str) -> bool:
     Returns:
         True if email sent successfully, False otherwise.
     """
-    from datetime import datetime, timezone
-    from src.notify_email import is_configured, _send_email, _base_html_template, VA_BLUE
+    from datetime import datetime
+
+    from src.notify_email import VA_BLUE, _base_html_template, _send_email, is_configured
 
     if not is_configured():
         logger.warning("Email not configured, cannot send digest")
         return False
 
-    date_label = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date_label = datetime.now(UTC).strftime("%Y-%m-%d")
     subject = f"VA Signals — State Intelligence Weekly Digest ({date_label})"
 
     # Convert text format to simple HTML (preserve newlines, escape HTML)
     import html
+
     escaped = html.escape(digest_text)
     # Convert markdown-style formatting for email
     # *bold* -> <strong>bold</strong>
     import re
-    escaped = re.sub(r'\*([^*]+)\*', r'<strong>\1</strong>', escaped)
+
+    escaped = re.sub(r"\*([^*]+)\*", r"<strong>\1</strong>", escaped)
     # _italic_ -> <em>italic</em>
-    escaped = re.sub(r'_([^_]+)_', r'<em>\1</em>', escaped)
+    escaped = re.sub(r"_([^_]+)_", r"<em>\1</em>", escaped)
     # <url|text> -> <a href="url">text</a>
-    escaped = re.sub(r'&lt;([^|]+)\|([^&]+)&gt;', r'<a href="\1" style="color: #0071bc;">\2</a>', escaped)
+    escaped = re.sub(
+        r"&lt;([^|]+)\|([^&]+)&gt;", r'<a href="\1" style="color: #0071bc;">\2</a>', escaped
+    )
     # Newlines to <br>
-    html_content = escaped.replace('\n', '<br>\n')
+    html_content = escaped.replace("\n", "<br>\n")
 
     content = f"""
         <h2 style="margin: 0 0 20px 0; color: {VA_BLUE}; font-size: 18px;">State Intelligence Weekly Digest</h2>
@@ -100,9 +106,7 @@ def _send_digest_email(digest_text: str) -> bool:
 
 def main():
     """CLI entry point for state digest generation."""
-    parser = argparse.ArgumentParser(
-        description="Generate state intelligence weekly digest"
-    )
+    parser = argparse.ArgumentParser(description="Generate state intelligence weekly digest")
     parser.add_argument(
         "--send-email",
         action="store_true",
@@ -114,7 +118,8 @@ def main():
         help="Generate digest but don't mark signals as notified.",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable verbose logging.",
     )

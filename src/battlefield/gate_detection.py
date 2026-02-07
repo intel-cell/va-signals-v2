@@ -12,13 +12,11 @@ Detects changes in decision points and creates alerts:
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
-from ..db import connect, execute as db_execute
+from ..db import connect
+from ..db import execute as db_execute
 from .db_helpers import (
     create_gate_alert,
-    get_vehicle,
-    get_calendar_events,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,9 +25,11 @@ logger = logging.getLogger(__name__)
 def _execute(sql: str, params: dict | None = None) -> list[dict]:
     """Execute a query and return results as list of dicts."""
     conn = connect()
-    conn.row_factory = lambda cursor, row: dict(
-        (col[0], row[idx]) for idx, col in enumerate(cursor.description)
-    ) if cursor.description else {}
+    conn.row_factory = lambda cursor, row: (
+        {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+        if cursor.description
+        else {}
+    )
     cursor = db_execute(conn, sql, params)
     try:
         results = cursor.fetchall()
@@ -45,7 +45,7 @@ def _execute_write(sql: str, params: dict | None = None) -> None:
     conn.commit()
 
 
-def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
+def _parse_date(date_str: str | None) -> datetime | None:
     """Parse a date string to datetime."""
     if not date_str:
         return None
@@ -55,7 +55,7 @@ def _parse_date(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _days_between(old_date: str, new_date: str) -> Optional[int]:
+def _days_between(old_date: str, new_date: str) -> int | None:
     """Calculate days between two dates. Positive = delayed, Negative = accelerated."""
     old = _parse_date(old_date)
     new = _parse_date(new_date)
@@ -113,7 +113,9 @@ def detect_hearing_changes() -> dict:
             )
             stats["date_changes"] += 1
             stats["alerts_created"] += 1
-            logger.info(f"Gate moved alert: Hearing {update['event_id']} date changed by {days_impact} days")
+            logger.info(
+                f"Gate moved alert: Hearing {update['event_id']} date changed by {days_impact} days"
+            )
 
         elif update["field_changed"] == "status":
             # Status change (e.g., Scheduled -> Cancelled)
@@ -122,13 +124,17 @@ def detect_hearing_changes() -> dict:
                 alert_type="status_changed",
                 old_value=update["old_value"],
                 new_value=update["new_value"],
-                recommended_action=_recommend_status_action(update["old_value"], update["new_value"]),
+                recommended_action=_recommend_status_action(
+                    update["old_value"], update["new_value"]
+                ),
                 source_event_id=str(update["id"]),
                 source_type="hearing_updates",
             )
             stats["status_changes"] += 1
             stats["alerts_created"] += 1
-            logger.info(f"Status change alert: Hearing {update['event_id']} {update['old_value']} -> {update['new_value']}")
+            logger.info(
+                f"Status change alert: Hearing {update['event_id']} {update['old_value']} -> {update['new_value']}"
+            )
 
     # Check for newly added hearings (first_seen_at in last 24 hours)
     new_hearings = _execute(
@@ -155,7 +161,9 @@ def detect_hearing_changes() -> dict:
         )
         stats["new_hearings"] += 1
         stats["alerts_created"] += 1
-        logger.info(f"New gate alert: Hearing {hearing['event_id']} scheduled for {hearing['hearing_date']}")
+        logger.info(
+            f"New gate alert: Hearing {hearing['event_id']} scheduled for {hearing['hearing_date']}"
+        )
 
     logger.info(f"Hearing detection complete: {stats}")
     return stats
@@ -342,7 +350,7 @@ def detect_passed_gates() -> dict:
     return stats
 
 
-def _recommend_date_action(days_impact: Optional[int]) -> str:
+def _recommend_date_action(days_impact: int | None) -> str:
     """Generate recommendation based on date change impact."""
     if days_impact is None:
         return "Review date change and update tracking"
@@ -361,7 +369,7 @@ def _recommend_date_action(days_impact: Optional[int]) -> str:
         return "No change in timing"
 
 
-def _recommend_status_action(old_status: Optional[str], new_status: str) -> str:
+def _recommend_status_action(old_status: str | None, new_status: str) -> str:
     """Generate recommendation based on status change."""
     new_lower = new_status.lower()
 

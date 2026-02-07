@@ -9,12 +9,9 @@ Usage:
 
 import argparse
 import json
-import sys
-from datetime import datetime, timezone
 
 from . import db
-from .agenda_drift import build_baseline, detect_deviation, explain_deviation, DEVIATION_THRESHOLD_Z
-
+from .agenda_drift import DEVIATION_THRESHOLD_Z, build_baseline, detect_deviation, explain_deviation
 
 MIN_EMBEDDINGS_FOR_BASELINE = 5
 
@@ -29,7 +26,7 @@ def get_members_with_embeddings() -> list[dict]:
            JOIN ad_utterances u ON m.member_id = u.member_id
            JOIN ad_embeddings e ON u.utterance_id = e.utterance_id
            GROUP BY m.member_id
-           ORDER BY embedding_count DESC"""
+           ORDER BY embedding_count DESC""",
     )
     rows = cur.fetchall()
     con.close()
@@ -155,7 +152,9 @@ def build_all_baselines(min_embeddings: int = MIN_EMBEDDINGS_FOR_BASELINE) -> di
             result = build_baseline(member["member_id"])
             if result:
                 stats["baselines_built"] += 1
-                print(f"  Built baseline for {member['name']}: n={result['n']}, mu={result['mu']:.4f}, sigma={result['sigma']:.4f}")
+                print(
+                    f"  Built baseline for {member['name']}: n={result['n']}, mu={result['mu']:.4f}, sigma={result['sigma']:.4f}"
+                )
             else:
                 stats["errors"].append(f"Failed to build baseline for {member['member_id']}")
         except Exception as e:
@@ -216,7 +215,9 @@ def run_detection(limit: int = 500, generate_explanations: bool = True) -> dict:
 
                 if result:
                     stats["deviations_found"] += 1
-                    print(f"  DEVIATION: {member_id} in {u['hearing_id']}: z={result['zscore']:.2f}, dist={result['cos_dist']:.4f}")
+                    print(
+                        f"  DEVIATION: {member_id} in {u['hearing_id']}: z={result['zscore']:.2f}, dist={result['cos_dist']:.4f}"
+                    )
 
                     # Generate LLM explanation and update the note field
                     if generate_explanations:
@@ -306,17 +307,33 @@ def print_summary():
 
 def main():
     parser = argparse.ArgumentParser(description="Run agenda drift detection")
-    parser.add_argument("--build-baselines", action="store_true", help="Build baselines for all eligible members")
-    parser.add_argument("--detect", action="store_true", help="Run deviation detection on unchecked utterances")
+    parser.add_argument(
+        "--build-baselines", action="store_true", help="Build baselines for all eligible members"
+    )
+    parser.add_argument(
+        "--detect", action="store_true", help="Run deviation detection on unchecked utterances"
+    )
     parser.add_argument("--all", action="store_true", help="Build baselines AND run detection")
     parser.add_argument("--summary", action="store_true", help="Show system summary only")
-    parser.add_argument("--limit", type=int, default=500, help="Max utterances to check (default: 500)")
-    parser.add_argument("--min-embeddings", type=int, default=MIN_EMBEDDINGS_FOR_BASELINE,
-                        help=f"Min embeddings required for baseline (default: {MIN_EMBEDDINGS_FOR_BASELINE})")
-    parser.add_argument("--no-explanations", action="store_true",
-                        help="Skip LLM explanation generation for deviations")
-    parser.add_argument("--backfill-explanations", action="store_true",
-                        help="Generate explanations for existing deviations that don't have them")
+    parser.add_argument(
+        "--limit", type=int, default=500, help="Max utterances to check (default: 500)"
+    )
+    parser.add_argument(
+        "--min-embeddings",
+        type=int,
+        default=MIN_EMBEDDINGS_FOR_BASELINE,
+        help=f"Min embeddings required for baseline (default: {MIN_EMBEDDINGS_FOR_BASELINE})",
+    )
+    parser.add_argument(
+        "--no-explanations",
+        action="store_true",
+        help="Skip LLM explanation generation for deviations",
+    )
+    parser.add_argument(
+        "--backfill-explanations",
+        action="store_true",
+        help="Generate explanations for existing deviations that don't have them",
+    )
     args = parser.parse_args()
 
     # Ensure DB is initialized
@@ -333,7 +350,7 @@ def main():
 
         stats = backfill_explanations(limit=args.limit)
 
-        print(f"\nBackfill Summary:")
+        print("\nBackfill Summary:")
         print(f"  Checked:   {stats['checked']}")
         print(f"  Generated: {stats['generated']}")
         if stats["errors"]:
@@ -353,7 +370,7 @@ def main():
 
         stats = build_all_baselines(min_embeddings=args.min_embeddings)
 
-        print(f"\nBaseline Summary:")
+        print("\nBaseline Summary:")
         print(f"  Total members:      {stats['total_members']}")
         print(f"  Eligible (≥{args.min_embeddings} emb): {stats['eligible_members']}")
         print(f"  Baselines built:    {stats['baselines_built']}")
@@ -370,7 +387,7 @@ def main():
         generate_explanations = not args.no_explanations
         stats = run_detection(limit=args.limit, generate_explanations=generate_explanations)
 
-        print(f"\nDetection Summary:")
+        print("\nDetection Summary:")
         print(f"  Utterances checked: {stats['utterances_checked']}")
         print(f"  Deviations found:   {stats['deviations_found']}")
         if generate_explanations:

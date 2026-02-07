@@ -1,7 +1,7 @@
 """Audit log writer for signal triggers."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.db import connect, insert_returning_id
 from src.signals.engine.evaluator import EvaluationResult
@@ -40,7 +40,7 @@ def write_audit_log(
             "indicator_id": indicator_id,
             "trigger_id": trigger_id,
             "severity": severity,
-            "fired_at": datetime.now(timezone.utc).isoformat(),
+            "fired_at": datetime.now(UTC).isoformat(),
             "suppressed": 1 if suppressed else 0,
             "suppression_reason": suppression_reason,
             "explanation_json": json.dumps(explanation),

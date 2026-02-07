@@ -8,7 +8,7 @@ fr_seen, and ecfr_seen tables.
 import csv
 import json
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = ROOT / "outputs" / "reports"
 FR_API_URL = "https://www.federalregister.gov/api/v1/documents.json"
 MAX_FR_DOCS_FETCH = 1000  # upper bound per-day fetch
-MAX_FR_DOCS_SHOWN = 50    # limit detailed listings to keep reports readable
+MAX_FR_DOCS_SHOWN = 50  # limit detailed listings to keep reports readable
 
 # Shared HTTP session with retry/backoff for FR API calls
 _http_session: requests.Session | None = None
@@ -70,7 +70,7 @@ def _get_period_bounds(
     Returns:
         Tuple of (start_datetime, end_datetime) in UTC
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if report_type == "daily":
         period_start = now - timedelta(hours=24)
@@ -85,10 +85,10 @@ def _get_period_bounds(
         period_end = datetime.fromisoformat(end_date)
         # Ensure they have timezone info
         if period_start.tzinfo is None:
-            period_start = period_start.replace(tzinfo=timezone.utc)
+            period_start = period_start.replace(tzinfo=UTC)
         if period_end.tzinfo is None:
             # Set end of day for end_date
-            period_end = period_end.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+            period_end = period_end.replace(hour=23, minute=59, second=59, tzinfo=UTC)
     else:
         raise ValueError(f"Unknown report_type: {report_type}")
 
@@ -118,15 +118,17 @@ def _fetch_runs_in_period(period_start: datetime, period_end: datetime) -> list[
     for row in rows:
         run_id, source_id, started_at, ended_at, status, records_fetched, errors_json = row
         errors = json.loads(errors_json) if errors_json else []
-        runs.append({
-            "id": run_id,
-            "source_id": source_id,
-            "started_at": started_at,
-            "ended_at": ended_at,
-            "status": status,
-            "records_fetched": records_fetched,
-            "errors": errors,
-        })
+        runs.append(
+            {
+                "id": run_id,
+                "source_id": source_id,
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "status": status,
+                "records_fetched": records_fetched,
+                "errors": errors,
+            }
+        )
     return runs
 
 
@@ -152,12 +154,14 @@ def _fetch_new_fr_docs_in_period(period_start: datetime, period_end: datetime) -
     docs = []
     for row in rows:
         doc_id, published_date, first_seen_at, source_url = row
-        docs.append({
-            "doc_id": doc_id,
-            "published_date": published_date,
-            "first_seen_at": first_seen_at,
-            "source_url": source_url,
-        })
+        docs.append(
+            {
+                "doc_id": doc_id,
+                "published_date": published_date,
+                "first_seen_at": first_seen_at,
+                "source_url": source_url,
+            }
+        )
     return docs
 
 
@@ -261,7 +265,9 @@ def _shape_fr_document(entry: dict, today: date) -> dict:
     }
 
 
-def _fetch_fr_documents_for_date(publication_date: str, timeout: int = 20) -> tuple[list[dict], int, str | None]:
+def _fetch_fr_documents_for_date(
+    publication_date: str, timeout: int = 20
+) -> tuple[list[dict], int, str | None]:
     """
     Fetch Federal Register documents for a given publication date.
     Returns (docs, total_count, error); docs may be empty on failure.
@@ -287,7 +293,7 @@ def _fetch_fr_documents_for_date(publication_date: str, timeout: int = 20) -> tu
     except Exception as e:
         return [], 0, f"FR API fetch failed for {publication_date}: {e.__class__.__name__}"
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     shaped = [_shape_fr_document(entry, today) for entry in results]
     return shaped, total_count, None
 
@@ -337,12 +343,15 @@ def _build_report_highlights(enriched_docs: list[dict], max_items: int = 5) -> l
 
     chosen = urgent or va_docs or all_docs
     highlights: list[str] = []
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
 
     for parent, doc in chosen[:max_items]:
         title = doc.get("title") or "New Federal Register document"
         agency = ", ".join(doc.get("agencies") or []) or "Agency TBD"
-        parts = [f"{parent.get('doc_id', '')} — {title}", f"({agency}; published {doc.get('publication_date','')})"]
+        parts = [
+            f"{parent.get('doc_id', '')} — {title}",
+            f"({agency}; published {doc.get('publication_date', '')})",
+        ]
 
         urgency = doc.get("urgency") or {}
         reasons = urgency.get("reasons") or []
@@ -386,21 +395,25 @@ def _enrich_new_documents(new_docs: list[dict]) -> list[dict]:
         available_count = len(fr_documents_all)
         if total_count and total_count < MAX_FR_DOCS_FETCH:
             available_count = total_count
-        enriched.append({
-            **doc,
-            "why_flagged": f"New FR bulk package for {label} (first seen at {doc.get('first_seen_at', '')})",
-            "document_count": len(selected_docs),
-            "documents_shown": len(selected_docs),
-            "veterans_affairs_documents": len(va_documents),
-            "documents_scanned": len(fr_documents_all),
-            "total_documents_available": available_count,
-            "urgent_count": urgent_count,
-            "documents_scope": "veterans_affairs" if va_documents else "all_documents",
-            "highlights": _format_highlights(selected_docs),
-            "documents": selected_docs,
-            "truncated": (len(selected_docs) < len(va_documents)) if va_documents else (len(selected_docs) < len(fr_documents_all)),
-            "fetch_error": err,
-        })
+        enriched.append(
+            {
+                **doc,
+                "why_flagged": f"New FR bulk package for {label} (first seen at {doc.get('first_seen_at', '')})",
+                "document_count": len(selected_docs),
+                "documents_shown": len(selected_docs),
+                "veterans_affairs_documents": len(va_documents),
+                "documents_scanned": len(fr_documents_all),
+                "total_documents_available": available_count,
+                "urgent_count": urgent_count,
+                "documents_scope": "veterans_affairs" if va_documents else "all_documents",
+                "highlights": _format_highlights(selected_docs),
+                "documents": selected_docs,
+                "truncated": (len(selected_docs) < len(va_documents))
+                if va_documents
+                else (len(selected_docs) < len(fr_documents_all)),
+                "fetch_error": err,
+            }
+        )
     return enriched
 
 
@@ -438,7 +451,9 @@ def generate_report(
 
     # Enrich new docs with FR metadata for context/urgency
     enriched_docs = _enrich_new_documents(new_docs)
-    stats["new_fr_docs_with_metadata"] = sum(1 for d in enriched_docs if d.get("document_count", 0) > 0)
+    stats["new_fr_docs_with_metadata"] = sum(
+        1 for d in enriched_docs if d.get("document_count", 0) > 0
+    )
     stats["urgent_fr_docs"] = sum(d.get("urgent_count", 0) for d in enriched_docs)
     stats["va_fr_docs"] = sum(d.get("veterans_affairs_documents", 0) for d in enriched_docs)
     stats["fr_enrichment_errors"] = sum(1 for d in enriched_docs if d.get("fetch_error"))
@@ -488,7 +503,7 @@ def _escape_csv_field(field: Any) -> str:
         return ""
     s = str(field)
     if "," in s or '"' in s or "\n" in s:
-        return f'"{s.replace(chr(34), chr(34)+chr(34))}"'
+        return f'"{s.replace(chr(34), chr(34) + chr(34))}"'
     return s
 
 
@@ -521,20 +536,22 @@ def export_csv(report: dict, filepath: str) -> str:
     runs_path = base_path.parent / f"{base_path.name}_runs.csv"
     with open(runs_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-        writer.writerow([
-            "id", "source_id", "started_at", "ended_at", "status", "records_fetched", "errors"
-        ])
+        writer.writerow(
+            ["id", "source_id", "started_at", "ended_at", "status", "records_fetched", "errors"]
+        )
         for run in report.get("runs", []):
             errors_str = "; ".join(run.get("errors", []))
-            writer.writerow([
-                run.get("id", ""),
-                run.get("source_id", ""),
-                run.get("started_at", ""),
-                run.get("ended_at", ""),
-                run.get("status", ""),
-                run.get("records_fetched", 0),
-                errors_str,
-            ])
+            writer.writerow(
+                [
+                    run.get("id", ""),
+                    run.get("source_id", ""),
+                    run.get("started_at", ""),
+                    run.get("ended_at", ""),
+                    run.get("status", ""),
+                    run.get("records_fetched", 0),
+                    errors_str,
+                ]
+            )
 
     # Export docs CSV
     docs_path = base_path.parent / f"{base_path.name}_docs.csv"
@@ -542,12 +559,14 @@ def export_csv(report: dict, filepath: str) -> str:
         writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
         writer.writerow(["doc_id", "published_date", "first_seen_at", "source_url"])
         for doc in report.get("new_documents", []):
-            writer.writerow([
-                doc.get("doc_id", ""),
-                doc.get("published_date", ""),
-                doc.get("first_seen_at", ""),
-                doc.get("source_url", ""),
-            ])
+            writer.writerow(
+                [
+                    doc.get("doc_id", ""),
+                    doc.get("published_date", ""),
+                    doc.get("first_seen_at", ""),
+                    doc.get("source_url", ""),
+                ]
+            )
 
     # Export detailed docs CSV (with FR metadata/urgency) if available
     enriched_docs = report.get("new_documents_enriched") or []
@@ -555,46 +574,50 @@ def export_csv(report: dict, filepath: str) -> str:
         detailed_path = base_path.parent / f"{base_path.name}_docs_detailed.csv"
         with open(detailed_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
-            writer.writerow([
-                "doc_id",
-                "published_date",
-                "first_seen_at",
-                "document_number",
-                "title",
-                "type",
-                "agencies",
-                "comments_close_on",
-                "effective_on",
-                "is_urgent",
-                "urgency_reasons",
-                "html_url",
-                "source_url",
-            ])
+            writer.writerow(
+                [
+                    "doc_id",
+                    "published_date",
+                    "first_seen_at",
+                    "document_number",
+                    "title",
+                    "type",
+                    "agencies",
+                    "comments_close_on",
+                    "effective_on",
+                    "is_urgent",
+                    "urgency_reasons",
+                    "html_url",
+                    "source_url",
+                ]
+            )
             for parent in enriched_docs:
                 for fr_doc in parent.get("documents", []) or []:
                     urgency = fr_doc.get("urgency") or {}
-                    writer.writerow([
-                        parent.get("doc_id", ""),
-                        parent.get("published_date", ""),
-                        parent.get("first_seen_at", ""),
-                        fr_doc.get("document_number", ""),
-                        fr_doc.get("title", ""),
-                        fr_doc.get("type", ""),
-                        "; ".join(fr_doc.get("agencies", [])),
-                        fr_doc.get("comments_close_on") or "",
-                        fr_doc.get("effective_on") or "",
-                        urgency.get("is_urgent", False),
-                        "; ".join(urgency.get("reasons", [])),
-                        fr_doc.get("html_url") or "",
-                        parent.get("source_url", ""),
-                    ])
+                    writer.writerow(
+                        [
+                            parent.get("doc_id", ""),
+                            parent.get("published_date", ""),
+                            parent.get("first_seen_at", ""),
+                            fr_doc.get("document_number", ""),
+                            fr_doc.get("title", ""),
+                            fr_doc.get("type", ""),
+                            "; ".join(fr_doc.get("agencies", [])),
+                            fr_doc.get("comments_close_on") or "",
+                            fr_doc.get("effective_on") or "",
+                            urgency.get("is_urgent", False),
+                            "; ".join(urgency.get("reasons", [])),
+                            fr_doc.get("html_url") or "",
+                            parent.get("source_url", ""),
+                        ]
+                    )
 
     return str(base_path)
 
 
 def _generate_filename(report_type: str) -> str:
     """Generate a filename based on report type and timestamp."""
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     return f"{report_type}_{timestamp}"
 
 
@@ -663,7 +686,9 @@ def main():
         print("By Source:")
         for source_id, stats in report["summary"]["sources"].items():
             print(f"  {source_id}:")
-            print(f"    Runs: {stats['total_runs']} (ok={stats['successful_runs']}, err={stats['error_runs']}, no_data={stats['no_data_runs']})")
+            print(
+                f"    Runs: {stats['total_runs']} (ok={stats['successful_runs']}, err={stats['error_runs']}, no_data={stats['no_data_runs']})"
+            )
             print(f"    Records: {stats['total_records_fetched']}")
 
 

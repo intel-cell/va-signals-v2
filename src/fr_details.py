@@ -12,7 +12,6 @@ Uses the Federal Register API: https://www.federalregister.gov/developers/docume
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -22,7 +21,14 @@ from urllib3.util.retry import Retry
 logger = logging.getLogger(__name__)
 
 FR_API_BASE = "https://www.federalregister.gov/api/v1"
-FR_FIELDS = ["document_number", "title", "type", "comments_close_on", "effective_on", "publication_date"]
+FR_FIELDS = [
+    "document_number",
+    "title",
+    "type",
+    "comments_close_on",
+    "effective_on",
+    "publication_date",
+]
 
 # Thread-local session with retry/backoff
 _session: requests.Session | None = None
@@ -159,7 +165,9 @@ def extract_document_dates(doc_details: dict[str, Any]) -> dict[str, str | None]
     }
 
 
-def enrich_fr_documents_with_dates(doc_ids: list[str], max_workers: int = 4) -> dict[str, dict[str, str | None]]:
+def enrich_fr_documents_with_dates(
+    doc_ids: list[str], max_workers: int = 4
+) -> dict[str, dict[str, str | None]]:
     """
     Fetch and extract date information for FR documents.
 

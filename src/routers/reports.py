@@ -2,12 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from ..reports import generate_report
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from ..reports import generate_report
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +22,10 @@ def generate_report_endpoint(
 ):
     """Generate and return a report. Requires ANALYST role."""
     if type not in ("daily", "weekly"):
-        raise HTTPException(
-            status_code=400, detail="Invalid report type. Use 'daily' or 'weekly'"
-        )
+        raise HTTPException(status_code=400, detail="Invalid report type. Use 'daily' or 'weekly'")
 
     if format != "json":
-        raise HTTPException(
-            status_code=400, detail="Only 'json' format is supported"
-        )
+        raise HTTPException(status_code=400, detail="Only 'json' format is supported")
 
     try:
         report = generate_report(type)

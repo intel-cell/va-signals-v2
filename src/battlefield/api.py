@@ -4,50 +4,31 @@ Battlefield Dashboard API Endpoints
 FastAPI router for battlefield dashboard, calendar, and alerts.
 """
 
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
-
+from ..auth.rbac import RoleChecker
+from .calendar import get_calendar_view, sync_all_sources
 from .db_helpers import (
-    init_battlefield_tables,
+    acknowledge_alert,
+    get_critical_gates,
+    get_dashboard_stats,
+    get_recent_alerts,
+    get_vehicle,
     get_vehicles,
     get_vehicles_by_heat,
-    get_vehicle,
-    get_calendar_events,
-    get_critical_gates,
-    get_recent_alerts,
-    get_dashboard_stats,
-    acknowledge_alert,
-    update_vehicle_heat_score,
-    upsert_vehicle,
+    init_battlefield_tables,
 )
-from .calendar import sync_all_sources, get_calendar_view
 from .gate_detection import run_all_detections
-from .models import (
-    Vehicle,
-    CalendarEvent,
-    GateAlert,
-    BattlefieldDashboard,
-    Calendar,
-    BattlefieldResponse,
-    CriticalGatesResponse,
-    ActiveVehiclesResponse,
-    RecentAlertsResponse,
-    Importance,
-    Posture,
-    VehicleType,
-)
-
 
 router = APIRouter(prefix="/api/battlefield", tags=["battlefield"])
 
 
 # --- Response Models ---
+
 
 class DashboardStatsResponse(BaseModel):
     total_vehicles: int
@@ -68,13 +49,14 @@ class AlertAckRequest(BaseModel):
 
 
 class VehicleUpdateRequest(BaseModel):
-    our_posture: Optional[str] = None
-    owner_internal: Optional[str] = None
-    lobbyist_task: Optional[str] = None
-    attack_surface: Optional[str] = None
+    our_posture: str | None = None
+    owner_internal: str | None = None
+    lobbyist_task: str | None = None
+    attack_surface: str | None = None
 
 
 # --- Endpoints ---
+
 
 @router.get("/stats", response_model=DashboardStatsResponse)
 async def get_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
@@ -85,9 +67,13 @@ async def get_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
 
 @router.get("/vehicles")
 async def list_vehicles(
-    vehicle_type: Optional[str] = Query(None, description="Filter by type: bill, rule, appropriations, oversight"),
-    posture: Optional[str] = Query(None, description="Filter by posture: support, oppose, monitor, neutral_engaged"),
-    stage: Optional[str] = Query(None, description="Filter by stage"),
+    vehicle_type: str | None = Query(
+        None, description="Filter by type: bill, rule, appropriations, oversight"
+    ),
+    posture: str | None = Query(
+        None, description="Filter by posture: support, oppose, monitor, neutral_engaged"
+    ),
+    stage: str | None = Query(None, description="Filter by stage"),
     limit: int = Query(50, ge=1, le=200),
     _: None = Depends(RoleChecker(UserRole.VIEWER)),
 ):
@@ -111,7 +97,9 @@ async def get_single_vehicle(vehicle_id: str, _: None = Depends(RoleChecker(User
 
 
 @router.patch("/vehicles/{vehicle_id}")
-async def update_vehicle(vehicle_id: str, updates: VehicleUpdateRequest, _: None = Depends(RoleChecker(UserRole.ANALYST))):
+async def update_vehicle(
+    vehicle_id: str, updates: VehicleUpdateRequest, _: None = Depends(RoleChecker(UserRole.ANALYST))
+):
     """Update vehicle posture, owner, or task."""
     vehicle = get_vehicle(vehicle_id)
     if not vehicle:
@@ -120,8 +108,9 @@ async def update_vehicle(vehicle_id: str, updates: VehicleUpdateRequest, _: None
     # Apply updates
     update_dict = updates.model_dump(exclude_none=True)
     if update_dict:
-        from ..db import execute
         from datetime import datetime
+
+        from ..db import execute
 
         set_clauses = ", ".join(f"{k} = :{k}" for k in update_dict.keys())
         update_dict["vehicle_id"] = vehicle_id
@@ -138,8 +127,8 @@ async def update_vehicle(vehicle_id: str, updates: VehicleUpdateRequest, _: None
 @router.get("/calendar")
 async def get_calendar(
     days: int = Query(14, ge=1, le=90, description="Number of days to look ahead"),
-    event_type: Optional[str] = Query(None, description="Filter by event type"),
-    importance: Optional[str] = Query(None, description="Filter by importance"),
+    event_type: str | None = Query(None, description="Filter by event type"),
+    importance: str | None = Query(None, description="Filter by importance"),
     _: None = Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """Get calendar events for the next N days."""
@@ -161,6 +150,7 @@ async def get_calendar(
 def _days_until(date_str: str) -> int:
     """Calculate days until a date from today."""
     from datetime import datetime
+
     try:
         target = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
         today = datetime.utcnow().date()
@@ -170,7 +160,9 @@ def _days_until(date_str: str) -> int:
 
 
 @router.get("/critical-gates")
-async def get_critical(days: int = Query(14, ge=1, le=30), _: None = Depends(RoleChecker(UserRole.VIEWER))):
+async def get_critical(
+    days: int = Query(14, ge=1, le=30), _: None = Depends(RoleChecker(UserRole.VIEWER))
+):
     """Get critical gates in the next N days."""
     events = get_critical_gates(days=days)
     # Add days_until to each event
@@ -182,7 +174,7 @@ async def get_critical(days: int = Query(14, ge=1, le=30), _: None = Depends(Rol
 @router.get("/alerts")
 async def get_alerts(
     hours: int = Query(48, ge=1, le=168, description="Hours to look back"),
-    acknowledged: Optional[bool] = Query(None, description="Filter by acknowledgment status"),
+    acknowledged: bool | None = Query(None, description="Filter by acknowledgment status"),
     _: None = Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """Get recent gate alerts."""
@@ -191,7 +183,9 @@ async def get_alerts(
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
-async def ack_alert(alert_id: str, request: AlertAckRequest, _: None = Depends(RoleChecker(UserRole.ANALYST))):
+async def ack_alert(
+    alert_id: str, request: AlertAckRequest, _: None = Depends(RoleChecker(UserRole.ANALYST))
+):
     """Acknowledge a gate alert."""
     acknowledge_alert(alert_id, request.acknowledged_by)
     return {"status": "acknowledged", "alert_id": alert_id}

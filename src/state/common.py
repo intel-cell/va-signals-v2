@@ -3,7 +3,6 @@
 import hashlib
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -14,10 +13,10 @@ class RawSignal:
     title: str
     source_id: str
     state: str
-    content: Optional[str] = None
-    pub_date: Optional[str] = None
-    event_date: Optional[str] = None
-    metadata: Optional[dict] = None
+    content: str | None = None
+    pub_date: str | None = None
+    event_date: str | None = None
+    metadata: dict | None = None
 
 
 def generate_signal_id(url: str) -> str:
@@ -114,7 +113,7 @@ _COMPILED_PROGRAM_PATTERNS = {
 }
 
 
-def detect_program(text: str) -> Optional[str]:
+def detect_program(text: str) -> str | None:
     """Detect which federal program a signal relates to."""
     for program, compiled_patterns in _COMPILED_PROGRAM_PATTERNS.items():
         for pattern in compiled_patterns:

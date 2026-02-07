@@ -1,8 +1,8 @@
 """Database helpers for state intelligence module."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 from src.db import connect, execute, insert_returning_id
-
 
 # Default sources for TX, CA, FL, PA, OH, NY, NC, GA, VA, AZ
 DEFAULT_SOURCES = [
@@ -183,7 +183,7 @@ DEFAULT_SOURCES = [
 
 def _utc_now_iso() -> str:
     """Return current UTC time as ISO 8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # --- Source helpers ---
@@ -348,9 +348,7 @@ def signal_exists(signal_id: str) -> bool:
     return exists
 
 
-def get_signals_by_state(
-    state: str, since: str | None = None, limit: int = 100
-) -> list[dict]:
+def get_signals_by_state(state: str, since: str | None = None, limit: int = 100) -> list[dict]:
     """Get signals for a state, ordered by pub_date descending.
 
     If `since` is provided, filter by fetched_at >= since.
@@ -632,7 +630,7 @@ def get_latest_run() -> dict | None:
     cur = execute(
         con,
         """SELECT id, run_type, state, status, signals_found, high_severity_count, started_at, finished_at
-           FROM state_runs ORDER BY started_at DESC LIMIT 1"""
+           FROM state_runs ORDER BY started_at DESC LIMIT 1""",
     )
     row = cur.fetchone()
     con.close()

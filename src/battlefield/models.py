@@ -5,16 +5,16 @@ Schemas for vehicles, decision points, calendar events, and gate alerts
 as specified in ORDER_DELTA_001.
 """
 
-from datetime import datetime
 from enum import Enum
-from typing import Optional
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
 
 # --- Enums ---
 
+
 class VehicleType(str, Enum):
     """Types of legislative/regulatory vehicles we track."""
+
     BILL = "bill"
     RULE = "rule"
     APPROPRIATIONS = "appropriations"
@@ -23,6 +23,7 @@ class VehicleType(str, Enum):
 
 class VehicleStage(str, Enum):
     """Current stage in the legislative/regulatory process."""
+
     # Legislative stages
     INTRODUCED = "introduced"
     COMMITTEE = "committee"
@@ -40,6 +41,7 @@ class VehicleStage(str, Enum):
 
 class Posture(str, Enum):
     """Our organizational posture toward the vehicle."""
+
     SUPPORT = "support"
     OPPOSE = "oppose"
     MONITOR = "monitor"
@@ -48,6 +50,7 @@ class Posture(str, Enum):
 
 class EventType(str, Enum):
     """Types of decision point events."""
+
     HEARING = "hearing"
     MARKUP = "markup"
     VOTE = "vote"
@@ -59,6 +62,7 @@ class EventType(str, Enum):
 
 class Importance(str, Enum):
     """Importance level for calendar events."""
+
     CRITICAL = "critical"
     IMPORTANT = "important"
     WATCH = "watch"
@@ -66,6 +70,7 @@ class Importance(str, Enum):
 
 class AlertType(str, Enum):
     """Types of gate alerts."""
+
     NEW_GATE = "new_gate"
     GATE_MOVED = "gate_moved"
     GATE_PASSED = "gate_passed"
@@ -74,21 +79,24 @@ class AlertType(str, Enum):
 
 # --- Core Models ---
 
+
 class VehicleStatus(BaseModel):
     """Current status of a vehicle."""
+
     current_stage: VehicleStage
     status_date: str
-    status_text: Optional[str] = None
+    status_text: str | None = None
 
 
 class DecisionPoint(BaseModel):
     """Next decision point for a vehicle."""
+
     event_type: EventType
     date: str
     days_until: int
-    time: Optional[str] = None
-    location: Optional[str] = None
-    description: Optional[str] = None
+    time: str | None = None
+    location: str | None = None
+    description: str | None = None
 
 
 class Vehicle(BaseModel):
@@ -97,26 +105,29 @@ class Vehicle(BaseModel):
 
     Per ORDER_DELTA_001 BATTLEFIELD_DASHBOARD schema.
     """
+
     vehicle_id: str = Field(..., description="Unique identifier for the vehicle")
-    vehicle_type: VehicleType = Field(..., description="Type: bill, rule, appropriations, oversight")
+    vehicle_type: VehicleType = Field(
+        ..., description="Type: bill, rule, appropriations, oversight"
+    )
     title: str = Field(..., description="Short title")
     identifier: str = Field(..., description="Official identifier (H.R. XXX, FR docket, etc.)")
 
     status: VehicleStatus = Field(..., description="Current status")
-    next_decision_point: Optional[DecisionPoint] = Field(None, description="Next gate/decision point")
+    next_decision_point: DecisionPoint | None = Field(None, description="Next gate/decision point")
 
     our_posture: Posture = Field(default=Posture.MONITOR, description="Organizational posture")
-    attack_surface: Optional[str] = Field(None, description="What could go wrong")
-    owner_internal: Optional[str] = Field(None, description="Internal owner tracking this")
-    lobbyist_task: Optional[str] = Field(None, description="Task for external team")
+    attack_surface: str | None = Field(None, description="What could go wrong")
+    owner_internal: str | None = Field(None, description="Internal owner tracking this")
+    lobbyist_task: str | None = Field(None, description="Task for external team")
 
-    heat_score: Optional[float] = Field(None, description="Heat score from CHARLIE (0-100)")
-    last_action: Optional[str] = Field(None, description="Most recent action taken")
-    evidence_pack_id: Optional[str] = Field(None, description="Link to BRAVO evidence pack")
+    heat_score: float | None = Field(None, description="Heat score from CHARLIE (0-100)")
+    last_action: str | None = Field(None, description="Most recent action taken")
+    evidence_pack_id: str | None = Field(None, description="Link to BRAVO evidence pack")
 
-    source_url: Optional[str] = Field(None, description="Primary source URL")
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    source_url: str | None = Field(None, description="Primary source URL")
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class CalendarEvent(BaseModel):
@@ -125,21 +136,22 @@ class CalendarEvent(BaseModel):
 
     Per ORDER_DELTA_001 CALENDAR schema.
     """
+
     event_id: str = Field(..., description="Unique event identifier")
     vehicle_id: str = Field(..., description="Associated vehicle")
     date: str = Field(..., description="Event date (YYYY-MM-DD)")
 
     event_type: EventType = Field(..., description="Type of event")
     title: str = Field(..., description="Event title")
-    time: Optional[str] = Field(None, description="Time if known (HH:MM)")
-    location: Optional[str] = Field(None, description="Committee, chamber, etc.")
+    time: str | None = Field(None, description="Time if known (HH:MM)")
+    location: str | None = Field(None, description="Committee, chamber, etc.")
 
     importance: Importance = Field(default=Importance.WATCH, description="Importance level")
-    prep_required: Optional[str] = Field(None, description="What we need ready")
+    prep_required: str | None = Field(None, description="What we need ready")
 
     days_until: int = Field(..., description="Days until event")
-    source_type: Optional[str] = Field(None, description="Source table/type")
-    source_id: Optional[str] = Field(None, description="ID in source table")
+    source_type: str | None = Field(None, description="Source table/type")
+    source_id: str | None = Field(None, description="ID in source table")
 
 
 class GateAlert(BaseModel):
@@ -148,22 +160,24 @@ class GateAlert(BaseModel):
 
     Per ORDER_DELTA_001 GATE_ALERT schema.
     """
+
     alert_id: str = Field(..., description="Unique alert identifier")
     timestamp: str = Field(..., description="When alert was generated")
     vehicle_id: str = Field(..., description="Associated vehicle")
 
     alert_type: AlertType = Field(..., description="Type of alert")
-    old_value: Optional[str] = Field(None, description="Previous value")
+    old_value: str | None = Field(None, description="Previous value")
     new_value: str = Field(..., description="New value")
-    days_impact: Optional[int] = Field(None, description="How much timeline shifted")
+    days_impact: int | None = Field(None, description="How much timeline shifted")
 
-    recommended_action: Optional[str] = Field(None, description="Suggested response")
+    recommended_action: str | None = Field(None, description="Suggested response")
     acknowledged: bool = Field(default=False, description="Has been reviewed")
-    acknowledged_by: Optional[str] = None
-    acknowledged_at: Optional[str] = None
+    acknowledged_by: str | None = None
+    acknowledged_at: str | None = None
 
 
 # --- Aggregate Models ---
+
 
 class Calendar(BaseModel):
     """
@@ -171,6 +185,7 @@ class Calendar(BaseModel):
 
     Per ORDER_DELTA_001 CALENDAR schema.
     """
+
     date: str = Field(..., description="Calendar generation date")
     events: list[CalendarEvent] = Field(default_factory=list)
 
@@ -186,6 +201,7 @@ class BattlefieldDashboard(BaseModel):
 
     Per ORDER_DELTA_001 BATTLEFIELD_DASHBOARD schema.
     """
+
     generated_date: str = Field(..., description="Dashboard generation timestamp")
     last_updated: str = Field(..., description="Last data update timestamp")
 
@@ -200,8 +216,10 @@ class BattlefieldDashboard(BaseModel):
 
 # --- API Response Models ---
 
+
 class BattlefieldResponse(BaseModel):
     """API response for battlefield dashboard."""
+
     dashboard: BattlefieldDashboard
     calendar: Calendar
     recent_alerts: list[GateAlert] = Field(default_factory=list)
@@ -209,6 +227,7 @@ class BattlefieldResponse(BaseModel):
 
 class CriticalGatesResponse(BaseModel):
     """Critical gates in next N days."""
+
     days: int
     events: list[CalendarEvent]
     count: int
@@ -216,12 +235,14 @@ class CriticalGatesResponse(BaseModel):
 
 class ActiveVehiclesResponse(BaseModel):
     """Active vehicles sorted by heat score."""
+
     vehicles: list[Vehicle]
     count: int
 
 
 class RecentAlertsResponse(BaseModel):
     """Recent gate alerts."""
+
     hours: int
     alerts: list[GateAlert]
     count: int

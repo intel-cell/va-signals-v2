@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -81,10 +80,9 @@ class AZOfficialSource(StateSource):
 
         for article in articles:
             try:
-                title_elem = (
-                    article.select_one("h2 a, h3 a, .field-content a")
-                    or article.select_one("a")
-                )
+                title_elem = article.select_one(
+                    "h2 a, h3 a, .field-content a"
+                ) or article.select_one("a")
                 if not title_elem:
                     continue
 
@@ -129,7 +127,7 @@ class AZOfficialSource(StateSource):
 
         return signals
 
-    def _parse_date_text(self, text: str) -> Optional[str]:
+    def _parse_date_text(self, text: str) -> str | None:
         """Try to parse date from text."""
         for fmt in ["%B %d, %Y", "%b %d, %Y", "%Y-%m-%d", "%m/%d/%Y"]:
             try:

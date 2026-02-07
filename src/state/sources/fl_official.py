@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -90,7 +89,7 @@ class FLOfficialSource(StateSource):
 
         return signals
 
-    def _parse_date_text(self, text: str) -> Optional[str]:
+    def _parse_date_text(self, text: str) -> str | None:
         """Try to parse date from text like 'January 21, 2026'."""
         for fmt in ["%B %d, %Y", "%b %d, %Y", "%m/%d/%Y", "%Y-%m-%d"]:
             try:

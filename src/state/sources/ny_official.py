@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime
-from typing import Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -162,7 +161,7 @@ class NYOfficialSource(StateSource):
 
         return signals
 
-    def _extract_date_from_text(self, text: str) -> Optional[str]:
+    def _extract_date_from_text(self, text: str) -> str | None:
         """Try to find and extract a date from free text."""
         import re
 
@@ -181,7 +180,7 @@ class NYOfficialSource(StateSource):
 
         return None
 
-    def _parse_date_text(self, text: str) -> Optional[str]:
+    def _parse_date_text(self, text: str) -> str | None:
         """Try to parse date from text."""
         # Remove optional comma in "Month DD, YYYY" vs "Month DD YYYY"
         cleaned = text.strip().replace(",", "")

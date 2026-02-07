@@ -1,7 +1,6 @@
 """Expression tree parser for trigger conditions."""
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 from src.signals.evaluators.registry import EVALUATOR_WHITELIST
 
@@ -9,12 +8,14 @@ from src.signals.evaluators.registry import EVALUATOR_WHITELIST
 @dataclass
 class ExpressionNode:
     """Base class for expression nodes."""
-    label: Optional[str] = None
+
+    label: str | None = None
 
 
 @dataclass
 class EvaluatorNode(ExpressionNode):
     """Leaf node that calls a registry evaluator."""
+
     evaluator_name: str = ""
     args: dict = field(default_factory=dict)
 
@@ -22,18 +23,21 @@ class EvaluatorNode(ExpressionNode):
 @dataclass
 class AllOfNode(ExpressionNode):
     """AND - all child expressions must pass."""
+
     children: list = field(default_factory=list)
 
 
 @dataclass
 class AnyOfNode(ExpressionNode):
     """OR - at least one child expression must pass."""
+
     children: list = field(default_factory=list)
 
 
 @dataclass
 class NoneOfNode(ExpressionNode):
     """NOT ANY - all child expressions must fail."""
+
     children: list = field(default_factory=list)
 
 

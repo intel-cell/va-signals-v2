@@ -6,10 +6,10 @@ import time
 import pytest
 
 from src.resilience.rate_limiter import (
-    RateLimitExceeded,
     RateLimiter,
     RateLimiterConfig,
     RateLimiterState,
+    RateLimitExceeded,
     _RateLimitAcquireContext,
 )
 
@@ -23,6 +23,7 @@ def _run(coro):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fresh_limiter(name: str, rate: float = 10.0, burst: int = 10) -> RateLimiter:
     """Create a rate limiter with a unique name."""
     return RateLimiter(rate=rate, burst=burst, name=name)
@@ -31,6 +32,7 @@ def _fresh_limiter(name: str, rate: float = 10.0, burst: int = 10) -> RateLimite
 # ---------------------------------------------------------------------------
 # RateLimitExceeded
 # ---------------------------------------------------------------------------
+
 
 class TestRateLimitExceeded:
     def test_attributes(self):
@@ -48,6 +50,7 @@ class TestRateLimitExceeded:
 # RateLimiterConfig
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimiterConfig:
     def test_required_fields(self):
         cfg = RateLimiterConfig(rate=5.0, burst=10, name="test")
@@ -64,6 +67,7 @@ class TestRateLimiterConfig:
 # RateLimiterState
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimiterState:
     def test_fields(self):
         s = RateLimiterState(tokens=5.0, last_update=1000.0)
@@ -76,6 +80,7 @@ class TestRateLimiterState:
 # ---------------------------------------------------------------------------
 # RateLimiter — init / registry
 # ---------------------------------------------------------------------------
+
 
 class TestRateLimiterInit:
     def test_initial_tokens_equal_burst(self):
@@ -99,6 +104,7 @@ class TestRateLimiterInit:
 # ---------------------------------------------------------------------------
 # RateLimiter.allow — basic token consumption
 # ---------------------------------------------------------------------------
+
 
 class TestAllow:
     def test_allow_single_token(self):
@@ -136,6 +142,7 @@ class TestAllow:
 # RateLimiter.allow_async
 # ---------------------------------------------------------------------------
 
+
 class TestAllowAsync:
     def test_allow_async(self):
         rl = _fresh_limiter("allow_async_ok", rate=10, burst=5)
@@ -151,6 +158,7 @@ class TestAllowAsync:
 # ---------------------------------------------------------------------------
 # _refill — token replenishment
 # ---------------------------------------------------------------------------
+
 
 class TestRefill:
     def test_refill_adds_tokens(self):
@@ -178,6 +186,7 @@ class TestRefill:
 # retry_after
 # ---------------------------------------------------------------------------
 
+
 class TestRetryAfter:
     def test_zero_when_tokens_available(self):
         rl = _fresh_limiter("retry_zero", rate=10, burst=5)
@@ -199,6 +208,7 @@ class TestRetryAfter:
 # available_tokens property
 # ---------------------------------------------------------------------------
 
+
 class TestAvailableTokens:
     def test_returns_current_after_refill(self):
         rl = _fresh_limiter("avail_tok", rate=10, burst=10)
@@ -216,6 +226,7 @@ class TestAvailableTokens:
 # ---------------------------------------------------------------------------
 # acquire — async context manager
 # ---------------------------------------------------------------------------
+
 
 class TestAcquire:
     def test_acquire_when_tokens_available(self):
@@ -257,6 +268,7 @@ class TestAcquire:
 # _RateLimitAcquireContext
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimitAcquireContext:
     def test_aexit_is_noop(self):
         rl = _fresh_limiter("ctx_aexit", rate=10, burst=5)
@@ -267,6 +279,7 @@ class TestRateLimitAcquireContext:
 # ---------------------------------------------------------------------------
 # to_dict
 # ---------------------------------------------------------------------------
+
 
 class TestToDict:
     def test_dict_keys(self):
@@ -292,21 +305,26 @@ class TestToDict:
 # Pre-configured instances
 # ---------------------------------------------------------------------------
 
+
 class TestPreConfigured:
     def test_api_rate_limiter(self):
         from src.resilience.rate_limiter import api_rate_limiter
+
         assert api_rate_limiter.config.rate == 100
         assert api_rate_limiter.config.burst == 200
 
     def test_external_api_limiter(self):
         from src.resilience.rate_limiter import external_api_limiter
+
         assert external_api_limiter.config.rate == 10
 
     def test_federal_register_limiter(self):
         from src.resilience.rate_limiter import federal_register_limiter
+
         assert federal_register_limiter.config.rate == 5
 
     def test_congress_api_limiter(self):
         from src.resilience.rate_limiter import congress_api_limiter
+
         assert congress_api_limiter.config.rate == 10
         assert congress_api_limiter.config.burst == 20

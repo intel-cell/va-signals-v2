@@ -5,10 +5,10 @@ Extracts numerical and categorical features from signals
 for use in predictive models.
 """
 
-import re
 import logging
-from datetime import datetime, timezone
-from typing import Optional, Any
+import re
+from datetime import UTC, datetime
+from typing import Any
 
 from .models import FeatureSet
 
@@ -16,18 +16,41 @@ logger = logging.getLogger(__name__)
 
 # High-priority keywords that indicate important signals
 HIGH_PRIORITY_KEYWORDS = [
-    "veteran", "disability", "benefit", "claim", "appeal",
-    "va ", "dod", "compensation", "rating", "effective date",
-    "deadline", "mandatory", "required", "final rule",
-    "proposed rule", "comment period", "regulation",
-    "amendment", "revision", "implementation"
+    "veteran",
+    "disability",
+    "benefit",
+    "claim",
+    "appeal",
+    "va ",
+    "dod",
+    "compensation",
+    "rating",
+    "effective date",
+    "deadline",
+    "mandatory",
+    "required",
+    "final rule",
+    "proposed rule",
+    "comment period",
+    "regulation",
+    "amendment",
+    "revision",
+    "implementation",
 ]
 
 # Keywords indicating urgency
 URGENCY_KEYWORDS = [
-    "immediate", "urgent", "emergency", "effective immediately",
-    "within 30 days", "within 60 days", "deadline", "expires",
-    "retroactive", "mandatory", "required"
+    "immediate",
+    "urgent",
+    "emergency",
+    "effective immediately",
+    "within 30 days",
+    "within 60 days",
+    "deadline",
+    "expires",
+    "retroactive",
+    "mandatory",
+    "required",
 ]
 
 # Source reliability scores (0-1)
@@ -111,7 +134,7 @@ class FeatureExtractor:
         features.word_count = len(words)
 
         # Sentence count (rough)
-        sentences = re.split(r'[.!?]+', text)
+        sentences = re.split(r"[.!?]+", text)
         features.sentence_count = len([s for s in sentences if s.strip()])
 
         # Average word length
@@ -139,9 +162,7 @@ class FeatureExtractor:
         features.source_type = source_type.lower()
 
         # Look up reliability score
-        features.source_reliability_score = SOURCE_RELIABILITY.get(
-            features.source_type, 0.5
-        )
+        features.source_reliability_score = SOURCE_RELIABILITY.get(features.source_type, 0.5)
 
         # Historical accuracy (would be calculated from past predictions)
         features.source_historical_accuracy = features.source_reliability_score
@@ -150,7 +171,7 @@ class FeatureExtractor:
 
     def _extract_temporal_features(self, signal: dict, features: FeatureSet) -> FeatureSet:
         """Extract time-related features."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Days until effective date
         effective_date = signal.get("effective_date")
@@ -176,7 +197,7 @@ class FeatureExtractor:
 
         return features
 
-    def _parse_date(self, date_str: str) -> Optional[datetime]:
+    def _parse_date(self, date_str: str) -> datetime | None:
         """Parse various date formats."""
         if not date_str:
             return None
@@ -192,7 +213,7 @@ class FeatureExtractor:
         for fmt in formats:
             try:
                 dt = datetime.strptime(date_str[:19], fmt)
-                return dt.replace(tzinfo=timezone.utc)
+                return dt.replace(tzinfo=UTC)
             except ValueError:
                 continue
 
@@ -202,16 +223,24 @@ class FeatureExtractor:
         """Extract entity-related features."""
         # Count organization mentions (simple pattern matching)
         org_patterns = [
-            r'\bVA\b', r'\bDOD\b', r'\bCongress\b', r'\bSenate\b',
-            r'\bHouse\b', r'\bCommittee\b', r'\bAgency\b', r'\bDepartment\b'
+            r"\bVA\b",
+            r"\bDOD\b",
+            r"\bCongress\b",
+            r"\bSenate\b",
+            r"\bHouse\b",
+            r"\bCommittee\b",
+            r"\bAgency\b",
+            r"\bDepartment\b",
         ]
         org_count = sum(len(re.findall(p, text, re.IGNORECASE)) for p in org_patterns)
         features.organization_mentions = org_count
 
         # Count regulation citations (e.g., 38 CFR, 42 U.S.C.)
         reg_patterns = [
-            r'\d+\s*CFR\s*\d+', r'\d+\s*U\.?S\.?C\.?\s*\d+',
-            r'Public Law\s*\d+-\d+', r'P\.?L\.?\s*\d+-\d+'
+            r"\d+\s*CFR\s*\d+",
+            r"\d+\s*U\.?S\.?C\.?\s*\d+",
+            r"Public Law\s*\d+-\d+",
+            r"P\.?L\.?\s*\d+-\d+",
         ]
         reg_count = sum(len(re.findall(p, text, re.IGNORECASE)) for p in reg_patterns)
         features.regulation_citations = reg_count

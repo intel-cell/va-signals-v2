@@ -4,19 +4,19 @@ CHARLIE COMMAND - LOE 3: Impact Memos, Heat Maps, Objection Library.
 """
 
 import json
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from ...db import connect, execute, insert_returning_id
+from ...db import connect, execute
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 # =============================================================================
 # IMPACT MEMOS
 # =============================================================================
+
 
 def insert_impact_memo(memo: dict) -> str:
     """
@@ -94,7 +94,7 @@ def insert_impact_memo(memo: dict) -> str:
     return memo["memo_id"]
 
 
-def get_impact_memo(memo_id: str) -> Optional[dict]:
+def get_impact_memo(memo_id: str) -> dict | None:
     """Get a single impact memo by ID."""
     con = connect()
     cur = execute(
@@ -159,8 +159,8 @@ def _memo_row_to_dict(row) -> dict:
 
 
 def get_impact_memos(
-    posture: Optional[str] = None,
-    compliance_exposure: Optional[str] = None,
+    posture: str | None = None,
+    compliance_exposure: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
     """Get impact memos with optional filtering."""
@@ -223,6 +223,7 @@ def get_memos_by_issue(issue_id: str) -> list[dict]:
 # HEAT MAPS
 # =============================================================================
 
+
 def insert_heat_map(heat_map: dict) -> str:
     """
     Insert a new heat map. Returns heat_map_id.
@@ -272,7 +273,7 @@ def insert_heat_map(heat_map: dict) -> str:
     return heat_map["heat_map_id"]
 
 
-def get_latest_heat_map() -> Optional[dict]:
+def get_latest_heat_map() -> dict | None:
     """Get the most recent heat map."""
     con = connect()
     cur = execute(
@@ -293,7 +294,7 @@ def get_latest_heat_map() -> Optional[dict]:
     }
 
 
-def get_heat_map(heat_map_id: str) -> Optional[dict]:
+def get_heat_map(heat_map_id: str) -> dict | None:
     """Get a specific heat map by ID."""
     con = connect()
     cur = execute(
@@ -351,6 +352,7 @@ def get_high_priority_issues(limit: int = 10) -> list[dict]:
 # OBJECTION LIBRARY
 # =============================================================================
 
+
 def insert_objection(objection: dict) -> str:
     """
     Insert a new objection. Returns objection_id.
@@ -389,7 +391,7 @@ def insert_objection(objection: dict) -> str:
     return objection["objection_id"]
 
 
-def get_objection(objection_id: str) -> Optional[dict]:
+def get_objection(objection_id: str) -> dict | None:
     """Get a single objection by ID."""
     con = connect()
     cur = execute(
@@ -426,8 +428,8 @@ def _objection_row_to_dict(row) -> dict:
 
 
 def get_objections(
-    issue_area: Optional[str] = None,
-    source_type: Optional[str] = None,
+    issue_area: str | None = None,
+    source_type: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
     """Get objections with optional filtering."""
@@ -456,7 +458,7 @@ def get_objections(
     return [_objection_row_to_dict(r) for r in rows]
 
 
-def update_objection_usage(objection_id: str, effectiveness_rating: Optional[int] = None) -> None:
+def update_objection_usage(objection_id: str, effectiveness_rating: int | None = None) -> None:
     """Update objection's last_used_date and optionally effectiveness_rating."""
     con = connect()
     now = _utc_now_iso()
@@ -529,7 +531,7 @@ def get_objection_stats() -> dict:
     # Average effectiveness
     cur = execute(
         con,
-        "SELECT AVG(effectiveness_rating) FROM objections WHERE effectiveness_rating IS NOT NULL"
+        "SELECT AVG(effectiveness_rating) FROM objections WHERE effectiveness_rating IS NOT NULL",
     )
     avg_effectiveness = cur.fetchone()[0]
 

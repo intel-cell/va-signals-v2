@@ -7,10 +7,8 @@ Computes hashes for change detection and stores metadata.
 
 import hashlib
 import json
-import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 # Root of the project
 ROOT = Path(__file__).resolve().parents[1]
@@ -39,7 +37,7 @@ def _generate_doc_id(file_path: Path) -> str:
     return f"omb-drop-{name}"
 
 
-def _extract_date_from_filename(filename: str) -> Optional[str]:
+def _extract_date_from_filename(filename: str) -> str | None:
     """Try to extract a date from the filename."""
     import re
 
@@ -63,7 +61,7 @@ def _extract_date_from_filename(filename: str) -> Optional[str]:
                 try:
                     date_str = match.group(0)
                     dt = datetime.strptime(date_str, date_fmt)
-                    return dt.replace(tzinfo=timezone.utc).isoformat()
+                    return dt.replace(tzinfo=UTC).isoformat()
                 except ValueError:
                     continue
             else:
@@ -134,9 +132,7 @@ def scan_omb_drop_folder(
 
         try:
             stat = file_path.stat()
-            file_modified = datetime.fromtimestamp(
-                stat.st_mtime, tz=timezone.utc
-            ).isoformat()
+            file_modified = datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat()
 
             content_hash = _compute_file_hash(file_path)
 
@@ -155,13 +151,15 @@ def scan_omb_drop_folder(
                 "source_url": f"file://{file_path}",
                 "body_text": None,  # Binary files - text extraction would need separate processing
                 "content_hash": content_hash,
-                "metadata_json": json.dumps({
-                    "file_path": str(file_path),
-                    "relative_path": str(rel_path),
-                    "file_size": stat.st_size,
-                    "file_modified": file_modified,
-                    "extension": ext,
-                }),
+                "metadata_json": json.dumps(
+                    {
+                        "file_path": str(file_path),
+                        "relative_path": str(rel_path),
+                        "file_size": stat.st_size,
+                        "file_modified": file_modified,
+                        "extension": ext,
+                    }
+                ),
             }
             docs.append(doc)
 

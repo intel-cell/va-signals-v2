@@ -1,7 +1,7 @@
 """NewsAPI.org news source for state-level veteran news."""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -77,7 +77,9 @@ class NewsAPISource(StateSource):
 
     def __init__(self, state: str, lookback_days: int = 7):
         if state not in SEARCH_QUERIES:
-            raise ValueError(f"Unknown state: {state}. Must be one of {list(SEARCH_QUERIES.keys())}")
+            raise ValueError(
+                f"Unknown state: {state}. Must be one of {list(SEARCH_QUERIES.keys())}"
+            )
         self._state = state
         self.lookback_days = lookback_days
 
@@ -93,7 +95,9 @@ class NewsAPISource(StateSource):
         """Fetch news from NewsAPI for this state's search queries."""
         try:
             api_key = _get_newsapi_key()
-            from_date = (datetime.now(timezone.utc) - timedelta(days=self.lookback_days)).strftime("%Y-%m-%d")
+            from_date = (datetime.now(UTC) - timedelta(days=self.lookback_days)).strftime(
+                "%Y-%m-%d"
+            )
 
             all_signals = []
             seen_urls = set()

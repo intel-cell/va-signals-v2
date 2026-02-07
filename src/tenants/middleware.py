@@ -6,24 +6,21 @@ to all downstream handlers.
 """
 
 import logging
-from typing import Optional
 from contextvars import ContextVar
 
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from .models import TenantContext, TenantPlan
 from .manager import tenant_manager
+from .models import TenantContext
 
 logger = logging.getLogger(__name__)
 
 # Context variable for current tenant (thread-safe)
-_tenant_context: ContextVar[Optional[TenantContext]] = ContextVar(
-    "tenant_context", default=None
-)
+_tenant_context: ContextVar[TenantContext | None] = ContextVar("tenant_context", default=None)
 
 
-def get_tenant_context() -> Optional[TenantContext]:
+def get_tenant_context() -> TenantContext | None:
     """
     Get the current tenant context.
 
@@ -32,7 +29,7 @@ def get_tenant_context() -> Optional[TenantContext]:
     return _tenant_context.get()
 
 
-def set_tenant_context(context: Optional[TenantContext]) -> None:
+def set_tenant_context(context: TenantContext | None) -> None:
     """Set the current tenant context."""
     _tenant_context.set(context)
 
@@ -46,8 +43,7 @@ def require_tenant_context() -> TenantContext:
     context = _tenant_context.get()
     if not context:
         raise HTTPException(
-            status_code=400,
-            detail="Tenant context required. Include X-Tenant-ID header."
+            status_code=400, detail="Tenant context required. Include X-Tenant-ID header."
         )
     return context
 
@@ -92,7 +88,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
 
         # Get user info from auth middleware (must run after auth)
         user_id = getattr(request.state, "user_id", None)
-        user_email = getattr(request.state, "user_email", None)
+        getattr(request.state, "user_email", None)
 
         if not user_id:
             # No authenticated user, skip tenant resolution
@@ -121,11 +117,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
             # Clear context after request
             set_tenant_context(None)
 
-    async def _resolve_tenant(
-        self,
-        request: Request,
-        user_id: str
-    ) -> Optional[TenantContext]:
+    async def _resolve_tenant(self, request: Request, user_id: str) -> TenantContext | None:
         """Resolve tenant from request headers or user's primary tenant."""
 
         tenant = None
@@ -172,10 +164,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
         # Verify user is a member of this tenant
         user_role = tenant_manager.get_member_role(tenant_id, user_id)
         if not user_role:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Not a member of tenant {tenant.name}"
-            )
+            raise HTTPException(status_code=403, detail=f"Not a member of tenant {tenant.name}")
 
         # Get tenant settings
         settings = tenant_manager.get_tenant_settings(tenant_id)
@@ -191,11 +180,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
         )
 
 
-def tenant_scoped_query(
-    base_query: str,
-    tenant_id: str,
-    tenant_column: str = "tenant_id"
-) -> str:
+def tenant_scoped_query(base_query: str, tenant_id: str, tenant_column: str = "tenant_id") -> str:
     """
     Add tenant scoping to a SQL query.
 

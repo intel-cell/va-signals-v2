@@ -5,11 +5,10 @@ Initializes Firebase Admin SDK and provides token verification.
 Supports both Firebase and Google IAP authentication methods.
 """
 
-import os
 import json
 import logging
-from typing import Optional
-from datetime import datetime, timezone
+import os
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +26,9 @@ def _get_session_secret() -> str:
     if secret:
         return secret
     if os.environ.get("ENV") == "production":
-        raise RuntimeError("SESSION_SECRET must be set in production — refusing to use dev fallback")
+        raise RuntimeError(
+            "SESSION_SECRET must be set in production — refusing to use dev fallback"
+        )
     return _DEV_SESSION_SECRET
 
 
@@ -45,6 +46,7 @@ def _get_firebase_credentials():
     if service_account_json:
         try:
             from firebase_admin import credentials
+
             cred_dict = json.loads(service_account_json)
             return credentials.Certificate(cred_dict)
         except (json.JSONDecodeError, ValueError) as e:
@@ -56,6 +58,7 @@ def _get_firebase_credentials():
     if cred_path and os.path.exists(cred_path):
         try:
             from firebase_admin import credentials
+
             return credentials.Certificate(cred_path)
         except Exception as e:
             logger.error(f"Failed to load credentials from {cred_path}: {e}")
@@ -64,6 +67,7 @@ def _get_firebase_credentials():
     # Option 3: Application default credentials (Cloud Run/GCE)
     try:
         from firebase_admin import credentials
+
         return credentials.ApplicationDefault()
     except Exception:
         return None
@@ -124,7 +128,7 @@ def init_firebase() -> bool:
         return False
 
 
-def verify_firebase_token(token: str) -> Optional[dict]:
+def verify_firebase_token(token: str) -> dict | None:
     """
     Verify a Firebase ID token.
 
@@ -165,7 +169,7 @@ def verify_firebase_token(token: str) -> Optional[dict]:
         return None
 
 
-def verify_iap_token(token: str) -> Optional[dict]:
+def verify_iap_token(token: str) -> dict | None:
     """
     Verify a Google Identity-Aware Proxy (IAP) JWT.
 
@@ -223,31 +227,27 @@ def create_session_token(user_id: str, email: str, expires_in_hours: int = 24) -
     Returns:
         Base64-encoded signed token
     """
-    import hmac
-    import hashlib
     import base64
+    import hashlib
+    import hmac
     from datetime import timedelta
 
     secret = _get_session_secret()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires = now + timedelta(hours=expires_in_hours)
 
     # Create payload
     payload = f"{user_id}:{email}:{int(now.timestamp())}:{int(expires.timestamp())}"
 
     # Sign with HMAC
-    signature = hmac.new(
-        secret.encode(),
-        payload.encode(),
-        hashlib.sha256
-    ).hexdigest()
+    signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
     # Combine and encode
     token = f"{payload}:{signature}"
     return base64.urlsafe_b64encode(token.encode()).decode()
 
 
-def verify_session_token(token: str) -> Optional[dict]:
+def verify_session_token(token: str) -> dict | None:
     """
     Verify a session token created by create_session_token.
 
@@ -257,9 +257,9 @@ def verify_session_token(token: str) -> Optional[dict]:
     Returns:
         Decoded claims if valid and not expired, None otherwise.
     """
-    import hmac
-    import hashlib
     import base64
+    import hashlib
+    import hmac
 
     secret = _get_session_secret()
 
@@ -275,18 +275,14 @@ def verify_session_token(token: str) -> Optional[dict]:
 
         # Verify signature
         payload = f"{user_id}:{email}:{issued_at}:{expires_at}"
-        expected_signature = hmac.new(
-            secret.encode(),
-            payload.encode(),
-            hashlib.sha256
-        ).hexdigest()
+        expected_signature = hmac.new(secret.encode(), payload.encode(), hashlib.sha256).hexdigest()
 
         if not hmac.compare_digest(signature, expected_signature):
             logger.warning("Session token signature mismatch")
             return None
 
         # Check expiration
-        now = datetime.now(timezone.utc).timestamp()
+        now = datetime.now(UTC).timestamp()
         if now > int(expires_at):
             logger.debug("Session token expired")
             return None

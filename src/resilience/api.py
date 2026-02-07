@@ -6,12 +6,11 @@ and retry statistics.
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
 from .circuit_breaker import CircuitBreaker, CircuitState
 from .rate_limiter import RateLimiter
 
@@ -29,17 +28,11 @@ async def list_circuits(_: None = Depends(RoleChecker(UserRole.ANALYST))):
     Requires ANALYST role.
     """
     circuits = CircuitBreaker.all()
-    return {
-        "circuits": [cb.to_dict() for cb in circuits.values()],
-        "count": len(circuits)
-    }
+    return {"circuits": [cb.to_dict() for cb in circuits.values()], "count": len(circuits)}
 
 
 @router.get("/circuits/{name}", summary="Get circuit breaker status")
-async def get_circuit(
-    name: str,
-    _: None = Depends(RoleChecker(UserRole.ANALYST))
-):
+async def get_circuit(name: str, _: None = Depends(RoleChecker(UserRole.ANALYST))):
     """Get status of a specific circuit breaker."""
     cb = CircuitBreaker.get(name)
     if not cb:
@@ -48,10 +41,7 @@ async def get_circuit(
 
 
 @router.post("/circuits/{name}/reset", summary="Reset a circuit breaker")
-async def reset_circuit(
-    name: str,
-    _: None = Depends(RoleChecker(UserRole.COMMANDER))
-):
+async def reset_circuit(name: str, _: None = Depends(RoleChecker(UserRole.COMMANDER))):
     """
     Manually reset a circuit breaker to CLOSED state.
 
@@ -72,7 +62,7 @@ async def reset_circuit(
         "circuit": name,
         "previous_state": old_state.value,
         "current_state": cb.state.value,
-        "message": f"Circuit '{name}' has been reset"
+        "message": f"Circuit '{name}' has been reset",
     }
 
 
@@ -85,17 +75,11 @@ async def list_rate_limits(_: None = Depends(RoleChecker(UserRole.ANALYST))):
     Requires ANALYST role.
     """
     limiters = RateLimiter.all()
-    return {
-        "rate_limiters": [rl.to_dict() for rl in limiters.values()],
-        "count": len(limiters)
-    }
+    return {"rate_limiters": [rl.to_dict() for rl in limiters.values()], "count": len(limiters)}
 
 
 @router.get("/rate-limits/{name}", summary="Get rate limiter status")
-async def get_rate_limit(
-    name: str,
-    _: None = Depends(RoleChecker(UserRole.ANALYST))
-):
+async def get_rate_limit(name: str, _: None = Depends(RoleChecker(UserRole.ANALYST))):
     """Get status of a specific rate limiter."""
     rl = RateLimiter.get(name)
     if not rl:
@@ -113,15 +97,9 @@ async def resilience_health():
     circuits = CircuitBreaker.all()
     limiters = RateLimiter.all()
 
-    open_circuits = [
-        name for name, cb in circuits.items()
-        if cb.state == CircuitState.OPEN
-    ]
+    open_circuits = [name for name, cb in circuits.items() if cb.state == CircuitState.OPEN]
 
-    exhausted_limiters = [
-        name for name, rl in limiters.items()
-        if rl.available_tokens < 1
-    ]
+    exhausted_limiters = [name for name, rl in limiters.items() if rl.available_tokens < 1]
 
     health_status = "healthy"
     if open_circuits:
@@ -140,7 +118,7 @@ async def resilience_health():
             "total": len(limiters),
             "exhausted": len(exhausted_limiters),
             "exhausted_names": exhausted_limiters,
-        }
+        },
     }
 
 

@@ -8,9 +8,9 @@ Provides:
 - Risk classification
 """
 
-from .scoring import SignalScorer, ScoringResult
 from .features import FeatureExtractor
 from .models import PredictionConfig, PredictionResult
+from .scoring import ScoringResult, SignalScorer
 
 __all__ = [
     "SignalScorer",

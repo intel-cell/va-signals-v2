@@ -20,8 +20,8 @@ import sys
 from datetime import datetime
 
 from src.db import insert_source_run
-from src.provenance import utc_now_iso
 from src.notify_email import send_error_alert
+from src.provenance import utc_now_iso
 
 logging.basicConfig(
     level=logging.INFO,
@@ -47,19 +47,19 @@ def run_sync():
     errors = []
     status = "SUCCESS"
     records_fetched = 0
-    
+
     logger.info("Starting battlefield sync...")
-    
+
     try:
         results = sync_all_sources()
-        
+
         total_vehicles = sum(r.get("created_vehicles", 0) for r in results.values())
         total_events = sum(r.get("created_events", 0) for r in results.values())
         records_fetched = total_vehicles + total_events
-        
+
         logger.info(f"Sync complete: {total_vehicles} vehicles, {total_events} events")
         logger.info(f"Results: {json.dumps(results, indent=2)}")
-        
+
     except Exception as e:
         status = "ERROR"
         errors.append(f"EXCEPTION: {repr(e)}")
@@ -67,7 +67,7 @@ def run_sync():
         results = {}
 
     ended_at = utc_now_iso()
-    
+
     run_record = {
         "source_id": "battlefield_sync",
         "started_at": started_at,
@@ -76,7 +76,7 @@ def run_sync():
         "records_fetched": records_fetched,
         "errors": errors,
     }
-    
+
     try:
         insert_source_run(run_record)
     except Exception as e:
@@ -98,16 +98,16 @@ def run_detection():
     records_fetched = 0
 
     logger.info("Starting gate detection...")
-    
+
     try:
         results = run_all_detections()
-        
+
         total_alerts = sum(r.get("alerts_created", 0) for r in results.values())
         records_fetched = total_alerts
-        
+
         logger.info(f"Detection complete: {total_alerts} alerts created")
         logger.info(f"Results: {json.dumps(results, indent=2)}")
-        
+
     except Exception as e:
         status = "ERROR"
         errors.append(f"EXCEPTION: {repr(e)}")
@@ -115,7 +115,7 @@ def run_detection():
         results = {}
 
     ended_at = utc_now_iso()
-    
+
     run_record = {
         "source_id": "battlefield_detection",
         "started_at": started_at,
@@ -124,7 +124,7 @@ def run_detection():
         "records_fetched": records_fetched,
         "errors": errors,
     }
-    
+
     try:
         insert_source_run(run_record)
     except Exception as e:
@@ -138,7 +138,7 @@ def run_detection():
 
 def show_stats():
     """Show dashboard statistics."""
-    from src.battlefield.db_helpers import get_dashboard_stats, get_critical_gates
+    from src.battlefield.db_helpers import get_critical_gates, get_dashboard_stats
 
     stats = get_dashboard_stats()
     gates = get_critical_gates(days=14)
@@ -152,7 +152,7 @@ def show_stats():
     for vtype, count in stats["by_type"].items():
         print(f"  - {vtype}: {count}")
 
-    print(f"\nPOSTURE:")
+    print("\nPOSTURE:")
     for posture, count in stats["by_posture"].items():
         print(f"  - {posture}: {count}")
 

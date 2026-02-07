@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
 
 import yaml
 
@@ -12,6 +11,7 @@ from src.signals.engine.parser import validate_expression
 @dataclass
 class CategorySchema:
     """Loaded category schema."""
+
     category_id: str
     description: str
     priority: str
@@ -35,7 +35,7 @@ def load_category_schema(category_id: str) -> CategorySchema:
     if not path.exists():
         raise FileNotFoundError(f"Schema not found: {path}")
 
-    with open(path, "r") as f:
+    with open(path) as f:
         raw = yaml.safe_load(f)
 
     # Validate all trigger conditions
@@ -58,7 +58,7 @@ def load_category_schema(category_id: str) -> CategorySchema:
     )
 
 
-def get_indicator(schema: CategorySchema, indicator_id: str) -> Optional[dict]:
+def get_indicator(schema: CategorySchema, indicator_id: str) -> dict | None:
     """Get indicator by ID from schema."""
     for indicator in schema.indicators:
         if indicator.get("indicator_id") == indicator_id:
@@ -66,7 +66,7 @@ def get_indicator(schema: CategorySchema, indicator_id: str) -> Optional[dict]:
     return None
 
 
-def get_trigger(schema: CategorySchema, trigger_id: str) -> Optional[dict]:
+def get_trigger(schema: CategorySchema, trigger_id: str) -> dict | None:
     """Get trigger by ID from schema."""
     for indicator in schema.indicators:
         for trigger in indicator.get("triggers", []):
@@ -75,7 +75,7 @@ def get_trigger(schema: CategorySchema, trigger_id: str) -> Optional[dict]:
     return None
 
 
-def get_routing_rule(schema: CategorySchema, trigger_id: str) -> Optional[dict]:
+def get_routing_rule(schema: CategorySchema, trigger_id: str) -> dict | None:
     """Get routing rule for a trigger."""
     for rule in schema.routing:
         if rule.get("trigger_id") == trigger_id:

@@ -14,11 +14,10 @@ Usage:
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
-import yaml
 from jsonschema import validate
 
 # Allow running as a script (python src/run_authority_docs.py) by setting package context
@@ -28,16 +27,16 @@ if __name__ == "__main__" and __package__ is None:
     sys.path.append(str(Path(__file__).resolve().parent.parent))
     __package__ = "src"
 
-from .notify_email import send_new_docs_alert, send_error_alert
-from .provenance import utc_now_iso
 from .db import init_db, insert_source_run, upsert_authority_doc
+from .fetch_omb_guidance import fetch_omb_guidance_docs
+from .fetch_omb_internal_drop import scan_omb_drop_folder
+from .fetch_reginfo_pra import fetch_va_pra_submissions
+from .fetch_va_pubs import fetch_va_pubs_docs
 
 # Import all ingestors
 from .fetch_whitehouse import fetch_whitehouse_docs
-from .fetch_omb_guidance import fetch_omb_guidance_docs
-from .fetch_omb_internal_drop import scan_omb_drop_folder
-from .fetch_va_pubs import fetch_va_pubs_docs
-from .fetch_reginfo_pra import fetch_va_pra_submissions
+from .notify_email import send_error_alert, send_new_docs_alert
+from .provenance import utc_now_iso
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -71,7 +70,7 @@ AUTHORITY_SOURCES = {
 }
 
 
-def load_run_schema() -> Dict[str, Any]:
+def load_run_schema() -> dict[str, Any]:
     """Load the source run JSON schema."""
     schema_path = ROOT / "schemas" / "source_run.schema.json"
     if schema_path.exists():
@@ -90,16 +89,16 @@ def load_run_schema() -> Dict[str, Any]:
     }
 
 
-def write_run_record(run_record: Dict[str, Any], source_id: str) -> None:
+def write_run_record(run_record: dict[str, Any], source_id: str) -> None:
     """Write run record to output file."""
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     filename = f"AUTHORITY_{source_id.upper()}_{stamp}.json"
     (outdir / filename).write_text(json.dumps(run_record, indent=2), encoding="utf-8")
 
 
-def run_source(source_id: str) -> Dict[str, Any]:
+def run_source(source_id: str) -> dict[str, Any]:
     """
     Run a single authority source.
 
@@ -113,9 +112,9 @@ def run_source(source_id: str) -> Dict[str, Any]:
     default_args = source["default_args"]
 
     started_at = utc_now_iso()
-    errors: List[str] = []
+    errors: list[str] = []
     status = "SUCCESS"
-    new_docs: List[Dict[str, str]] = []
+    new_docs: list[dict[str, str]] = []
     records_fetched = 0
 
     try:
@@ -131,12 +130,14 @@ def run_source(source_id: str) -> Dict[str, Any]:
                 try:
                     is_new = upsert_authority_doc(doc)
                     if is_new:
-                        new_docs.append({
-                            "doc_id": doc["doc_id"],
-                            "title": doc["title"][:100],
-                            "source_url": doc["source_url"],
-                            "authority_type": doc["authority_type"],
-                        })
+                        new_docs.append(
+                            {
+                                "doc_id": doc["doc_id"],
+                                "title": doc["title"][:100],
+                                "source_url": doc["source_url"],
+                                "authority_type": doc["authority_type"],
+                            }
+                        )
                 except Exception as e:
                     errors.append(f"Error upserting {doc.get('doc_id', 'unknown')}: {repr(e)}")
 
@@ -163,7 +164,7 @@ def run_source(source_id: str) -> Dict[str, Any]:
     return run_record, new_docs
 
 
-def run_authority_docs(sources: List[str] = None) -> Dict[str, Any]:
+def run_authority_docs(sources: list[str] = None) -> dict[str, Any]:
     """
     Run authority document collection.
 
@@ -180,10 +181,10 @@ def run_authority_docs(sources: List[str] = None) -> Dict[str, Any]:
         sources = list(AUTHORITY_SOURCES.keys())
 
     started_at = utc_now_iso()
-    all_errors: List[str] = []
+    all_errors: list[str] = []
     total_fetched = 0
-    all_new_docs: List[Dict[str, str]] = []
-    source_results: Dict[str, Any] = {}
+    all_new_docs: list[dict[str, str]] = []
+    source_results: dict[str, Any] = {}
 
     for source_id in sources:
         print(f"Running {source_id}...")
@@ -248,16 +249,19 @@ def run_authority_docs(sources: List[str] = None) -> Dict[str, Any]:
     outdir = ROOT / "outputs" / "runs"
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "AUTHORITY_LATEST.json").write_text(
-        json.dumps({
-            "retrieved_at": utc_now_iso(),
-            "new_docs": all_new_docs,
-            "source_results": source_results,
-        }, indent=2),
+        json.dumps(
+            {
+                "retrieved_at": utc_now_iso(),
+                "new_docs": all_new_docs,
+                "source_results": source_results,
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
     # Print summary
-    print(f"\n=== Authority Docs Summary ===")
+    print("\n=== Authority Docs Summary ===")
     print(f"Status: {final_status}")
     print(f"Total fetched: {total_fetched}")
     print(f"New documents: {len(all_new_docs)}")

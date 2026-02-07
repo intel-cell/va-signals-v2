@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-from typing import Optional
 
 
 def get_env_or_keychain(
@@ -12,7 +11,7 @@ def get_env_or_keychain(
     keychain_service: str,
     user_env: str = "USER",
     allow_missing: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Return env var if set, else fallback to Keychain lookup."""
     value = os.environ.get(env_var)
     if value:
@@ -46,7 +45,7 @@ def get_secret_env(
     keychain_service: str,
     user_env: str = "USER",
     allow_missing: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """Alias for get_env_or_keychain to match spec wording."""
     return get_env_or_keychain(
         env_var,

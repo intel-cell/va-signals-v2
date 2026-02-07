@@ -6,18 +6,16 @@ Handles tenant CRUD, membership, and settings management.
 
 import logging
 import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime
 
 from ..db import connect, execute
 from .models import (
     Tenant,
-    TenantSettings,
+    TenantCreateRequest,
     TenantMember,
     TenantPlan,
+    TenantSettings,
     TenantStatus,
-    TenantCreateRequest,
-    TenantUpdateRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,7 +45,7 @@ class TenantManager:
             Created Tenant object
         """
         tenant_id = f"tenant_{uuid.uuid4().hex[:12]}"
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         con = connect()
         try:
@@ -76,7 +74,7 @@ class TenantManager:
                     "owner_user_id": owner_user_id,
                     "billing_email": request.billing_email,
                     "domain": request.domain,
-                }
+                },
             )
 
             # Create default settings
@@ -98,7 +96,7 @@ class TenantManager:
                     "role": "commander",
                     "joined_at": now.isoformat(),
                     "is_primary": True,
-                }
+                },
             )
 
             con.commit()
@@ -124,12 +122,7 @@ class TenantManager:
         finally:
             con.close()
 
-    def _create_default_settings(
-        self,
-        con,
-        tenant_id: str,
-        plan: TenantPlan
-    ) -> None:
+    def _create_default_settings(self, con, tenant_id: str, plan: TenantPlan) -> None:
         """Create default settings based on plan."""
         # Plan-specific defaults
         plan_settings = {
@@ -172,7 +165,7 @@ class TenantManager:
         }
 
         settings = plan_settings.get(plan, plan_settings[TenantPlan.FREE])
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         execute(
             con,
@@ -200,10 +193,10 @@ class TenantManager:
                 "retention": settings["data_retention_days"],
                 "created_at": now,
                 "updated_at": now,
-            }
+            },
         )
 
-    def get_tenant(self, tenant_id: str) -> Optional[Tenant]:
+    def get_tenant(self, tenant_id: str) -> Tenant | None:
         """Get tenant by ID."""
         con = connect()
         try:
@@ -216,7 +209,7 @@ class TenantManager:
                 FROM tenants
                 WHERE tenant_id = :tenant_id
                 """,
-                {"tenant_id": tenant_id}
+                {"tenant_id": tenant_id},
             )
             row = cur.fetchone()
             if not row:
@@ -238,15 +231,11 @@ class TenantManager:
         finally:
             con.close()
 
-    def get_tenant_by_slug(self, slug: str) -> Optional[Tenant]:
+    def get_tenant_by_slug(self, slug: str) -> Tenant | None:
         """Get tenant by URL slug."""
         con = connect()
         try:
-            cur = execute(
-                con,
-                "SELECT tenant_id FROM tenants WHERE slug = :slug",
-                {"slug": slug}
-            )
+            cur = execute(con, "SELECT tenant_id FROM tenants WHERE slug = :slug", {"slug": slug})
             row = cur.fetchone()
             if not row:
                 return None
@@ -254,7 +243,7 @@ class TenantManager:
         finally:
             con.close()
 
-    def get_tenant_settings(self, tenant_id: str) -> Optional[TenantSettings]:
+    def get_tenant_settings(self, tenant_id: str) -> TenantSettings | None:
         """Get tenant settings."""
         con = connect()
         try:
@@ -272,7 +261,7 @@ class TenantManager:
                 FROM tenant_settings
                 WHERE tenant_id = :tenant_id
                 """,
-                {"tenant_id": tenant_id}
+                {"tenant_id": tenant_id},
             )
             row = cur.fetchone()
             if not row:
@@ -317,7 +306,7 @@ class TenantManager:
                 WHERE tm.user_id = :user_id
                 ORDER BY tm.is_primary DESC, t.name
                 """,
-                {"user_id": user_id}
+                {"user_id": user_id},
             )
             return [
                 {
@@ -348,7 +337,7 @@ class TenantManager:
                 WHERE tm.tenant_id = :tenant_id
                 ORDER BY tm.is_primary DESC, tm.joined_at
                 """,
-                {"tenant_id": tenant_id}
+                {"tenant_id": tenant_id},
             )
             return [
                 {
@@ -365,15 +354,11 @@ class TenantManager:
             con.close()
 
     def add_member(
-        self,
-        tenant_id: str,
-        user_id: str,
-        role: str,
-        invited_by: Optional[str] = None
+        self, tenant_id: str, user_id: str, role: str, invited_by: str | None = None
     ) -> TenantMember:
         """Add a user to a tenant."""
         con = connect()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         try:
             execute(
                 con,
@@ -393,7 +378,7 @@ class TenantManager:
                     "joined_at": now.isoformat(),
                     "invited_by": invited_by,
                     "is_primary": False,
-                }
+                },
             )
             con.commit()
             logger.info(f"Added user {user_id} to tenant {tenant_id} with role {role}")
@@ -424,7 +409,7 @@ class TenantManager:
                 WHERE tenant_id = :tenant_id AND user_id = :user_id
                 AND is_primary = FALSE
                 """,
-                {"tenant_id": tenant_id, "user_id": user_id}
+                {"tenant_id": tenant_id, "user_id": user_id},
             )
             con.commit()
             removed = cur.rowcount > 0
@@ -434,12 +419,7 @@ class TenantManager:
         finally:
             con.close()
 
-    def update_member_role(
-        self,
-        tenant_id: str,
-        user_id: str,
-        new_role: str
-    ) -> bool:
+    def update_member_role(self, tenant_id: str, user_id: str, new_role: str) -> bool:
         """Update a member's role in a tenant."""
         con = connect()
         try:
@@ -450,7 +430,7 @@ class TenantManager:
                 SET role = :role
                 WHERE tenant_id = :tenant_id AND user_id = :user_id
                 """,
-                {"tenant_id": tenant_id, "user_id": user_id, "role": new_role}
+                {"tenant_id": tenant_id, "user_id": user_id, "role": new_role},
             )
             con.commit()
             return cur.rowcount > 0
@@ -467,13 +447,13 @@ class TenantManager:
                 SELECT 1 FROM tenant_members
                 WHERE tenant_id = :tenant_id AND user_id = :user_id
                 """,
-                {"tenant_id": tenant_id, "user_id": user_id}
+                {"tenant_id": tenant_id, "user_id": user_id},
             )
             return cur.fetchone() is not None
         finally:
             con.close()
 
-    def get_member_role(self, tenant_id: str, user_id: str) -> Optional[str]:
+    def get_member_role(self, tenant_id: str, user_id: str) -> str | None:
         """Get user's role in a tenant."""
         con = connect()
         try:
@@ -483,7 +463,7 @@ class TenantManager:
                 SELECT role FROM tenant_members
                 WHERE tenant_id = :tenant_id AND user_id = :user_id
                 """,
-                {"tenant_id": tenant_id, "user_id": user_id}
+                {"tenant_id": tenant_id, "user_id": user_id},
             )
             row = cur.fetchone()
             return row[0] if row else None

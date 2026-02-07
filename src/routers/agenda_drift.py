@@ -1,14 +1,13 @@
 """Agenda drift deviation detection endpoints."""
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..db import connect, execute, table_exists
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from ..db import connect, execute, table_exists
 from ._helpers import utc_now_iso
 
 logger = logging.getLogger(__name__)
@@ -17,6 +16,7 @@ router = APIRouter(tags=["Agenda Drift"])
 
 
 # --- Pydantic Models ---
+
 
 class ADDeviationEvent(BaseModel):
     id: int
@@ -27,7 +27,7 @@ class ADDeviationEvent(BaseModel):
     cos_dist: float
     zscore: float
     detected_at: str
-    note: Optional[str]
+    note: str | None
 
 
 class ADDeviationResponse(BaseModel):
@@ -43,6 +43,7 @@ class ADMemberStats(BaseModel):
 
 
 # --- Endpoints ---
+
 
 @router.get("/api/agenda-drift/events", response_model=ADDeviationResponse)
 def get_ad_events(
@@ -111,7 +112,7 @@ def get_ad_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
             "members_with_baselines": 0,
             "total_events": 0,
             "members": [],
-            "checked_at": utc_now_iso()
+            "checked_at": utc_now_iso(),
         }
 
     # Total members
@@ -141,7 +142,7 @@ def get_ad_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
            FROM ad_deviation_events e
            JOIN ad_members m ON e.member_id = m.member_id
            GROUP BY m.member_id
-           ORDER BY event_count DESC"""
+           ORDER BY event_count DESC""",
     )
     rows = cur.fetchall()
     con.close()
@@ -163,7 +164,7 @@ def get_ad_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
         "members_with_baselines": members_with_baselines,
         "total_events": total_events,
         "members": [m.model_dump() for m in members],
-        "checked_at": utc_now_iso()
+        "checked_at": utc_now_iso(),
     }
 
 

@@ -10,17 +10,16 @@ Provides:
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import time
 import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Any
+from datetime import UTC, datetime, timedelta
 from queue import Queue
 from threading import Thread
+from typing import Any
 
-from fastapi import Request, Response
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from .models import AuthContext
@@ -34,12 +33,13 @@ _audit_worker_started = False
 
 # --- Audit Log Entry ---
 
+
 def _generate_log_id() -> str:
     """Generate unique audit log ID."""
-    return f"AUDIT_{datetime.now(timezone.utc).strftime('%Y%m%d')}_{uuid.uuid4().hex[:12]}"
+    return f"AUDIT_{datetime.now(UTC).strftime('%Y%m%d')}_{uuid.uuid4().hex[:12]}"
 
 
-def _sanitize_body(body: Optional[str], max_length: int = 10000) -> Optional[str]:
+def _sanitize_body(body: str | None, max_length: int = 10000) -> str | None:
     """Sanitize request body, removing sensitive fields and truncating."""
     if not body:
         return None
@@ -66,6 +66,7 @@ def _sanitize_body(body: Optional[str], max_length: int = 10000) -> Optional[str
 
 
 # --- Async Audit Worker ---
+
 
 def _is_contaminated(entry: dict) -> bool:
     """Check if an audit entry contains test contamination or injection attempts."""
@@ -112,7 +113,7 @@ def _audit_worker():
                     :request_body, :response_status, :ip_address, :user_agent,
                     :duration_ms, :success
                 )""",
-                entry
+                entry,
             )
             con.commit()
             con.close()
@@ -135,18 +136,18 @@ def _start_audit_worker():
 
 
 def log_audit(
-    user_id: Optional[str],
-    user_email: Optional[str],
+    user_id: str | None,
+    user_email: str | None,
     action: str,
-    resource: Optional[str] = None,
-    resource_id: Optional[str] = None,
-    request_method: Optional[str] = None,
-    request_path: Optional[str] = None,
-    request_body: Optional[str] = None,
-    response_status: Optional[int] = None,
-    ip_address: Optional[str] = None,
-    user_agent: Optional[str] = None,
-    duration_ms: Optional[int] = None,
+    resource: str | None = None,
+    resource_id: str | None = None,
+    request_method: str | None = None,
+    request_path: str | None = None,
+    request_body: str | None = None,
+    response_status: int | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+    duration_ms: int | None = None,
     success: bool = True,
 ):
     """
@@ -158,7 +159,7 @@ def log_audit(
 
     entry = {
         "log_id": _generate_log_id(),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "user_id": user_id,
         "user_email": user_email,
         "action": action,
@@ -178,6 +179,7 @@ def log_audit(
 
 
 # --- Audit Middleware ---
+
 
 class AuditMiddleware(BaseHTTPMiddleware):
     """
@@ -240,7 +242,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         duration_ms = int((time.time() - start_time) * 1000)
 
         # Get user context if available
-        auth_context: Optional[AuthContext] = getattr(request.state, "auth_context", None)
+        auth_context: AuthContext | None = getattr(request.state, "auth_context", None)
         user_id = auth_context.user_id if auth_context else None
         user_email = auth_context.email if auth_context else None
 
@@ -299,7 +301,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         }
         return f"api:{method_actions.get(method, method.lower())}"
 
-    def _extract_resource(self, path: str) -> tuple[Optional[str], Optional[str]]:
+    def _extract_resource(self, path: str) -> tuple[str | None, str | None]:
         """Extract resource type and ID from path."""
         # Remove /api/ prefix
         clean_path = path.lstrip("/api/").lstrip("/")
@@ -316,14 +318,15 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
 # --- Query Functions ---
 
+
 def get_audit_logs(
-    user_id: Optional[str] = None,
-    user_email: Optional[str] = None,
-    action: Optional[str] = None,
-    resource: Optional[str] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-    success_only: Optional[bool] = None,
+    user_id: str | None = None,
+    user_email: str | None = None,
+    action: str | None = None,
+    resource: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    success_only: bool | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict]:
@@ -391,7 +394,7 @@ def get_audit_stats(days: int = 7) -> dict:
     """
     from ..db import connect, execute
 
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    start_date = (datetime.now(UTC) - timedelta(days=days)).isoformat()
 
     con = connect()
 
@@ -399,7 +402,7 @@ def get_audit_stats(days: int = 7) -> dict:
     cur = execute(
         con,
         "SELECT COUNT(*) FROM audit_log WHERE timestamp >= :start_date",
-        {"start_date": start_date}
+        {"start_date": start_date},
     )
     total_requests = cur.fetchone()[0]
 
@@ -412,7 +415,7 @@ def get_audit_stats(days: int = 7) -> dict:
            GROUP BY action
            ORDER BY count DESC
            LIMIT 20""",
-        {"start_date": start_date}
+        {"start_date": start_date},
     )
     by_action = {row[0]: row[1] for row in cur.fetchall()}
 
@@ -425,7 +428,7 @@ def get_audit_stats(days: int = 7) -> dict:
            GROUP BY user_email
            ORDER BY count DESC
            LIMIT 10""",
-        {"start_date": start_date}
+        {"start_date": start_date},
     )
     by_user = {row[0]: row[1] for row in cur.fetchall()}
 
@@ -437,7 +440,7 @@ def get_audit_stats(days: int = 7) -> dict:
              COUNT(*) as total
            FROM audit_log
            WHERE timestamp >= :start_date""",
-        {"start_date": start_date}
+        {"start_date": start_date},
     )
     row = cur.fetchone()
     errors = row[0] or 0
@@ -450,7 +453,7 @@ def get_audit_stats(days: int = 7) -> dict:
         """SELECT AVG(duration_ms)
            FROM audit_log
            WHERE timestamp >= :start_date AND duration_ms IS NOT NULL""",
-        {"start_date": start_date}
+        {"start_date": start_date},
     )
     avg_duration = cur.fetchone()[0] or 0
 
@@ -468,8 +471,8 @@ def get_audit_stats(days: int = 7) -> dict:
 
 
 def export_audit_logs_csv(
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
 ) -> str:
     """
     Export audit logs to CSV format.
@@ -497,6 +500,7 @@ def export_audit_logs_csv(
 
 
 # --- Cleanup ---
+
 
 def shutdown_audit_worker():
     """Gracefully shutdown the audit worker."""
@@ -535,7 +539,7 @@ def cleanup_old_audit_logs(retention_days: int | None = None, dry_run: bool = Fa
     if retention_days is None:
         retention_days = get_retention_days()
 
-    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+    cutoff_date = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
 
     con = connect()
 
@@ -543,7 +547,7 @@ def cleanup_old_audit_logs(retention_days: int | None = None, dry_run: bool = Fa
     cur = execute(
         con,
         "SELECT COUNT(*) FROM audit_log WHERE timestamp < :cutoff_date",
-        {"cutoff_date": cutoff_date}
+        {"cutoff_date": cutoff_date},
     )
     count_to_delete = cur.fetchone()[0]
 
@@ -552,7 +556,7 @@ def cleanup_old_audit_logs(retention_days: int | None = None, dry_run: bool = Fa
         execute(
             con,
             "DELETE FROM audit_log WHERE timestamp < :cutoff_date",
-            {"cutoff_date": cutoff_date}
+            {"cutoff_date": cutoff_date},
         )
         con.commit()
         deleted = count_to_delete
@@ -584,7 +588,7 @@ def cleanup_old_signal_audit_logs(retention_days: int | None = None, dry_run: bo
     if retention_days is None:
         retention_days = get_retention_days()
 
-    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+    cutoff_date = (datetime.now(UTC) - timedelta(days=retention_days)).isoformat()
 
     con = connect()
 
@@ -592,7 +596,7 @@ def cleanup_old_signal_audit_logs(retention_days: int | None = None, dry_run: bo
     cur = execute(
         con,
         "SELECT COUNT(*) FROM signal_audit_log WHERE created_at < :cutoff_date",
-        {"cutoff_date": cutoff_date}
+        {"cutoff_date": cutoff_date},
     )
     count_to_delete = cur.fetchone()[0]
 
@@ -601,7 +605,7 @@ def cleanup_old_signal_audit_logs(retention_days: int | None = None, dry_run: bo
         execute(
             con,
             "DELETE FROM signal_audit_log WHERE created_at < :cutoff_date",
-            {"cutoff_date": cutoff_date}
+            {"cutoff_date": cutoff_date},
         )
         con.commit()
         deleted = count_to_delete

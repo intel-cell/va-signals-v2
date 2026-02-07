@@ -15,7 +15,7 @@ Usage:
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from .manager import ws_manager
 
@@ -36,11 +36,7 @@ async def notify_new_signal(signal: dict[str, Any]) -> int:
 
 
 async def notify_alert(
-    alert_type: str,
-    title: str,
-    message: str,
-    severity: str = "info",
-    data: Optional[dict] = None
+    alert_type: str, title: str, message: str, severity: str = "info", data: dict | None = None
 ) -> int:
     """
     Send an alert notification to all connected clients.
@@ -60,7 +56,7 @@ async def notify_alert(
         "title": title,
         "message": message,
         "severity": severity,
-        **(data or {})
+        **(data or {}),
     }
     return await ws_manager.broadcast_alert(alert)
 
@@ -91,7 +87,7 @@ async def notify_battlefield_update(update: dict[str, Any]) -> int:
     return await ws_manager.broadcast_battlefield(update)
 
 
-async def notify_source_health(source_id: str, status: str, details: Optional[dict] = None) -> int:
+async def notify_source_health(source_id: str, status: str, details: dict | None = None) -> int:
     """
     Notify about a source health change.
 
@@ -103,14 +99,13 @@ async def notify_source_health(source_id: str, status: str, details: Optional[di
     Returns:
         Number of clients notified
     """
-    return await ws_manager.broadcast({
-        "type": "source_health",
-        "data": {
-            "source_id": source_id,
-            "status": status,
-            **(details or {})
-        }
-    }, topic="alerts")
+    return await ws_manager.broadcast(
+        {
+            "type": "source_health",
+            "data": {"source_id": source_id, "status": status, **(details or {})},
+        },
+        topic="alerts",
+    )
 
 
 def notify_sync(func):
@@ -123,6 +118,7 @@ def notify_sync(func):
             # ... processing ...
             return notify_new_signal(signal)
     """
+
     def wrapper(*args, **kwargs):
         loop = asyncio.get_event_loop()
         if loop.is_running():
@@ -131,6 +127,7 @@ def notify_sync(func):
         else:
             # Run in a new loop
             loop.run_until_complete(func(*args, **kwargs))
+
     return wrapper
 
 
@@ -149,11 +146,7 @@ def notify_new_signal_sync(signal: dict[str, Any]) -> None:
 
 
 def notify_alert_sync(
-    alert_type: str,
-    title: str,
-    message: str,
-    severity: str = "info",
-    data: Optional[dict] = None
+    alert_type: str, title: str, message: str, severity: str = "info", data: dict | None = None
 ) -> None:
     """Synchronous version of notify_alert."""
     try:

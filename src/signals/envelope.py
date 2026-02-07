@@ -4,7 +4,7 @@ import hashlib
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 
 def normalize_text(text: str) -> str:
@@ -44,22 +44,22 @@ class Envelope:
     body_text: str
 
     # Classification hints (optional)
-    committee: Optional[str] = None  # HVAC | SVAC | null
-    subcommittee: Optional[str] = None
+    committee: str | None = None  # HVAC | SVAC | null
+    subcommittee: str | None = None
     topics: list[str] = field(default_factory=list)
 
     # Change detection
-    content_hash: Optional[str] = None
+    content_hash: str | None = None
     version: int = 1
 
     # Temporal
-    published_at: Optional[str] = None
+    published_at: str | None = None
     published_at_source: str = "derived"  # authority | derived
-    event_start_at: Optional[str] = None
+    event_start_at: str | None = None
 
     # Provenance
-    source_url: Optional[str] = None
-    fetched_at: Optional[str] = None
+    source_url: str | None = None
+    fetched_at: str | None = None
 
     # Structured metadata
     metadata: dict[str, Any] = field(default_factory=dict)

@@ -1,6 +1,6 @@
 """Federal Register + eCFR database functions."""
 
-from .core import connect, execute, _count_inserted_rows
+from .core import _count_inserted_rows, connect, execute
 
 
 def upsert_fr_seen(
@@ -135,7 +135,9 @@ def bulk_insert_fr_seen(docs: list[dict]) -> int:
     return inserted
 
 
-def upsert_ecfr_seen(doc_id: str, last_modified: str, etag: str, first_seen_at: str, source_url: str) -> bool:
+def upsert_ecfr_seen(
+    doc_id: str, last_modified: str, etag: str, first_seen_at: str, source_url: str
+) -> bool:
     """
     Returns True if inserted or changed; False if unchanged.
     Change detection is based on (last_modified, etag).

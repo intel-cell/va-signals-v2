@@ -9,41 +9,37 @@ Provides:
 - Current user info
 """
 
+import logging
 import os
 import time
 import uuid
-import logging
-from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request, Response, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from .models import (
-    User,
-    UserRole,
-    AuthContext,
-    LoginRequest,
-    LoginResponse,
-    TokenVerifyRequest,
-    TokenVerifyResponse,
-    UserCreateRequest,
-    UserUpdateRequest,
-    CurrentUserResponse,
-    SessionCreateRequest,
-    FirebaseConfigResponse,
+from .firebase_config import (
+    create_session_token,
+    verify_firebase_token,
 )
 from .middleware import (
+    clear_auth_cookies,
+    generate_csrf_token,
     get_current_user,
     require_auth,
     require_role,
-    generate_csrf_token,
     set_auth_cookies,
-    clear_auth_cookies,
 )
-from .firebase_config import (
-    verify_firebase_token,
-    create_session_token,
+from .models import (
+    AuthContext,
+    CurrentUserResponse,
+    FirebaseConfigResponse,
+    LoginRequest,
+    SessionCreateRequest,
+    TokenVerifyRequest,
+    TokenVerifyResponse,
+    UserCreateRequest,
+    UserRole,
+    UserUpdateRequest,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,6 +50,7 @@ router = APIRouter(prefix="/api/auth", tags=["authentication"])
 # =============================================================================
 # PER-IP RATE LIMITER FOR AUTH ENDPOINTS
 # =============================================================================
+
 
 class _AuthRateLimiter:
     """
@@ -88,9 +85,7 @@ class _AuthRateLimiter:
         # Periodic cleanup of stale entries (>10 min idle)
         if self._request_count % 1000 == 0:
             cutoff = now - 600
-            self._buckets = {
-                k: v for k, v in self._buckets.items() if v[1] > cutoff
-            }
+            self._buckets = {k: v for k, v in self._buckets.items() if v[1] > cutoff}
 
         if ip not in self._buckets:
             self._buckets[ip] = [float(self._burst), now]
@@ -138,6 +133,7 @@ def _check_auth_rate_limit(request: Request) -> None:
 
 # --- Firebase Config Endpoint ---
 
+
 @router.get("/config", response_model=FirebaseConfigResponse)
 async def get_firebase_config():
     """
@@ -154,7 +150,7 @@ async def get_firebase_config():
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail="Firebase not configured. Set FIREBASE_API_KEY environment variable."
+            detail="Firebase not configured. Set FIREBASE_API_KEY environment variable.",
         )
 
     return FirebaseConfigResponse(
@@ -169,21 +165,26 @@ async def get_firebase_config():
 
 # --- Database Helpers ---
 
+
 def _get_db():
     """Get database connection."""
     from ..db import connect
+
     return connect()
 
 
 def _execute(sql: str, params: dict = None):
     """Execute a query and return results as list of dicts."""
     from ..db import connect, execute, get_db_backend
+
     con = connect()
     if get_db_backend() == "postgres":
         # psycopg uses cursor-level row_factory via dict_row
         from psycopg.rows import dict_row
+
         cur = con.cursor(row_factory=dict_row)
         from ..db import _prepare_query
+
         sql, params = _prepare_query(sql, params)
         if params is None:
             cur.execute(sql)
@@ -191,9 +192,7 @@ def _execute(sql: str, params: dict = None):
             cur.execute(sql, params)
     else:
         # sqlite3 uses connection-level row_factory
-        con.row_factory = lambda cursor, row: dict(
-            zip([col[0] for col in cursor.description], row)
-        )
+        con.row_factory = lambda cursor, row: dict(zip([col[0] for col in cursor.description], row))
         cur = execute(con, sql, params)
     results = cur.fetchall()
     con.close()
@@ -203,27 +202,24 @@ def _execute(sql: str, params: dict = None):
 def _execute_write(sql: str, params: dict = None):
     """Execute a write query."""
     from ..db import connect, execute
+
     con = connect()
     execute(con, sql, params)
     con.commit()
     con.close()
 
 
-def _get_user_by_email(email: str) -> Optional[dict]:
+def _get_user_by_email(email: str) -> dict | None:
     """Get user by email."""
     results = _execute(
-        "SELECT * FROM users WHERE email = :email AND is_active = TRUE",
-        {"email": email}
+        "SELECT * FROM users WHERE email = :email AND is_active = TRUE", {"email": email}
     )
     return results[0] if results else None
 
 
-def _get_user_by_id(user_id: str) -> Optional[dict]:
+def _get_user_by_id(user_id: str) -> dict | None:
     """Get user by ID."""
-    results = _execute(
-        "SELECT * FROM users WHERE user_id = :user_id",
-        {"user_id": user_id}
-    )
+    results = _execute("SELECT * FROM users WHERE user_id = :user_id", {"user_id": user_id})
     return results[0] if results else None
 
 
@@ -239,11 +235,11 @@ def _create_or_update_user(user_id: str, email: str, display_name: str = None) -
                    display_name = COALESCE(:display_name, display_name)
                WHERE email = :email""",
             {
-                "now": datetime.now(timezone.utc).isoformat(),
+                "now": datetime.now(UTC).isoformat(),
                 "user_id": user_id,
                 "email": email,
                 "display_name": display_name,
-            }
+            },
         )
         return _get_user_by_email(email)
     else:
@@ -255,8 +251,8 @@ def _create_or_update_user(user_id: str, email: str, display_name: str = None) -
                 "user_id": user_id,
                 "email": email,
                 "display_name": display_name or email.split("@")[0],
-                "now": datetime.now(timezone.utc).isoformat(),
-            }
+                "now": datetime.now(UTC).isoformat(),
+            },
         )
         return _get_user_by_email(email)
 
@@ -264,6 +260,7 @@ def _create_or_update_user(user_id: str, email: str, display_name: str = None) -
 def _init_auth_tables():
     """Initialize auth database tables."""
     from ..db import init_db
+
     init_db()
     logger.info("Auth tables initialized")
 
@@ -300,6 +297,7 @@ def get_permissions(role: UserRole) -> list[str]:
 
 
 # --- Endpoints ---
+
 
 @router.post("/login", dependencies=[Depends(_check_auth_rate_limit)])
 async def login(request: Request, response: Response, body: LoginRequest):
@@ -423,7 +421,7 @@ async def google_oauth_redirect(request: Request):
     if not client_id:
         raise HTTPException(
             status_code=503,
-            detail="Google OAuth not configured. Please use Firebase Sign-In instead, or configure GOOGLE_CLIENT_ID."
+            detail="Google OAuth not configured. Please use Firebase Sign-In instead, or configure GOOGLE_CLIENT_ID.",
         )
 
     # Build the OAuth URL
@@ -441,6 +439,7 @@ async def google_oauth_redirect(request: Request):
     oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
     from fastapi.responses import RedirectResponse
+
     return RedirectResponse(url=oauth_url)
 
 
@@ -457,11 +456,13 @@ async def google_oauth_callback(
     Exchanges the authorization code for tokens and creates a session.
     """
     import os
+
     import httpx
 
     if error:
         # Redirect to login with error
         from fastapi.responses import RedirectResponse
+
         return RedirectResponse(url=f"/login.html?error={error}")
 
     if not code:
@@ -491,6 +492,7 @@ async def google_oauth_callback(
         if token_response.status_code != 200:
             logger.error(f"Token exchange failed: {token_response.text}")
             from fastapi.responses import RedirectResponse
+
             return RedirectResponse(url="/login.html?error=token_exchange_failed")
 
         tokens = token_response.json()
@@ -503,6 +505,7 @@ async def google_oauth_callback(
 
         if userinfo_response.status_code != 200:
             from fastapi.responses import RedirectResponse
+
             return RedirectResponse(url="/login.html?error=userinfo_failed")
 
         userinfo = userinfo_response.json()
@@ -527,6 +530,7 @@ async def google_oauth_callback(
 
     # Redirect to dashboard
     from fastapi.responses import RedirectResponse
+
     redirect_response = RedirectResponse(url="/", status_code=302)
     set_auth_cookies(redirect_response, session_token, csrf_token)
     return redirect_response
@@ -553,7 +557,9 @@ async def verify_token(request: Request, body: TokenVerifyRequest):
         user_id=claims.get("user_id"),
         email=claims.get("email"),
         role=role,
-        expires_at=datetime.fromtimestamp(claims["exp"], tz=timezone.utc).isoformat() if claims.get("exp") else None,
+        expires_at=datetime.fromtimestamp(claims["exp"], tz=UTC).isoformat()
+        if claims.get("exp")
+        else None,
     )
 
 
@@ -600,9 +606,10 @@ async def get_csrf_token(response: Response):
 
 # --- User Management (Commander Only) ---
 
+
 @router.get("/users")
 async def list_users(
-    role: Optional[str] = Query(None, description="Filter by role"),
+    role: str | None = Query(None, description="Filter by role"),
     user: AuthContext = Depends(require_role(UserRole.COMMANDER)),
 ):
     """
@@ -611,7 +618,7 @@ async def list_users(
     if role:
         users = _execute(
             "SELECT user_id, email, display_name, role, created_at, last_login, is_active FROM users WHERE role = :role ORDER BY created_at DESC",
-            {"role": role}
+            {"role": role},
         )
     else:
         users = _execute(
@@ -648,9 +655,9 @@ async def create_user(
             "email": body.email,
             "display_name": body.display_name or body.email.split("@")[0],
             "role": body.role.value,
-            "now": datetime.now(timezone.utc).isoformat(),
+            "now": datetime.now(UTC).isoformat(),
             "created_by": user.user_id,
-        }
+        },
     )
 
     new_user = _get_user_by_email(body.email)
@@ -688,10 +695,7 @@ async def update_user(
         params["display_name"] = body.display_name
 
     if updates:
-        _execute_write(
-            f"UPDATE users SET {', '.join(updates)} WHERE user_id = :user_id",
-            params
-        )
+        _execute_write(f"UPDATE users SET {', '.join(updates)} WHERE user_id = :user_id", params)
 
     updated_user = _get_user_by_id(target_user_id)
     return {"status": "updated", "user": updated_user}
@@ -716,8 +720,7 @@ async def deactivate_user(
         raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
 
     _execute_write(
-        "UPDATE users SET is_active = FALSE WHERE user_id = :user_id",
-        {"user_id": target_user_id}
+        "UPDATE users SET is_active = FALSE WHERE user_id = :user_id", {"user_id": target_user_id}
     )
 
     return {"status": "deactivated", "user_id": target_user_id}
@@ -739,11 +742,12 @@ async def init_tables(user: AuthContext = Depends(require_auth)):
 
 # --- Audit Endpoints (Commander Only) ---
 
+
 @router.get("/audit/logs")
 async def get_audit_log_entries(
-    user_email: Optional[str] = Query(None, description="Filter by user email"),
-    action: Optional[str] = Query(None, description="Filter by action (partial match)"),
-    resource: Optional[str] = Query(None, description="Filter by resource type"),
+    user_email: str | None = Query(None, description="Filter by user email"),
+    action: str | None = Query(None, description="Filter by action (partial match)"),
+    resource: str | None = Query(None, description="Filter by resource type"),
     days: int = Query(7, ge=1, le=90, description="Number of days to look back"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -754,10 +758,11 @@ async def get_audit_log_entries(
 
     Returns paginated audit log entries with filtering options.
     """
-    from .audit import get_audit_logs
     from datetime import timedelta
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    from .audit import get_audit_logs
+
+    start_date = datetime.now(UTC) - timedelta(days=days)
 
     logs = get_audit_logs(
         user_email=user_email,
@@ -802,22 +807,24 @@ async def export_audit_logs(
 
     Returns CSV file for download.
     """
-    from fastapi.responses import StreamingResponse
-    from .audit import export_audit_logs_csv
-    from datetime import timedelta
     import io
+    from datetime import timedelta
 
-    start_date = datetime.now(timezone.utc) - timedelta(days=days)
+    from fastapi.responses import StreamingResponse
+
+    from .audit import export_audit_logs_csv
+
+    start_date = datetime.now(UTC) - timedelta(days=days)
     csv_content = export_audit_logs_csv(start_date=start_date)
 
     # Create streaming response
     output = io.BytesIO(csv_content.encode("utf-8"))
     output.seek(0)
 
-    filename = f"audit_log_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"audit_log_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.csv"
 
     return StreamingResponse(
         output,
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

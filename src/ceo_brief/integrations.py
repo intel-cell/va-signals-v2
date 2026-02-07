@@ -9,12 +9,10 @@ Interfaces with BRAVO, CHARLIE, and DELTA commands for:
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
-from typing import Optional
+from datetime import date
 
 from .schema import (
     AskItem,
-    IssueArea,
     Likelihood,
     ObjectionResponse,
     RiskOpportunity,
@@ -33,14 +31,15 @@ def _bravo_available() -> bool:
     """Check if BRAVO evidence API is available."""
     try:
         from src.evidence import api as evidence_api
-        return hasattr(evidence_api, 'get_citations_for_topic')
+
+        return hasattr(evidence_api, "get_citations_for_topic")
     except ImportError:
         return False
 
 
 def get_bravo_citations(
     topic: str,
-    source_types: Optional[list[str]] = None,
+    source_types: list[str] | None = None,
     limit: int = 10,
 ) -> list[SourceCitation]:
     """
@@ -124,6 +123,7 @@ def validate_claim_with_bravo(
 
     try:
         from src.evidence.api import validate_claim
+
         return validate_claim(claim_text, source_ids)
     except Exception as e:
         logger.error(f"BRAVO validation error: {e}")
@@ -184,7 +184,8 @@ def _charlie_available() -> bool:
     """Check if CHARLIE impact API is available."""
     try:
         from src.signals.impact import db as impact_db
-        return hasattr(impact_db, 'get_impact_memos')
+
+        return hasattr(impact_db, "get_impact_memos")
     except ImportError:
         return False
 
@@ -194,7 +195,7 @@ class ImpactData:
     """Impact data from CHARLIE for CEO Brief enhancement."""
 
     memos: list[dict]
-    heat_map_text: Optional[str]
+    heat_map_text: str | None
     high_priority_count: int
     objections: list[dict]
 
@@ -231,9 +232,7 @@ def get_charlie_impact_data() -> ImpactData:
             heat_map_text = render_heat_map_for_brief(heat_map)
             # Count high priority issues
             issues = heat_map.get("issues", [])
-            high_priority_count = sum(
-                1 for i in issues if i.get("quadrant") == "high_priority"
-            )
+            high_priority_count = sum(1 for i in issues if i.get("quadrant") == "high_priority")
 
         # Get objections from library
         objections = []
@@ -258,18 +257,26 @@ def get_charlie_impact_data() -> ImpactData:
         return ImpactData(memos=[], heat_map_text=None, high_priority_count=0, objections=[])
 
 
-def charlie_memo_to_risk_opportunity(memo: dict) -> Optional[RiskOpportunity]:
+def charlie_memo_to_risk_opportunity(memo: dict) -> RiskOpportunity | None:
     """Convert a CHARLIE impact memo to a RiskOpportunity for CEO Brief."""
     try:
         posture = memo.get("our_posture", "monitor")
         is_risk = posture == "oppose"
 
         compliance = memo.get("compliance_exposure", "medium")
-        likelihood_map = {"critical": Likelihood.HIGH, "high": Likelihood.HIGH, "medium": Likelihood.MEDIUM}
+        likelihood_map = {
+            "critical": Likelihood.HIGH,
+            "high": Likelihood.HIGH,
+            "medium": Likelihood.MEDIUM,
+        }
         likelihood = likelihood_map.get(compliance, Likelihood.LOW)
 
         rep_risk = memo.get("reputational_risk", "low")
-        impact_map = {"critical": Likelihood.HIGH, "high": Likelihood.HIGH, "medium": Likelihood.MEDIUM}
+        impact_map = {
+            "critical": Likelihood.HIGH,
+            "high": Likelihood.HIGH,
+            "medium": Likelihood.MEDIUM,
+        }
         impact = impact_map.get(rep_risk, Likelihood.LOW)
 
         return RiskOpportunity(
@@ -284,7 +291,7 @@ def charlie_memo_to_risk_opportunity(memo: dict) -> Optional[RiskOpportunity]:
         return None
 
 
-def charlie_objection_to_brief(objection: dict) -> Optional[ObjectionResponse]:
+def charlie_objection_to_brief(objection: dict) -> ObjectionResponse | None:
     """Convert a CHARLIE objection to an ObjectionResponse for CEO Brief."""
     try:
         return ObjectionResponse(
@@ -305,7 +312,8 @@ def _delta_available() -> bool:
     """Check if DELTA battlefield API is available."""
     try:
         from src.battlefield import integrations as bf_int
-        return hasattr(bf_int, 'get_decision_points_for_brief')
+
+        return hasattr(bf_int, "get_decision_points_for_brief")
     except ImportError:
         return False
 
@@ -335,18 +343,15 @@ def get_delta_battlefield_data(days: int = 14) -> BattlefieldData:
 
     try:
         from src.battlefield.integrations import (
-            get_decision_points_for_brief,
             get_active_vehicles_summary,
+            get_decision_points_for_brief,
         )
 
         decision_points = get_decision_points_for_brief(days=days)
         summary = get_active_vehicles_summary()
 
         # Count critical decision points
-        critical_count = sum(
-            1 for dp in decision_points
-            if dp.get("importance") == "critical"
-        )
+        critical_count = sum(1 for dp in decision_points if dp.get("importance") == "critical")
 
         logger.info(
             f"DELTA: Got {len(decision_points)} decision points ({critical_count} critical), "
@@ -364,7 +369,7 @@ def get_delta_battlefield_data(days: int = 14) -> BattlefieldData:
         return BattlefieldData(decision_points=[], summary={}, critical_count=0)
 
 
-def delta_decision_point_to_ask(dp: dict) -> Optional[AskItem]:
+def delta_decision_point_to_ask(dp: dict) -> AskItem | None:
     """Convert a DELTA decision point to an AskItem for CEO Brief."""
     try:
         event_type = dp.get("event_type", "")

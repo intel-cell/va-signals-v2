@@ -5,12 +5,9 @@ Reviews aggregated deltas, identifies top 3-5 issues requiring CEO attention,
 drafts talking points, maps stakeholders, and generates ask list.
 """
 
-import os
-from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Optional
 
-from .aggregator import get_deltas_by_issue_area, get_top_deltas
+from .aggregator import get_top_deltas
 from .schema import (
     AggregatedDelta,
     AggregationResult,
@@ -187,7 +184,9 @@ def _draft_message_from_delta(delta: AggregatedDelta, index: int) -> Message:
         elif "proposed rule" in title.lower():
             text = f"VA is proposing changes to {_extract_topic(title)}. We have a window to submit comments and shape the final rule."
         else:
-            text = f"A new Federal Register notice on {_extract_topic(title)} requires our attention."
+            text = (
+                f"A new Federal Register notice on {_extract_topic(title)} requires our attention."
+            )
     elif delta.source_type == SourceType.BILL:
         action = delta.metadata.get("latest_action_text", "")
         if "passed" in action.lower():
@@ -245,7 +244,7 @@ def _extract_topic(title: str) -> str:
     return clean
 
 
-def _draft_ask_from_delta(delta: AggregatedDelta) -> Optional[AskItem]:
+def _draft_ask_from_delta(delta: AggregatedDelta) -> AskItem | None:
     """Generate a specific ask based on delta content."""
     if delta.source_type == SourceType.FEDERAL_REGISTER:
         if "proposed rule" in delta.title.lower():
@@ -302,7 +301,7 @@ def _draft_ask_from_delta(delta: AggregatedDelta) -> Optional[AskItem]:
     return None
 
 
-def _draft_risk_from_delta(delta: AggregatedDelta) -> Optional[RiskOpportunity]:
+def _draft_risk_from_delta(delta: AggregatedDelta) -> RiskOpportunity | None:
     """Generate risk/opportunity assessment from delta."""
     is_risk = True
     description = ""
@@ -315,17 +314,23 @@ def _draft_risk_from_delta(delta: AggregatedDelta) -> Optional[RiskOpportunity]:
     if delta.source_type == SourceType.FEDERAL_REGISTER:
         if "final rule" in title_lower:
             is_risk = True
-            description = f"New regulation may impose compliance requirements: {_extract_topic(delta.title)}"
+            description = (
+                f"New regulation may impose compliance requirements: {_extract_topic(delta.title)}"
+            )
         elif "proposed rule" in title_lower:
             is_risk = False
-            description = f"Opportunity to influence proposed regulation: {_extract_topic(delta.title)}"
+            description = (
+                f"Opportunity to influence proposed regulation: {_extract_topic(delta.title)}"
+            )
         else:
             return None
 
     elif delta.source_type == SourceType.BILL:
         action = delta.metadata.get("latest_action_text", "").lower()
         if "passed" in action:
-            description = f"Passed legislation may require operational changes: {_extract_topic(delta.title)}"
+            description = (
+                f"Passed legislation may require operational changes: {_extract_topic(delta.title)}"
+            )
             is_risk = True
         else:
             description = f"Pending legislation to monitor: {_extract_topic(delta.title)}"
@@ -366,7 +371,7 @@ def _draft_risk_from_delta(delta: AggregatedDelta) -> Optional[RiskOpportunity]:
     )
 
 
-def _draft_snapshot_from_delta(delta: AggregatedDelta) -> Optional[IssueSnapshot]:
+def _draft_snapshot_from_delta(delta: AggregatedDelta) -> IssueSnapshot | None:
     """Generate issue snapshot for high-impact deltas."""
     # Only create snapshots for actionable items
     if delta.impact_score < 0.5:
@@ -390,14 +395,18 @@ def _draft_snapshot_from_delta(delta: AggregatedDelta) -> Optional[IssueSnapshot
     elif delta.source_type == SourceType.BILL:
         bill_id = delta.source_id
         policy_hook = f"{bill_id} - {_extract_topic(delta.title)[:30]}"
-        what_it_does = delta.metadata.get("latest_action_text") or "Congressional action on veterans policy"
+        what_it_does = (
+            delta.metadata.get("latest_action_text") or "Congressional action on veterans policy"
+        )
         why_it_matters = "Direct impact on veteran benefits and claims processing."
         line_we_want = "Support language that streamlines claims and expands access."
 
     elif delta.source_type == SourceType.HEARING:
         policy_hook = f"Hearing: {delta.metadata.get('committee_name', 'Committee')}"
         what_it_does = delta.title
-        why_it_matters = "Congressional oversight attention on this topic signals potential legislative action."
+        why_it_matters = (
+            "Congressional oversight attention on this topic signals potential legislative action."
+        )
         line_we_want = "Prepare testimony supporting veteran access to benefits."
 
     else:
@@ -454,7 +463,7 @@ def analyze_deltas(aggregation: AggregationResult) -> AnalysisResult:
     # Map stakeholders based on top issue areas
     draft_stakeholders = []
     seen_stakeholders = set()
-    top_issue_areas = list(set(d.issue_area for d in top_issues[:5]))
+    top_issue_areas = list({d.issue_area for d in top_issues[:5]})
 
     for area in top_issue_areas:
         for s in STAKEHOLDER_TEMPLATES.get(area, []):

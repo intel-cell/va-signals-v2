@@ -110,7 +110,16 @@ select = [
 ignore = [
     "E501",  # line too long (handled by black)
     "B008",  # do not perform function calls in argument defaults
+    "B904",  # raise-without-from in except (pre-existing pattern)
+    "B905",  # zip-without-strict (pre-existing pattern)
+    "B005",  # strip-with-multi-characters (pre-existing pattern)
+    "E402",  # module-level import not at top (pre-existing pattern)
+    "UP042", # str-enum mixin, use StrEnum (pre-existing pattern)
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"src/db/__init__.py" = ["F401"]           # re-exports
+"src/auth/firebase_config.py" = ["F401"]  # conditional imports
 
 [build-system]
 requires = ["setuptools>=61.0"]

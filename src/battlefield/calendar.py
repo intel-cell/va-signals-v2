@@ -11,15 +11,12 @@ Sources:
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 
-from ..db import connect, execute as db_execute
+from ..db import connect
+from ..db import execute as db_execute
 from .db_helpers import (
-    generate_id,
-    upsert_vehicle,
     upsert_calendar_event,
-    create_gate_alert,
-    get_calendar_events,
+    upsert_vehicle,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,9 +25,11 @@ logger = logging.getLogger(__name__)
 def _execute(sql: str, params: dict | None = None) -> list[dict]:
     """Execute a query and return results as list of dicts."""
     conn = connect()
-    conn.row_factory = lambda cursor, row: dict(
-        (col[0], row[idx]) for idx, col in enumerate(cursor.description)
-    ) if cursor.description else {}
+    conn.row_factory = lambda cursor, row: (
+        {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
+        if cursor.description
+        else {}
+    )
     cursor = db_execute(conn, sql, params)
     try:
         results = cursor.fetchall()
@@ -49,7 +48,7 @@ def _days_until(date_str: str) -> int:
         return 999
 
 
-def _determine_importance(event_type: str, days_until: int, status: Optional[str] = None) -> str:
+def _determine_importance(event_type: str, days_until: int, status: str | None = None) -> str:
     """Determine importance level based on event type and timing."""
     # Critical: any event within 7 days
     if days_until <= 7:
@@ -80,7 +79,7 @@ def sync_hearings_to_calendar() -> dict:
 
     # Get upcoming hearings (next 90 days)
     today = datetime.utcnow().date().isoformat()
-    end_date = (datetime.utcnow().date() + timedelta(days=90)).isoformat()
+    (datetime.utcnow().date() + timedelta(days=90)).isoformat()
 
     rows = _execute(
         """
@@ -217,7 +216,9 @@ def sync_bills_to_calendar() -> dict:
                     vehicle_id=vehicle_id,
                     date=row["latest_action_date"],
                     event_type="floor_action" if stage == "floor" else "amendment",
-                    title=f"{identifier}: {row['latest_action_text'][:100]}" if row["latest_action_text"] else identifier,
+                    title=f"{identifier}: {row['latest_action_text'][:100]}"
+                    if row["latest_action_text"]
+                    else identifier,
                     importance=importance,
                     source_type="bills",
                     source_id=row["bill_id"],
@@ -265,7 +266,11 @@ def sync_federal_register_to_calendar() -> dict:
         tags = row["tags"] or ""
         summary = row["summary"] or ""
 
-        if "proposed" in doc_type or "proposed rule" in tags.lower() or "proposed rule" in summary.lower():
+        if (
+            "proposed" in doc_type
+            or "proposed rule" in tags.lower()
+            or "proposed rule" in summary.lower()
+        ):
             stage = "proposed_rule"
             vehicle_type = "rule"
         elif "final" in doc_type or "final rule" in tags.lower() or "final rule" in summary.lower():
@@ -379,7 +384,9 @@ def sync_oversight_to_calendar() -> dict:
             title=row["title"][:200] if row["title"] else "Oversight Event",
             identifier=row["event_id"],
             current_stage="active",
-            status_date=row["pub_timestamp"][:10] if row["pub_timestamp"] else datetime.utcnow().date().isoformat(),
+            status_date=row["pub_timestamp"][:10]
+            if row["pub_timestamp"]
+            else datetime.utcnow().date().isoformat(),
             status_text=row["summary"][:200] if row["summary"] else None,
             our_posture=posture,
             source_type="om_events",
@@ -390,14 +397,20 @@ def sync_oversight_to_calendar() -> dict:
 
         # Create calendar event for escalations
         if row["is_escalation"] or row["is_deviation"]:
-            pub_date = row["pub_timestamp"][:10] if row["pub_timestamp"] else datetime.utcnow().date().isoformat()
+            pub_date = (
+                row["pub_timestamp"][:10]
+                if row["pub_timestamp"]
+                else datetime.utcnow().date().isoformat()
+            )
             event_id = f"evt_om_{row['event_id']}"
 
             upsert_calendar_event(
                 event_id=event_id,
                 vehicle_id=vehicle_id,
                 date=pub_date,
-                event_type="hearing" if "hearing" in (row["event_type"] or "").lower() else "amendment",
+                event_type="hearing"
+                if "hearing" in (row["event_type"] or "").lower()
+                else "amendment",
                 title=row["title"][:200] if row["title"] else "Oversight Event",
                 importance="important" if row["is_escalation"] else "watch",
                 source_type="om_events",

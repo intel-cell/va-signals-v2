@@ -1,11 +1,11 @@
 """Evaluator registry."""
 
-from .base import Evaluator, get_field_value, ALLOWED_TOP_LEVEL_FIELDS
-from .text import ContainsAnyEvaluator
-from .field_match import FieldInEvaluator, FieldIntersectsEvaluator
+from .base import ALLOWED_TOP_LEVEL_FIELDS, Evaluator, get_field_value
 from .comparison import EqualsEvaluator, GtEvaluator
 from .existence import FieldExistsEvaluator, NestedFieldInEvaluator
-from .registry import EvaluatorRegistry, EVALUATOR_WHITELIST
+from .field_match import FieldInEvaluator, FieldIntersectsEvaluator
+from .registry import EVALUATOR_WHITELIST, EvaluatorRegistry
+from .text import ContainsAnyEvaluator
 
 __all__ = [
     "Evaluator",

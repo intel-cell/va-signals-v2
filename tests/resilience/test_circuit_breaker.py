@@ -2,7 +2,7 @@
 
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
@@ -15,10 +15,10 @@ from src.resilience.circuit_breaker import (
     CircuitState,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _fresh_cb(name: str, **config_kw) -> CircuitBreaker:
     """Create a circuit breaker with a unique name to avoid registry collisions."""
@@ -50,6 +50,7 @@ def _run(coro):
 # CircuitState enum
 # ---------------------------------------------------------------------------
 
+
 class TestCircuitState:
     def test_values(self):
         assert CircuitState.CLOSED.value == "closed"
@@ -64,22 +65,24 @@ class TestCircuitState:
 # CircuitBreakerOpen exception
 # ---------------------------------------------------------------------------
 
+
 class TestCircuitBreakerOpen:
     def test_attributes(self):
-        until = datetime.now(timezone.utc)
+        until = datetime.now(UTC)
         exc = CircuitBreakerOpen("svc", until)
         assert exc.name == "svc"
         assert exc.until is until
         assert "svc" in str(exc)
 
     def test_is_exception(self):
-        exc = CircuitBreakerOpen("x", datetime.now(timezone.utc))
+        exc = CircuitBreakerOpen("x", datetime.now(UTC))
         assert isinstance(exc, Exception)
 
 
 # ---------------------------------------------------------------------------
 # CircuitBreakerConfig defaults
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreakerConfig:
     def test_defaults(self):
@@ -95,6 +98,7 @@ class TestCircuitBreakerConfig:
 # ---------------------------------------------------------------------------
 # CircuitMetrics defaults
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitMetrics:
     def test_defaults(self):
@@ -114,6 +118,7 @@ class TestCircuitMetrics:
 # ---------------------------------------------------------------------------
 # CircuitBreaker — init / properties / registry
 # ---------------------------------------------------------------------------
+
 
 class TestCircuitBreakerInit:
     def test_initial_state_is_closed(self):
@@ -151,6 +156,7 @@ class TestCircuitBreakerInit:
 # CircuitBreaker — call: happy path
 # ---------------------------------------------------------------------------
 
+
 class TestCallHappyPath:
     def test_async_func_passes_through(self):
         cb = _fresh_cb("call_async_pass")
@@ -186,6 +192,7 @@ class TestCallHappyPath:
 # CircuitBreaker — call: failure path
 # ---------------------------------------------------------------------------
 
+
 class TestCallFailurePath:
     def test_failure_is_recorded(self):
         cb = _fresh_cb("fail_rec", failure_threshold=10)
@@ -213,6 +220,7 @@ class TestCallFailurePath:
 # State transitions: CLOSED -> OPEN
 # ---------------------------------------------------------------------------
 
+
 class TestClosedToOpen:
     def test_opens_at_threshold(self):
         cb = _fresh_cb("c2o_thresh", failure_threshold=3)
@@ -239,6 +247,7 @@ class TestClosedToOpen:
 # State transitions: OPEN -> HALF_OPEN (timeout elapsed)
 # ---------------------------------------------------------------------------
 
+
 class TestOpenToHalfOpen:
     def test_transitions_after_timeout(self):
         cb = _fresh_cb("o2ho", failure_threshold=2, timeout_seconds=0.05)
@@ -255,6 +264,7 @@ class TestOpenToHalfOpen:
 # ---------------------------------------------------------------------------
 # State transitions: HALF_OPEN -> CLOSED (enough successes)
 # ---------------------------------------------------------------------------
+
 
 class TestHalfOpenToClosed:
     def test_closes_after_success_threshold(self):
@@ -279,6 +289,7 @@ class TestHalfOpenToClosed:
 # State transitions: HALF_OPEN -> OPEN (failure in half-open)
 # ---------------------------------------------------------------------------
 
+
 class TestHalfOpenToOpen:
     def test_reopens_on_failure(self):
         cb = _fresh_cb(
@@ -300,6 +311,7 @@ class TestHalfOpenToOpen:
 # ---------------------------------------------------------------------------
 # HALF_OPEN max calls limit
 # ---------------------------------------------------------------------------
+
 
 class TestHalfOpenMaxCalls:
     def test_rejects_excess_half_open_calls(self):
@@ -328,6 +340,7 @@ class TestHalfOpenMaxCalls:
 # ---------------------------------------------------------------------------
 # _should_count_failure
 # ---------------------------------------------------------------------------
+
 
 class TestShouldCountFailure:
     def test_included_exception_counts(self):
@@ -381,6 +394,7 @@ class TestShouldCountFailure:
 # Decorator usage
 # ---------------------------------------------------------------------------
 
+
 class TestDecorator:
     def test_async_decorator(self):
         cb = _fresh_cb("dec_async", failure_threshold=5)
@@ -409,6 +423,7 @@ class TestDecorator:
 # reset
 # ---------------------------------------------------------------------------
 
+
 class TestReset:
     def test_reset_from_open(self):
         cb = _fresh_cb("reset_open", failure_threshold=1)
@@ -430,6 +445,7 @@ class TestReset:
 # ---------------------------------------------------------------------------
 # to_dict
 # ---------------------------------------------------------------------------
+
 
 class TestToDict:
     def test_dict_keys(self):
@@ -455,17 +471,21 @@ class TestToDict:
 # Pre-configured instances (module level)
 # ---------------------------------------------------------------------------
 
+
 class TestPreConfigured:
     def test_federal_register_cb_exists(self):
         from src.resilience.circuit_breaker import federal_register_cb
+
         assert federal_register_cb.name == "federal_register"
         assert federal_register_cb.config.failure_threshold == 3
 
     def test_congress_api_cb_exists(self):
         from src.resilience.circuit_breaker import congress_api_cb
+
         assert congress_api_cb.name == "congress_api"
 
     def test_database_cb_exists(self):
         from src.resilience.circuit_breaker import database_cb
+
         assert database_cb.name == "database"
         assert database_cb.config.timeout_seconds == 30

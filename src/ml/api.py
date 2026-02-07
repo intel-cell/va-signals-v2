@@ -3,16 +3,15 @@ API endpoints for predictive scoring.
 """
 
 import logging
-from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
 from ..db import connect, execute
-from .models import PredictionConfig, PredictionType, BatchPredictionRequest
-from .scoring import SignalScorer, score_batch
+from .models import BatchPredictionRequest, PredictionConfig
+from .scoring import SignalScorer
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +20,18 @@ router = APIRouter(prefix="/api/ml", tags=["Machine Learning"])
 
 class ScoreRequest(BaseModel):
     """Request to score a signal."""
-    signal_id: Optional[str] = None
+
+    signal_id: str | None = None
     title: str
-    content: Optional[str] = None
-    source_type: Optional[str] = None
-    effective_date: Optional[str] = None
-    comments_close_date: Optional[str] = None
+    content: str | None = None
+    source_type: str | None = None
+    effective_date: str | None = None
+    comments_close_date: str | None = None
 
 
 class ScoreResponse(BaseModel):
     """Scoring response."""
+
     signal_id: str
     importance_score: float
     impact_score: float
@@ -103,7 +104,7 @@ async def score_existing_signal(
                 LEFT JOIN fr_summaries s ON f.doc_id = s.doc_id
                 WHERE f.doc_id = :signal_id
                 """,
-                {"signal_id": signal_id}
+                {"signal_id": signal_id},
             )
             row = cur.fetchone()
             if row:
@@ -126,7 +127,7 @@ async def score_existing_signal(
                 JOIN state_sources ss ON s.source_id = ss.source_id
                 WHERE s.signal_id = :signal_id
                 """,
-                {"signal_id": signal_id}
+                {"signal_id": signal_id},
             )
             row = cur.fetchone()
             if row:
@@ -146,7 +147,7 @@ async def score_existing_signal(
                 FROM om_events
                 WHERE event_id = :signal_id
                 """,
-                {"signal_id": signal_id}
+                {"signal_id": signal_id},
             )
             row = cur.fetchone()
             if row:
@@ -166,7 +167,7 @@ async def score_existing_signal(
                 FROM bf_vehicles
                 WHERE vehicle_id = :signal_id
                 """,
-                {"signal_id": signal_id}
+                {"signal_id": signal_id},
             )
             row = cur.fetchone()
             if row:
@@ -221,7 +222,7 @@ async def score_batch_signals(
     return {
         "message": "Batch scoring not yet implemented",
         "signal_count": len(request.signal_ids),
-        "prediction_types": [pt.value for pt in request.prediction_types]
+        "prediction_types": [pt.value for pt in request.prediction_types],
     }
 
 

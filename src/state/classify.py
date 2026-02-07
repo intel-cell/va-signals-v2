@@ -4,11 +4,9 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
-
-from src.secrets import get_env_or_keychain
 
 from src.llm_config import HAIKU_LEGACY_MODEL as HAIKU_MODEL
+from src.secrets import get_env_or_keychain
 
 
 @dataclass
@@ -18,8 +16,8 @@ class ClassificationResult:
     severity: str  # "high", "medium", "low", "noise"
     method: str  # "keyword", "llm"
     keywords_matched: list[str] = field(default_factory=list)
-    llm_reasoning: Optional[str] = None
-    program: Optional[str] = None
+    llm_reasoning: str | None = None
+    program: str | None = None
 
 
 HIGH_SEVERITY_KEYWORDS = [
@@ -136,9 +134,7 @@ _HIGH_PATTERNS = _compile_keyword_patterns(HIGH_SEVERITY_KEYWORDS)
 _MEDIUM_PATTERNS = _compile_keyword_patterns(MEDIUM_SEVERITY_KEYWORDS)
 
 
-def classify_by_keywords(
-    title: str, content: Optional[str] = None
-) -> ClassificationResult:
+def classify_by_keywords(title: str, content: str | None = None) -> ClassificationResult:
     """
     Classify signal severity by keyword matching.
 
@@ -231,7 +227,7 @@ def _call_haiku(prompt: str) -> dict:
 
 def classify_by_llm(
     title: str,
-    content: Optional[str],
+    content: str | None,
     state: str,
 ) -> ClassificationResult:
     """

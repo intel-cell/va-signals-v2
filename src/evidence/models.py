@@ -4,16 +4,15 @@ These models define the structure for evidence packs, sources, excerpts, and cla
 All models enforce provenance-first design: no claim without dated, verifiable source.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Optional
 import hashlib
-import json
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
 
 
 class SourceType(str, Enum):
     """Types of authoritative sources."""
+
     FEDERAL_REGISTER = "federal_register"
     BILL = "bill"
     HEARING = "hearing"
@@ -28,20 +27,23 @@ class SourceType(str, Enum):
 
 class ClaimType(str, Enum):
     """Classification of claim basis."""
-    OBSERVED = "observed"   # Directly stated in source
-    INFERRED = "inferred"   # Logically derived from source
-    MODELED = "modeled"     # Computed/predicted, requires explanation
+
+    OBSERVED = "observed"  # Directly stated in source
+    INFERRED = "inferred"  # Logically derived from source
+    MODELED = "modeled"  # Computed/predicted, requires explanation
 
 
 class Confidence(str, Enum):
     """Confidence level in claim."""
-    HIGH = "high"       # Multiple corroborating sources or official statement
-    MEDIUM = "medium"   # Single authoritative source
-    LOW = "low"         # Indirect source or inference
+
+    HIGH = "high"  # Multiple corroborating sources or official statement
+    MEDIUM = "medium"  # Single authoritative source
+    LOW = "low"  # Indirect source or inference
 
 
 class PackStatus(str, Enum):
     """Evidence pack workflow status."""
+
     DRAFT = "draft"
     VALIDATED = "validated"
     PUBLISHED = "published"
@@ -51,13 +53,14 @@ class PackStatus(str, Enum):
 @dataclass
 class EvidenceExcerpt:
     """A specific quoted passage from a source."""
+
     excerpt_text: str
     source_id: str
-    section_reference: Optional[str] = None  # e.g., "Section 3(a)(1)"
-    page_or_line: Optional[str] = None
-    context_before: Optional[str] = None
-    context_after: Optional[str] = None
-    excerpt_id: Optional[int] = None
+    section_reference: str | None = None  # e.g., "Section 3(a)(1)"
+    page_or_line: str | None = None
+    context_before: str | None = None
+    context_after: str | None = None
+    excerpt_id: int | None = None
 
     def to_citation_string(self) -> str:
         """Format as a citation reference."""
@@ -67,32 +70,37 @@ class EvidenceExcerpt:
         if self.page_or_line:
             parts.append(f"p. {self.page_or_line}")
         location = ", ".join(parts) if parts else ""
-        return f'"{self.excerpt_text[:100]}..." ({location})' if len(self.excerpt_text) > 100 else f'"{self.excerpt_text}" ({location})'
+        return (
+            f'"{self.excerpt_text[:100]}..." ({location})'
+            if len(self.excerpt_text) > 100
+            else f'"{self.excerpt_text}" ({location})'
+        )
 
 
 @dataclass
 class EvidenceSource:
     """An authoritative source document."""
+
     source_id: str
     source_type: SourceType
     title: str
     url: str
     date_accessed: str
-    date_published: Optional[str] = None
-    date_effective: Optional[str] = None
-    document_hash: Optional[str] = None
+    date_published: str | None = None
+    date_effective: str | None = None
+    document_hash: str | None = None
     version: int = 1
 
     # Source-type-specific identifiers
-    fr_citation: Optional[str] = None      # e.g., "89 FR 12345"
-    fr_doc_number: Optional[str] = None    # e.g., "2024-01234"
-    bill_number: Optional[str] = None      # e.g., "HR5"
-    bill_congress: Optional[int] = None    # e.g., 118
-    report_number: Optional[str] = None    # e.g., "GAO-24-123"
+    fr_citation: str | None = None  # e.g., "89 FR 12345"
+    fr_doc_number: str | None = None  # e.g., "2024-01234"
+    bill_number: str | None = None  # e.g., "HR5"
+    bill_congress: int | None = None  # e.g., 118
+    report_number: str | None = None  # e.g., "GAO-24-123"
 
     # Metadata
-    issuing_agency: Optional[str] = None
-    document_type: Optional[str] = None
+    issuing_agency: str | None = None
+    document_type: str | None = None
     metadata: dict = field(default_factory=dict)
 
     # Associated excerpts
@@ -132,13 +140,14 @@ class EvidenceSource:
 @dataclass
 class EvidenceClaim:
     """A claim backed by evidence sources."""
+
     claim_text: str
     claim_type: ClaimType = ClaimType.OBSERVED
     confidence: Confidence = Confidence.HIGH
     source_ids: list[str] = field(default_factory=list)
     excerpt_ids: list[int] = field(default_factory=list)
-    last_verified: Optional[str] = None
-    claim_id: Optional[int] = None
+    last_verified: str | None = None
+    claim_id: int | None = None
 
     def is_valid(self) -> tuple[bool, list[str]]:
         """Check if claim has required supporting sources."""
@@ -159,22 +168,23 @@ class EvidenceClaim:
 @dataclass
 class EvidencePack:
     """A complete evidence pack with claims and supporting sources."""
+
     pack_id: str
     title: str
     generated_at: str
     generated_by: str
     claims: list[EvidenceClaim] = field(default_factory=list)
     sources: dict[str, EvidenceSource] = field(default_factory=dict)
-    issue_id: Optional[str] = None
-    summary: Optional[str] = None
+    issue_id: str | None = None
+    summary: str | None = None
     status: PackStatus = PackStatus.DRAFT
     validation_errors: list[str] = field(default_factory=list)
-    output_path: Optional[str] = None
+    output_path: str | None = None
 
     @classmethod
-    def generate_pack_id(cls, issue_id: Optional[str] = None) -> str:
+    def generate_pack_id(cls, issue_id: str | None = None) -> str:
         """Generate a unique pack ID."""
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         if issue_id:
             return f"EP-{issue_id}-{timestamp}"
         return f"EP-{timestamp}"
@@ -187,7 +197,7 @@ class EvidencePack:
         """Add a claim to the pack."""
         self.claims.append(claim)
 
-    def get_source(self, source_id: str) -> Optional[EvidenceSource]:
+    def get_source(self, source_id: str) -> EvidenceSource | None:
         """Retrieve a source by ID."""
         return self.sources.get(source_id)
 
@@ -200,12 +210,12 @@ class EvidencePack:
             is_valid, claim_errors = claim.is_valid()
             if not is_valid:
                 for err in claim_errors:
-                    errors.append(f"Claim {i+1}: {err}")
+                    errors.append(f"Claim {i + 1}: {err}")
 
             # Verify source IDs exist
             for source_id in claim.source_ids:
                 if source_id not in self.sources:
-                    errors.append(f"Claim {i+1}: References unknown source {source_id}")
+                    errors.append(f"Claim {i + 1}: References unknown source {source_id}")
 
         # Check all sources have required fields
         for source_id, source in self.sources.items():

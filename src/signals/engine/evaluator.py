@@ -3,15 +3,15 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.signals.envelope import Envelope
-from src.signals.evaluators.registry import EvaluatorRegistry
 from src.signals.engine.parser import (
-    parse_expression,
-    EvaluatorNode,
     AllOfNode,
     AnyOfNode,
+    EvaluatorNode,
     NoneOfNode,
+    parse_expression,
 )
+from src.signals.envelope import Envelope
+from src.signals.evaluators.registry import EvaluatorRegistry
 
 
 @dataclass

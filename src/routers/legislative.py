@@ -1,15 +1,15 @@
 """Bills and hearings endpoints."""
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
-from ..db import connect, execute, table_exists
-from ..auth.rbac import RoleChecker
 from ..auth.models import UserRole
+from ..auth.rbac import RoleChecker
+from ..db import connect, execute, table_exists
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +18,18 @@ router = APIRouter(tags=["Bills", "Hearings"])
 
 # --- Pydantic Models ---
 
+
 class BillResponse(BaseModel):
     bill_id: str
     congress: int
     bill_type: str
     bill_number: int
     title: str
-    sponsor_name: Optional[str]
-    sponsor_party: Optional[str]
-    sponsor_state: Optional[str]
-    latest_action_date: Optional[str]
-    latest_action_text: Optional[str]
+    sponsor_name: str | None
+    sponsor_party: str | None
+    sponsor_state: str | None
+    latest_action_date: str | None
+    latest_action_text: str | None
     first_seen_at: str
 
 
@@ -48,13 +49,13 @@ class HearingResponse(BaseModel):
     event_id: str
     congress: int
     chamber: str
-    committee_name: Optional[str]
+    committee_name: str | None
     hearing_date: str
-    hearing_time: Optional[str]
-    title: Optional[str]
-    meeting_type: Optional[str]
+    hearing_time: str | None
+    title: str | None
+    meeting_type: str | None
     status: str
-    url: Optional[str]
+    url: str | None
 
 
 class HearingsResponse(BaseModel):
@@ -71,10 +72,11 @@ class HearingStatsResponse(BaseModel):
 
 # --- Endpoints ---
 
+
 @router.get("/api/bills", response_model=BillsResponse)
 def get_bills(
     limit: int = Query(50, ge=1, le=500, description="Number of bills to return"),
-    congress: Optional[int] = Query(None, description="Filter by congress number"),
+    congress: int | None = Query(None, description="Filter by congress number"),
     _: None = Depends(RoleChecker(UserRole.VIEWER)),
 ):
     """List tracked VA bills."""
@@ -150,7 +152,7 @@ def get_bill_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     total_bills = cur.fetchone()[0]
 
     # New this week
-    seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+    seven_days_ago = (datetime.now(UTC) - timedelta(days=7)).strftime("%Y-%m-%d")
     cur = execute(
         con,
         "SELECT COUNT(*) FROM bills WHERE first_seen_at >= :since",
@@ -163,7 +165,9 @@ def get_bill_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
     by_type = dict(cur.fetchall())
 
     # By congress
-    cur = execute(con, "SELECT congress, COUNT(*) FROM bills GROUP BY congress ORDER BY congress DESC")
+    cur = execute(
+        con, "SELECT congress, COUNT(*) FROM bills GROUP BY congress ORDER BY congress DESC"
+    )
     by_congress = {int(row[0]): row[1] for row in cur.fetchall()}
 
     con.close()
@@ -190,7 +194,7 @@ def get_hearings(
         con.close()
         return HearingsResponse(hearings=[], count=0)
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
 
     if upcoming:
         query = """
@@ -258,7 +262,7 @@ def get_hearing_stats(_: None = Depends(RoleChecker(UserRole.VIEWER))):
             total_hearings=0, upcoming_count=0, by_committee={}, by_status={}
         )
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # Total hearings
     cur = execute(con, "SELECT COUNT(*) FROM hearings")

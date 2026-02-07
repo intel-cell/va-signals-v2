@@ -8,28 +8,25 @@ Generates visual heat maps ranking issues by:
 - Urgency: Days to next decision point (affects score weighting)
 """
 
-import json
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
+from .db import (
+    get_impact_memos,
+    get_latest_heat_map,
+    insert_heat_map,
+)
 from .models import (
     HeatMap,
     HeatMapIssue,
     HeatMapQuadrant,
     create_heat_map_issue,
 )
-from .db import (
-    insert_heat_map,
-    get_latest_heat_map,
-    get_high_priority_issues,
-    get_impact_memos,
-)
-
 
 # =============================================================================
 # LIKELIHOOD ASSESSMENT RULES
 # =============================================================================
+
 
 def assess_bill_likelihood(bill: dict) -> int:
     """Assess likelihood of bill passage (1-5).
@@ -128,6 +125,7 @@ def assess_generic_likelihood(memo_or_context: dict) -> int:
 # IMPACT ASSESSMENT RULES
 # =============================================================================
 
+
 def assess_bill_impact(bill: dict) -> int:
     """Assess operational impact of bill (1-5).
 
@@ -216,6 +214,7 @@ def assess_generic_impact(memo_or_context: dict) -> int:
 # URGENCY CALCULATION
 # =============================================================================
 
+
 def calculate_urgency_days(context: dict) -> int:
     """Calculate days to next decision point.
 
@@ -229,7 +228,7 @@ def calculate_urgency_days(context: dict) -> int:
     if compliance_deadline:
         try:
             deadline = datetime.fromisoformat(compliance_deadline.replace("Z", "+00:00"))
-            days = (deadline - datetime.now(timezone.utc)).days
+            days = (deadline - datetime.now(UTC)).days
             return max(1, days)
         except (ValueError, TypeError):
             pass
@@ -238,7 +237,7 @@ def calculate_urgency_days(context: dict) -> int:
         try:
             effective = datetime.fromisoformat(effective_date.replace("Z", "+00:00"))
             if isinstance(effective, datetime):
-                days = (effective - datetime.now(timezone.utc)).days
+                days = (effective - datetime.now(UTC)).days
                 return max(1, days)
         except (ValueError, TypeError):
             pass
@@ -248,10 +247,10 @@ def calculate_urgency_days(context: dict) -> int:
             # Handle date-only string
             if "T" not in hearing_date:
                 hearing = datetime.strptime(hearing_date, "%Y-%m-%d")
-                hearing = hearing.replace(tzinfo=timezone.utc)
+                hearing = hearing.replace(tzinfo=UTC)
             else:
                 hearing = datetime.fromisoformat(hearing_date.replace("Z", "+00:00"))
-            days = (hearing - datetime.now(timezone.utc)).days
+            days = (hearing - datetime.now(UTC)).days
             return max(1, days)
         except (ValueError, TypeError):
             pass
@@ -259,10 +258,10 @@ def calculate_urgency_days(context: dict) -> int:
     # Default urgency based on source type
     source_type = context.get("source_type", context.get("vehicle_type", ""))
     defaults = {
-        "bill": 90,      # Congressional session window
-        "rule": 60,      # Typical comment period
-        "hearing": 14,   # Hearings are imminent
-        "report": 30,    # Response window
+        "bill": 90,  # Congressional session window
+        "rule": 60,  # Typical comment period
+        "hearing": 14,  # Hearings are imminent
+        "report": 30,  # Response window
     }
     return defaults.get(source_type, 60)
 
@@ -270,6 +269,7 @@ def calculate_urgency_days(context: dict) -> int:
 # =============================================================================
 # HEAT MAP GENERATOR CLASS
 # =============================================================================
+
 
 class HeatMapGenerator:
     """Generates heat maps from issues/memos."""
@@ -377,14 +377,17 @@ class HeatMapGenerator:
 
         likelihood = assess_generic_likelihood(why_it_matters)
         impact = assess_generic_impact(why_it_matters)
-        urgency = calculate_urgency_days({
-            **memo.get("policy_hook", {}),
-            **why_it_matters,
-        })
+        urgency = calculate_urgency_days(
+            {
+                **memo.get("policy_hook", {}),
+                **why_it_matters,
+            }
+        )
 
         return create_heat_map_issue(
             issue_id=memo.get("issue_id", memo.get("memo_id", "")),
-            title=memo.get("what_it_does", "")[:100] or memo.get("policy_hook", {}).get("vehicle", ""),
+            title=memo.get("what_it_does", "")[:100]
+            or memo.get("policy_hook", {}).get("vehicle", ""),
             likelihood=likelihood,
             impact=impact,
             urgency_days=urgency,
@@ -393,7 +396,7 @@ class HeatMapGenerator:
 
     def _create_heat_map(self, issues: list[HeatMapIssue]) -> HeatMap:
         """Create heat map from issues."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         heat_map_id = f"HMAP-{now.strftime('%Y%m%d')}-{uuid.uuid4().hex[:8].upper()}"
 
         return HeatMap(
@@ -410,6 +413,7 @@ class HeatMapGenerator:
 # =============================================================================
 # CONVENIENCE FUNCTIONS
 # =============================================================================
+
 
 def generate_heat_map(
     bills: list[dict] = None,
@@ -441,7 +445,7 @@ def generate_heat_map(
     return heat_map
 
 
-def get_current_heat_map() -> Optional[HeatMap]:
+def get_current_heat_map() -> HeatMap | None:
     """Get the latest heat map from database."""
     data = get_latest_heat_map()
     if not data:
@@ -483,7 +487,9 @@ def render_heat_map_for_brief(heat_map: HeatMap) -> str:
     if high_priority:
         output.append("### HIGH PRIORITY (Immediate Attention)")
         for issue in high_priority[:5]:
-            output.append(f"- **{issue.title}** (L:{issue.likelihood} I:{issue.impact} Score:{issue.score:.1f})")
+            output.append(
+                f"- **{issue.title}** (L:{issue.likelihood} I:{issue.impact} Score:{issue.score:.1f})"
+            )
         output.append("")
 
     # Watch section

@@ -1,11 +1,10 @@
 """WebSocket connection manager for real-time signal broadcasting."""
 
 import asyncio
-import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import WebSocket
 
@@ -15,10 +14,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ConnectionInfo:
     """Metadata about a WebSocket connection."""
+
     websocket: WebSocket
-    user_id: Optional[str] = None
+    user_id: str | None = None
     subscriptions: set = field(default_factory=set)
-    connected_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    connected_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 class ConnectionManager:
@@ -36,16 +36,18 @@ class ConnectionManager:
         self.active_connections: dict[str, ConnectionInfo] = {}
         self._lock = asyncio.Lock()
         self._message_queue: asyncio.Queue = asyncio.Queue()
-        self._broadcaster_task: Optional[asyncio.Task] = None
+        self._broadcaster_task: asyncio.Task | None = None
 
-    async def connect(self, websocket: WebSocket, client_id: str, user_id: Optional[str] = None) -> None:
+    async def connect(
+        self, websocket: WebSocket, client_id: str, user_id: str | None = None
+    ) -> None:
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
         async with self._lock:
             self.active_connections[client_id] = ConnectionInfo(
                 websocket=websocket,
                 user_id=user_id,
-                subscriptions={"all"}  # Default subscription
+                subscriptions={"all"},  # Default subscription
             )
         logger.info(f"WebSocket connected: {client_id}, user: {user_id}")
 
@@ -96,7 +98,7 @@ class ConnectionManager:
         Returns:
             Number of clients that received the message
         """
-        message["timestamp"] = datetime.now(timezone.utc).isoformat()
+        message["timestamp"] = datetime.now(UTC).isoformat()
         message["topic"] = topic
 
         sent_count = 0
@@ -107,7 +109,11 @@ class ConnectionManager:
 
         for client_id, conn_info in clients:
             # Check if client is subscribed to this topic
-            if topic != "all" and topic not in conn_info.subscriptions and "all" not in conn_info.subscriptions:
+            if (
+                topic != "all"
+                and topic not in conn_info.subscriptions
+                and "all" not in conn_info.subscriptions
+            ):
                 continue
 
             try:
@@ -128,31 +134,19 @@ class ConnectionManager:
 
     async def broadcast_signal(self, signal: dict[str, Any]) -> int:
         """Broadcast a new signal alert."""
-        return await self.broadcast({
-            "type": "signal",
-            "data": signal
-        }, topic="signals")
+        return await self.broadcast({"type": "signal", "data": signal}, topic="signals")
 
     async def broadcast_alert(self, alert: dict[str, Any]) -> int:
         """Broadcast a system alert."""
-        return await self.broadcast({
-            "type": "alert",
-            "data": alert
-        }, topic="alerts")
+        return await self.broadcast({"type": "alert", "data": alert}, topic="alerts")
 
     async def broadcast_oversight(self, event: dict[str, Any]) -> int:
         """Broadcast an oversight event."""
-        return await self.broadcast({
-            "type": "oversight",
-            "data": event
-        }, topic="oversight")
+        return await self.broadcast({"type": "oversight", "data": event}, topic="oversight")
 
     async def broadcast_battlefield(self, update: dict[str, Any]) -> int:
         """Broadcast a battlefield status update."""
-        return await self.broadcast({
-            "type": "battlefield",
-            "data": update
-        }, topic="battlefield")
+        return await self.broadcast({"type": "battlefield", "data": update}, topic="battlefield")
 
     def get_connection_count(self) -> int:
         """Get the number of active connections."""
@@ -165,7 +159,7 @@ class ConnectionManager:
                 "client_id": client_id,
                 "user_id": conn.user_id,
                 "subscriptions": list(conn.subscriptions),
-                "connected_at": conn.connected_at
+                "connected_at": conn.connected_at,
             }
             for client_id, conn in self.active_connections.items()
         ]
