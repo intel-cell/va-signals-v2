@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
@@ -78,12 +79,14 @@ async def websocket_signals(
         return
 
     user_id = claims.get("user_id")
+    token_exp = claims.get("exp")
 
     # Generate client_id if not provided
     if not client_id:
         client_id = f"client_{uuid.uuid4().hex[:12]}"
 
-    await ws_manager.connect(websocket, client_id, user_id)
+    await ws_manager.connect(websocket, client_id, user_id, token_exp=token_exp)
+    logger.info(f"WebSocket connected: client={client_id}, user={user_id}")
 
     try:
         # Send welcome message
@@ -99,6 +102,26 @@ async def websocket_signals(
         while True:
             # Receive and process commands from client
             data = await websocket.receive_text()
+
+            # --- Token expiry check ---
+            conn_info = ws_manager.active_connections.get(client_id)
+            if conn_info and conn_info.token_exp is not None:
+                if time.time() > conn_info.token_exp:
+                    await websocket.send_json({"type": "error", "message": "Token expired"})
+                    await websocket.close(code=4401, reason="Token expired")
+                    return
+
+            # --- Rate limit check (30 messages per 60 seconds) ---
+            if conn_info:
+                now = time.time()
+                if now > conn_info.rate_limit_reset:
+                    conn_info.message_count = 0
+                    conn_info.rate_limit_reset = now + 60.0
+                conn_info.message_count += 1
+                if conn_info.message_count > 30:
+                    await websocket.send_json({"type": "error", "message": "Rate limit exceeded"})
+                    await websocket.close(code=4429, reason="Rate limit exceeded")
+                    return
 
             try:
                 message = json.loads(data)

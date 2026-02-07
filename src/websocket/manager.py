@@ -19,6 +19,9 @@ class ConnectionInfo:
     user_id: str | None = None
     subscriptions: set = field(default_factory=set)
     connected_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    token_exp: float | None = None
+    message_count: int = 0
+    rate_limit_reset: float = 0.0
 
 
 class ConnectionManager:
@@ -39,7 +42,11 @@ class ConnectionManager:
         self._broadcaster_task: asyncio.Task | None = None
 
     async def connect(
-        self, websocket: WebSocket, client_id: str, user_id: str | None = None
+        self,
+        websocket: WebSocket,
+        client_id: str,
+        user_id: str | None = None,
+        token_exp: float | None = None,
     ) -> None:
         """Accept and register a new WebSocket connection."""
         await websocket.accept()
@@ -48,6 +55,7 @@ class ConnectionManager:
                 websocket=websocket,
                 user_id=user_id,
                 subscriptions={"all"},  # Default subscription
+                token_exp=token_exp,
             )
         logger.info(f"WebSocket connected: {client_id}, user: {user_id}")
 
