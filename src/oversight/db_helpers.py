@@ -1,14 +1,13 @@
 """Database helpers for Oversight Monitor tables."""
 
 import json
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from src.db import connect, execute, insert_returning_id
 
 
 def _utc_now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def insert_om_event(event: dict) -> None:
@@ -51,12 +50,16 @@ def insert_om_event(event: dict) -> None:
             "summary": event.get("summary"),
             "raw_content": event.get("raw_content"),
             "is_escalation": 1 if event.get("is_escalation") else 0,
-            "escalation_signals": json.dumps(event.get("escalation_signals")) if event.get("escalation_signals") else None,
+            "escalation_signals": json.dumps(event.get("escalation_signals"))
+            if event.get("escalation_signals")
+            else None,
             "ml_score": event.get("ml_score"),
             "ml_risk_level": event.get("ml_risk_level"),
             "is_deviation": 1 if event.get("is_deviation") else 0,
             "deviation_reason": event.get("deviation_reason"),
-            "canonical_refs": json.dumps(event.get("canonical_refs")) if event.get("canonical_refs") else None,
+            "canonical_refs": json.dumps(event.get("canonical_refs"))
+            if event.get("canonical_refs")
+            else None,
             "fetched_at": event["fetched_at"],
         },
     )
@@ -64,7 +67,7 @@ def insert_om_event(event: dict) -> None:
     con.close()
 
 
-def get_om_event(event_id: str) -> Optional[dict]:
+def get_om_event(event_id: str) -> dict | None:
     """Get a canonical event by ID."""
     con = connect()
     cur = execute(
@@ -254,7 +257,7 @@ def get_active_escalation_signals() -> list[dict]:
         SELECT id, signal_pattern, signal_type, severity, description
         FROM om_escalation_signals
         WHERE active = 1
-        """
+        """,
     )
     rows = cur.fetchall()
     con.close()
@@ -272,17 +275,72 @@ def get_active_escalation_signals() -> list[dict]:
 
 
 DEFAULT_ESCALATION_SIGNALS = [
-    {"signal_pattern": "criminal referral", "signal_type": "phrase", "severity": "critical", "description": "GAO/OIG referred matter for prosecution"},
-    {"signal_pattern": "subpoena", "signal_type": "keyword", "severity": "critical", "description": "Congressional subpoena issued"},
-    {"signal_pattern": "emergency hearing", "signal_type": "phrase", "severity": "critical", "description": "Unscheduled urgent hearing"},
-    {"signal_pattern": "whistleblower", "signal_type": "keyword", "severity": "high", "description": "Whistleblower testimony or complaint"},
-    {"signal_pattern": "investigation launched", "signal_type": "phrase", "severity": "high", "description": "New formal investigation opened"},
-    {"signal_pattern": "fraud", "signal_type": "keyword", "severity": "high", "description": "Fraud allegation or finding"},
-    {"signal_pattern": "arrest", "signal_type": "keyword", "severity": "critical", "description": "Criminal arrest related to VA"},
-    {"signal_pattern": "first-ever", "signal_type": "phrase", "severity": "medium", "description": "Unprecedented action"},
-    {"signal_pattern": "reversal", "signal_type": "keyword", "severity": "medium", "description": "Policy or legal reversal"},
-    {"signal_pattern": "bipartisan letter", "signal_type": "phrase", "severity": "medium", "description": "Cross-party congressional action"},
-    {"signal_pattern": "precedential opinion", "signal_type": "phrase", "severity": "high", "description": "CAFC precedential ruling"},
+    {
+        "signal_pattern": "criminal referral",
+        "signal_type": "phrase",
+        "severity": "critical",
+        "description": "GAO/OIG referred matter for prosecution",
+    },
+    {
+        "signal_pattern": "subpoena",
+        "signal_type": "keyword",
+        "severity": "critical",
+        "description": "Congressional subpoena issued",
+    },
+    {
+        "signal_pattern": "emergency hearing",
+        "signal_type": "phrase",
+        "severity": "critical",
+        "description": "Unscheduled urgent hearing",
+    },
+    {
+        "signal_pattern": "whistleblower",
+        "signal_type": "keyword",
+        "severity": "high",
+        "description": "Whistleblower testimony or complaint",
+    },
+    {
+        "signal_pattern": "investigation launched",
+        "signal_type": "phrase",
+        "severity": "high",
+        "description": "New formal investigation opened",
+    },
+    {
+        "signal_pattern": "fraud",
+        "signal_type": "keyword",
+        "severity": "high",
+        "description": "Fraud allegation or finding",
+    },
+    {
+        "signal_pattern": "arrest",
+        "signal_type": "keyword",
+        "severity": "critical",
+        "description": "Criminal arrest related to VA",
+    },
+    {
+        "signal_pattern": "first-ever",
+        "signal_type": "phrase",
+        "severity": "medium",
+        "description": "Unprecedented action",
+    },
+    {
+        "signal_pattern": "reversal",
+        "signal_type": "keyword",
+        "severity": "medium",
+        "description": "Policy or legal reversal",
+    },
+    {
+        "signal_pattern": "bipartisan letter",
+        "signal_type": "phrase",
+        "severity": "medium",
+        "description": "Cross-party congressional action",
+    },
+    {
+        "signal_pattern": "precedential opinion",
+        "signal_type": "phrase",
+        "severity": "high",
+        "description": "CAFC precedential ruling",
+    },
 ]
 
 
@@ -298,6 +356,37 @@ def seed_default_escalation_signals() -> int:
             inserted += 1
 
     return inserted
+
+
+def update_canonical_refs(event_id: str, refs: dict) -> None:
+    """Merge new canonical refs into an existing event's canonical_refs JSON."""
+    con = connect()
+    cur = execute(
+        con,
+        "SELECT canonical_refs FROM om_events WHERE event_id = :event_id",
+        {"event_id": event_id},
+    )
+    row = cur.fetchone()
+    if not row:
+        con.close()
+        return
+
+    existing = json.loads(row[0]) if row[0] else {}
+    existing.update(refs)
+
+    execute(
+        con,
+        """UPDATE om_events
+           SET canonical_refs = :canonical_refs, updated_at = :updated_at
+           WHERE event_id = :event_id""",
+        {
+            "canonical_refs": json.dumps(existing),
+            "updated_at": _utc_now_iso(),
+            "event_id": event_id,
+        },
+    )
+    con.commit()
+    con.close()
 
 
 def get_oversight_stats() -> dict:
@@ -326,7 +415,7 @@ def get_oversight_stats() -> dict:
         FROM om_events
         GROUP BY primary_source_type
         ORDER BY COUNT(*) DESC
-        """
+        """,
     )
     by_source = {row[0]: row[1] for row in cur.fetchall()}
 

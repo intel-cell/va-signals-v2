@@ -843,6 +843,66 @@ CREATE TABLE IF NOT EXISTS trend_daily_battlefield (
 CREATE INDEX IF NOT EXISTS idx_trend_daily_battlefield_date ON trend_daily_battlefield(date);
 
 -- ============================================================
+-- MULTI-TENANT SUPPORT
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS tenants (
+    tenant_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    plan TEXT NOT NULL DEFAULT 'free',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    owner_user_id TEXT NOT NULL,
+    billing_email TEXT,
+    domain TEXT,
+    trial_ends_at TEXT,
+    features_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenants_slug ON tenants(slug);
+CREATE INDEX IF NOT EXISTS idx_tenants_owner ON tenants(owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_tenants_status ON tenants(status);
+
+CREATE TABLE IF NOT EXISTS tenant_settings (
+    tenant_id TEXT PRIMARY KEY REFERENCES tenants(tenant_id),
+    api_rate_limit_per_minute INTEGER NOT NULL DEFAULT 60,
+    api_rate_limit_per_day INTEGER NOT NULL DEFAULT 10000,
+    max_users INTEGER NOT NULL DEFAULT 5,
+    max_signals_per_day INTEGER NOT NULL DEFAULT 1000,
+    enable_websocket INTEGER DEFAULT 1,
+    enable_battlefield INTEGER DEFAULT 1,
+    enable_oversight INTEGER DEFAULT 1,
+    enable_state_intelligence INTEGER DEFAULT 1,
+    enable_ml_scoring INTEGER DEFAULT 0,
+    enable_custom_integrations INTEGER DEFAULT 0,
+    slack_webhook_url TEXT,
+    email_notifications_enabled INTEGER DEFAULT 1,
+    daily_digest_enabled INTEGER DEFAULT 1,
+    data_retention_days INTEGER NOT NULL DEFAULT 90,
+    audit_log_retention_days INTEGER NOT NULL DEFAULT 365,
+    logo_url TEXT,
+    primary_color TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS tenant_members (
+    user_id TEXT NOT NULL,
+    tenant_id TEXT NOT NULL REFERENCES tenants(tenant_id),
+    role TEXT NOT NULL DEFAULT 'viewer',
+    joined_at TEXT NOT NULL,
+    invited_by TEXT,
+    is_primary INTEGER DEFAULT 0,
+    PRIMARY KEY (user_id, tenant_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenant_members_tenant ON tenant_members(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_members_user ON tenant_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_tenant_members_primary ON tenant_members(is_primary);
+
+-- ============================================================
 -- LDA.gov Lobbying Disclosure Filings
 -- ============================================================
 

@@ -1,35 +1,33 @@
 """CLI runner for oversight monitor - orchestrates agents and pipeline."""
 
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from .agents.gao import GAOAgent
-from .agents.oig import OIGAgent
-from .agents.crs import CRSAgent
-from .agents.congressional_record import CongressionalRecordAgent
-from .agents.committee_press import CommitteePressAgent
-from .agents.news_wire import NewsWireAgent
-from .agents.investigative import InvestigativeAgent
-from .agents.trade_press import TradePressAgent
-from .agents.cafc import CAFCAgent
+from .agents.base import RawEvent
 from .agents.bva import BVAAgent
-from .agents.base import RawEvent, TimestampResult
+from .agents.cafc import CAFCAgent
+from .agents.committee_press import CommitteePressAgent
+from .agents.congressional_record import CongressionalRecordAgent
+from .agents.crs import CRSAgent
+from .agents.gao import GAOAgent
+from .agents.investigative import InvestigativeAgent
+from .agents.news_wire import NewsWireAgent
+from .agents.oig import OIGAgent
+from .agents.trade_press import TradePressAgent
 from .db_helpers import (
-    insert_om_event,
     get_om_event,
-    insert_om_rejected,
     get_om_events_for_digest,
+    insert_om_event,
+    insert_om_rejected,
     seed_default_escalation_signals,
+    update_canonical_refs,
 )
-from .pipeline.quality_gate import check_quality_gate
-from .pipeline.escalation import check_escalation
-from .pipeline.deduplicator import deduplicate_event, extract_entities
 from .output.formatters import format_weekly_digest
-
+from .pipeline.deduplicator import deduplicate_event, extract_entities
+from .pipeline.escalation import check_escalation
+from .pipeline.quality_gate import check_quality_gate
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,7 +63,14 @@ class OversightRunResult:
 
 _THEME_KEYWORDS = {
     "oversight_report": ["report", "audit", "review", "assessment", "evaluation"],
-    "congressional_action": ["hearing", "committee", "subcommittee", "legislation", "bill", "resolution"],
+    "congressional_action": [
+        "hearing",
+        "committee",
+        "subcommittee",
+        "legislation",
+        "bill",
+        "resolution",
+    ],
     "legal_ruling": ["ruling", "decision", "opinion", "court", "judge", "appeal"],
     "policy_change": ["policy", "regulation", "rule", "guidance", "directive", "memorandum"],
     "budget_fiscal": ["budget", "funding", "appropriation", "fiscal", "spending"],
@@ -84,7 +89,7 @@ _SOURCE_TYPE_THEME_MAP = {
 }
 
 
-def _extract_theme(title: str, source_type: str) -> Optional[str]:
+def _extract_theme(title: str, source_type: str) -> str | None:
     """Extract theme from title keywords, falling back to source_type mapping."""
     lower_title = title.lower()
     for theme, keywords in _THEME_KEYWORDS.items():
@@ -104,7 +109,7 @@ def _process_raw_event(
     raw: RawEvent,
     agent,
     source_type: str,
-) -> tuple[Optional[dict], Optional[str]]:
+) -> tuple[dict | None, str | None]:
     """
     Process a raw event through the pipeline.
 
@@ -171,7 +176,7 @@ def _process_raw_event(
     return event, None
 
 
-def run_agent(agent_name: str, since: Optional[datetime] = None) -> OversightRunResult:
+def run_agent(agent_name: str, since: datetime | None = None) -> OversightRunResult:
     """
     Run a single oversight agent.
 
@@ -215,14 +220,16 @@ def run_agent(agent_name: str, since: Optional[datetime] = None) -> OversightRun
                 event, rejection_reason = _process_raw_event(raw, agent, agent_name)
 
                 if rejection_reason:
-                    insert_om_rejected({
-                        "source_type": agent_name,
-                        "url": raw.url,
-                        "title": raw.title,
-                        "pub_timestamp": None,
-                        "rejection_reason": rejection_reason,
-                        "fetched_at": raw.fetched_at,
-                    })
+                    insert_om_rejected(
+                        {
+                            "source_type": agent_name,
+                            "url": raw.url,
+                            "title": raw.title,
+                            "pub_timestamp": None,
+                            "rejection_reason": rejection_reason,
+                            "fetched_at": raw.fetched_at,
+                        }
+                    )
                     continue
 
                 # Check if already exists
@@ -260,7 +267,7 @@ def run_agent(agent_name: str, since: Optional[datetime] = None) -> OversightRun
         )
 
 
-def run_all_agents(since: Optional[datetime] = None) -> list[OversightRunResult]:
+def run_all_agents(since: datetime | None = None) -> list[OversightRunResult]:
     """
     Run all registered oversight agents in parallel using ThreadPoolExecutor.
 
@@ -293,8 +300,54 @@ def run_all_agents(since: Optional[datetime] = None) -> list[OversightRunResult]
                     errors=[f"Thread exception: {repr(e)}"],
                 )
 
+    # Run cross-source correlation after all agents have ingested
+    run_correlation()
+
     # Return in registry order for deterministic output
     return [agent_results[name] for name in AGENT_REGISTRY]
+
+
+def run_correlation() -> dict:
+    """
+    Run the cross-source correlator after agents have ingested events.
+
+    Finds compound signals across sources (oversight, bills, hearings, etc.)
+    and links member events via canonical_refs.
+
+    Returns:
+        Summary dict from CorrelationEngine.run()
+    """
+    try:
+        from src.signals.correlator import CorrelationEngine
+
+        engine = CorrelationEngine()
+        summary = engine.run()
+
+        # Link member events via canonical_refs
+        if summary.get("stored", 0) > 0:
+            from src.db.compound import get_compound_signals
+
+            recent = get_compound_signals(limit=summary["stored"])
+            for sig in recent:
+                compound_id = sig["compound_id"]
+                for member in sig.get("member_events", []):
+                    event_id = member.get("event_id", "")
+                    if event_id.startswith("om-"):
+                        update_canonical_refs(
+                            event_id,
+                            {"compound_signal": compound_id},
+                        )
+
+        logger.info(
+            "Correlator: %d signals found, %d stored",
+            summary.get("total_signals", 0),
+            summary.get("stored", 0),
+        )
+        return summary
+
+    except Exception as e:
+        logger.error("Correlator failed: %s", e)
+        return {"total_signals": 0, "stored": 0, "by_rule": {}, "error": str(e)}
 
 
 def run_backfill(
@@ -324,8 +377,8 @@ def run_backfill(
         agent_class = AGENT_REGISTRY[agent_name]
         agent = agent_class()
 
-        start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
-        end = datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
+        start = datetime.fromisoformat(start_date).replace(tzinfo=UTC)
+        end = datetime.fromisoformat(end_date).replace(tzinfo=UTC)
 
         raw_events = agent.backfill(start, end)
         logger.info(f"[{agent_name}] Backfill fetched {len(raw_events)} events")

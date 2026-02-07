@@ -9,9 +9,9 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
 
@@ -28,12 +28,13 @@ TOPIC_KEYWORDS = {
     "vasrd": ["vasrd", "schedule for rating disabilities"],
 }
 
-TITLE_SIMILARITY_THRESHOLD = 0.3
+TITLE_SIMILARITY_THRESHOLD = 0.85
 
 
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CorrelationRule:
@@ -53,7 +54,7 @@ class MemberEvent:
     source_type: str
     event_id: str
     title: str
-    timestamp: Optional[str]
+    timestamp: str | None
     topics: list[str]
     metadata: dict[str, Any]
 
@@ -94,10 +95,11 @@ class CompoundSignal:
 # Engine
 # ---------------------------------------------------------------------------
 
+
 class CorrelationEngine:
     """Evaluates correlation rules across multiple data sources."""
 
-    def __init__(self, rules_path: Optional[Path] = None):
+    def __init__(self, rules_path: Path | None = None):
         self.rules = self._load_rules(rules_path or DEFAULT_RULES_PATH)
 
     # -- Rule loading -------------------------------------------------------
@@ -113,17 +115,19 @@ class CorrelationEngine:
             return []
         rules = []
         for item in raw:
-            rules.append(CorrelationRule(
-                rule_id=item["rule_id"],
-                name=item["name"],
-                description=item.get("description", ""),
-                source_types=item["source_types"],
-                temporal_window_hours=item["temporal_window_hours"],
-                min_topic_overlap=item.get("min_topic_overlap", 1),
-                severity_base=item["severity_base"],
-                severity_multipliers=item.get("severity_multipliers", {}),
-                min_source_count=item.get("min_source_count", 2),
-            ))
+            rules.append(
+                CorrelationRule(
+                    rule_id=item["rule_id"],
+                    name=item["name"],
+                    description=item.get("description", ""),
+                    source_types=item["source_types"],
+                    temporal_window_hours=item["temporal_window_hours"],
+                    min_topic_overlap=item.get("min_topic_overlap", 1),
+                    severity_base=item["severity_base"],
+                    severity_multipliers=item.get("severity_multipliers", {}),
+                    min_source_count=item.get("min_source_count", 2),
+                )
+            )
         return rules
 
     # -- Event fetching -----------------------------------------------------
@@ -139,7 +143,7 @@ class CorrelationEngine:
     def _fetch_recent_events(self, hours: int) -> dict[str, list[MemberEvent]]:
         from src.db import connect, execute
 
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
         result: dict[str, list[MemberEvent]] = {
             "oversight": [],
             "bill": [],
@@ -150,100 +154,130 @@ class CorrelationEngine:
         con = connect()
         try:
             # Oversight events
-            cur = execute(con, """
+            cur = execute(
+                con,
+                """
                 SELECT event_id, event_type, theme, primary_source_type,
                        pub_timestamp, title, summary, is_escalation
                 FROM om_events
                 WHERE created_at >= :cutoff OR pub_timestamp >= :cutoff
                 ORDER BY pub_timestamp DESC
-            """, {"cutoff": cutoff})
+            """,
+                {"cutoff": cutoff},
+            )
             for row in cur.fetchall():
                 topics = self._extract_topics(row[5] or "", f"{row[6] or ''} {row[2] or ''}")
-                result["oversight"].append(MemberEvent(
-                    source_type="oversight",
-                    event_id=row[0],
-                    title=row[5] or "",
-                    timestamp=row[4],
-                    topics=topics,
-                    metadata={
-                        "event_type": row[1],
-                        "theme": row[2],
-                        "primary_source_type": row[3],
-                        "is_escalation": bool(row[7]),
-                    },
-                ))
+                result["oversight"].append(
+                    MemberEvent(
+                        source_type="oversight",
+                        event_id=row[0],
+                        title=row[5] or "",
+                        timestamp=row[4],
+                        topics=topics,
+                        metadata={
+                            "event_type": row[1],
+                            "theme": row[2],
+                            "primary_source_type": row[3],
+                            "is_escalation": bool(row[7]),
+                        },
+                    )
+                )
 
             # Bills
-            cur = execute(con, """
+            cur = execute(
+                con,
+                """
                 SELECT bill_id, title, policy_area, introduced_date, latest_action_date
                 FROM bills
                 WHERE updated_at >= :cutoff OR introduced_date >= :cutoff
                 ORDER BY introduced_date DESC
-            """, {"cutoff": cutoff})
+            """,
+                {"cutoff": cutoff},
+            )
             for row in cur.fetchall():
                 topics = self._extract_topics(row[1] or "", row[2] or "")
-                result["bill"].append(MemberEvent(
-                    source_type="bill",
-                    event_id=row[0],
-                    title=row[1] or "",
-                    timestamp=row[3],
-                    topics=topics,
-                    metadata={"policy_area": row[2]},
-                ))
+                result["bill"].append(
+                    MemberEvent(
+                        source_type="bill",
+                        event_id=row[0],
+                        title=row[1] or "",
+                        timestamp=row[3],
+                        topics=topics,
+                        metadata={"policy_area": row[2]},
+                    )
+                )
 
             # Hearings
-            cur = execute(con, """
+            cur = execute(
+                con,
+                """
                 SELECT event_id, title, hearing_date, committee_name, status
                 FROM hearings
                 WHERE updated_at >= :cutoff OR hearing_date >= :cutoff
                 ORDER BY hearing_date DESC
-            """, {"cutoff": cutoff})
+            """,
+                {"cutoff": cutoff},
+            )
             for row in cur.fetchall():
                 topics = self._extract_topics(row[1] or "", row[3] or "")
-                result["hearing"].append(MemberEvent(
-                    source_type="hearing",
-                    event_id=row[0],
-                    title=row[1] or "",
-                    timestamp=row[2],
-                    topics=topics,
-                    metadata={"committee_name": row[3], "status": row[4]},
-                ))
+                result["hearing"].append(
+                    MemberEvent(
+                        source_type="hearing",
+                        event_id=row[0],
+                        title=row[1] or "",
+                        timestamp=row[2],
+                        topics=topics,
+                        metadata={"committee_name": row[3], "status": row[4]},
+                    )
+                )
 
             # Federal Register
-            cur = execute(con, """
+            cur = execute(
+                con,
+                """
                 SELECT doc_id, title, published_date, document_type
                 FROM fr_seen
                 WHERE first_seen_at >= :cutoff OR published_date >= :cutoff
                 ORDER BY published_date DESC
-            """, {"cutoff": cutoff})
+            """,
+                {"cutoff": cutoff},
+            )
             for row in cur.fetchall():
                 topics = self._extract_topics(row[1] or "", row[3] or "")
-                result["federal_register"].append(MemberEvent(
-                    source_type="federal_register",
-                    event_id=row[0],
-                    title=row[1] or "",
-                    timestamp=row[2],
-                    topics=topics,
-                    metadata={"document_type": row[3]},
-                ))
+                result["federal_register"].append(
+                    MemberEvent(
+                        source_type="federal_register",
+                        event_id=row[0],
+                        title=row[1] or "",
+                        timestamp=row[2],
+                        topics=topics,
+                        metadata={"document_type": row[3]},
+                    )
+                )
 
             # State signals
-            cur = execute(con, """
+            cur = execute(
+                con,
+                """
                 SELECT signal_id, state, title, content, pub_date
                 FROM state_signals
                 WHERE fetched_at >= :cutoff OR pub_date >= :cutoff
                 ORDER BY pub_date DESC
-            """, {"cutoff": cutoff})
+            """,
+                {"cutoff": cutoff},
+            )
             for row in cur.fetchall():
                 topics = self._extract_topics(row[2] or "", row[3] or "")
-                result["state"].append(MemberEvent(
-                    source_type="state",
-                    event_id=row[0],
-                    title=row[2] or "",
-                    timestamp=row[4],
-                    topics=topics,
-                    metadata={"state": row[1]},
-                ))
+                result["state"].append(
+                    MemberEvent(
+                        source_type="state",
+                        event_id=row[0],
+                        title=row[2] or "",
+                        timestamp=row[4],
+                        topics=topics,
+                        metadata={"state": row[1]},
+                    )
+                )
 
         finally:
             con.close()
@@ -352,7 +386,9 @@ class CorrelationEngine:
 
     # -- Compound ID --------------------------------------------------------
 
-    def _make_compound_id(self, rule_id: str, event_ids: list[str], topics: list[str] | None = None) -> str:
+    def _make_compound_id(
+        self, rule_id: str, event_ids: list[str], topics: list[str] | None = None
+    ) -> str:
         parts = [rule_id, "|".join(sorted(event_ids))]
         if topics:
             parts.append("|".join(sorted(topics)))
@@ -377,7 +413,7 @@ class CorrelationEngine:
         seen_ids: set[str] = set()
 
         for i, st_a in enumerate(available):
-            for st_b in available[i + 1:]:
+            for st_b in available[i + 1 :]:
                 events_a = events_by_source[st_a]
                 events_b = events_by_source[st_b]
                 topics = self._find_topic_overlap(events_a, events_b)
@@ -394,16 +430,18 @@ class CorrelationEngine:
                 severity = self._compute_severity(rule, matched, topics)
                 narrative = self._generate_narrative(rule, matched, topics)
 
-                signals.append(CompoundSignal(
-                    compound_id=cid,
-                    rule_id=rule.rule_id,
-                    severity_score=severity,
-                    narrative=narrative,
-                    temporal_window_hours=rule.temporal_window_hours,
-                    member_events=matched,
-                    topics=topics,
-                    created_at=datetime.now(timezone.utc).isoformat(),
-                ))
+                signals.append(
+                    CompoundSignal(
+                        compound_id=cid,
+                        rule_id=rule.rule_id,
+                        severity_score=severity,
+                        narrative=narrative,
+                        temporal_window_hours=rule.temporal_window_hours,
+                        member_events=matched,
+                        topics=topics,
+                        created_at=datetime.now(UTC).isoformat(),
+                    )
+                )
 
         return signals
 
@@ -437,16 +475,18 @@ class CorrelationEngine:
             severity = self._compute_severity(rule, evts, topics)
             narrative = self._generate_narrative(rule, evts, topics)
 
-            signals.append(CompoundSignal(
-                compound_id=cid,
-                rule_id=rule.rule_id,
-                severity_score=severity,
-                narrative=narrative,
-                temporal_window_hours=rule.temporal_window_hours,
-                member_events=evts,
-                topics=topics,
-                created_at=datetime.now(timezone.utc).isoformat(),
-            ))
+            signals.append(
+                CompoundSignal(
+                    compound_id=cid,
+                    rule_id=rule.rule_id,
+                    severity_score=severity,
+                    narrative=narrative,
+                    temporal_window_hours=rule.temporal_window_hours,
+                    member_events=evts,
+                    topics=topics,
+                    created_at=datetime.now(UTC).isoformat(),
+                )
+            )
 
         return signals
 

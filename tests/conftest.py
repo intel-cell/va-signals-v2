@@ -1,5 +1,4 @@
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -24,8 +23,16 @@ def use_test_db(tmp_path, monkeypatch):
     monkeypatch.setattr(db_core, "DB_PATH", test_db)
     monkeypatch.setattr(db_module, "DB_PATH", test_db)
 
-    # Initialize the schema
+    # Initialize the schema (connect() already sets WAL mode)
     db_module.init_db()
+
+    # Verify WAL mode is active to prevent 'database locked' errors
+    import sqlite3
+
+    con = sqlite3.connect(test_db, timeout=30)
+    mode = con.execute("PRAGMA journal_mode").fetchone()[0]
+    con.close()
+    assert mode == "wal", f"Expected WAL journal mode, got {mode}"
 
     yield
 

@@ -6,9 +6,8 @@ TDD: Tests written first, implementation follows.
 import json
 import os
 import sqlite3
-import tempfile
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -186,86 +185,136 @@ def rules_path(tmp_path):
 def populated_db(tmp_db):
     """Populate the test DB with events across sources for correlation testing."""
     con = sqlite3.connect(str(tmp_db), timeout=30)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     two_days_ago = (now - timedelta(days=2)).isoformat()
     five_days_ago = (now - timedelta(days=5)).isoformat()
     one_day_ago = (now - timedelta(days=1)).isoformat()
 
     # Insert oversight event about disability benefits
-    con.execute("""
+    con.execute(
+        """
         INSERT INTO om_events (event_id, event_type, theme, primary_source_type,
             primary_url, pub_timestamp, pub_precision, pub_source, title, summary,
             is_escalation, fetched_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        "om-001", "report", "disability", "gao",
-        "https://gao.gov/report1", two_days_ago, "day", "gao",
-        "GAO Report on Disability Benefits Processing Backlog",
-        "Examination of claims backlog and rating delays",
-        1, two_days_ago,
-    ))
+    """,
+        (
+            "om-001",
+            "report",
+            "disability",
+            "gao",
+            "https://gao.gov/report1",
+            two_days_ago,
+            "day",
+            "gao",
+            "GAO Report on Disability Benefits Processing Backlog",
+            "Examination of claims backlog and rating delays",
+            1,
+            two_days_ago,
+        ),
+    )
 
-    con.execute("""
+    con.execute(
+        """
         INSERT INTO om_events (event_id, event_type, theme, primary_source_type,
             primary_url, pub_timestamp, pub_precision, pub_source, title, summary,
             is_escalation, fetched_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        "om-002", "report", "appeals", "oig",
-        "https://oig.va.gov/report2", one_day_ago, "day", "oig",
-        "OIG Review of Appeals Processing",
-        "Review of BVA appeal processing timelines",
-        0, one_day_ago,
-    ))
+    """,
+        (
+            "om-002",
+            "report",
+            "appeals",
+            "oig",
+            "https://oig.va.gov/report2",
+            one_day_ago,
+            "day",
+            "oig",
+            "OIG Review of Appeals Processing",
+            "Review of BVA appeal processing timelines",
+            0,
+            one_day_ago,
+        ),
+    )
 
     # Insert bill about disability benefits
-    con.execute("""
+    con.execute(
+        """
         INSERT INTO bills (bill_id, congress, bill_type, bill_number, title,
             policy_area, introduced_date, latest_action_date, first_seen_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        "hr-1234-119", 119, "HR", 1234,
-        "Veterans Disability Benefits Improvement Act",
-        "Armed Forces and National Security",
-        five_days_ago, two_days_ago, five_days_ago, two_days_ago,
-    ))
+    """,
+        (
+            "hr-1234-119",
+            119,
+            "HR",
+            1234,
+            "Veterans Disability Benefits Improvement Act",
+            "Armed Forces and National Security",
+            five_days_ago,
+            two_days_ago,
+            five_days_ago,
+            two_days_ago,
+        ),
+    )
 
     # Insert hearing about disability
-    con.execute("""
+    con.execute(
+        """
         INSERT INTO hearings (event_id, congress, chamber, committee_code,
             committee_name, hearing_date, title, status, first_seen_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        "hearing-001", 119, "House", "HVAC",
-        "House Veterans Affairs Committee",
-        one_day_ago, "Hearing on Disability Claims Backlog",
-        "scheduled", five_days_ago, one_day_ago,
-    ))
+    """,
+        (
+            "hearing-001",
+            119,
+            "House",
+            "HVAC",
+            "House Veterans Affairs Committee",
+            one_day_ago,
+            "Hearing on Disability Claims Backlog",
+            "scheduled",
+            five_days_ago,
+            one_day_ago,
+        ),
+    )
 
     # Insert FR document about disability rating
-    con.execute("""
+    con.execute(
+        """
         INSERT INTO fr_seen (doc_id, published_date, first_seen_at, source_url,
             document_type, title)
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        "fr-2026-01234", two_days_ago, two_days_ago,
-        "https://federalregister.gov/d/2026-01234",
-        "Rule", "Schedule for Rating Disabilities Update",
-    ))
+    """,
+        (
+            "fr-2026-01234",
+            two_days_ago,
+            two_days_ago,
+            "https://federalregister.gov/d/2026-01234",
+            "Rule",
+            "Schedule for Rating Disabilities Update",
+        ),
+    )
 
     # Insert state signals (3 states, same topic)
-    for i, state in enumerate(["TX", "CA", "FL", "NY"]):
-        con.execute("""
+    for _i, state in enumerate(["TX", "CA", "FL", "NY"]):
+        con.execute(
+            """
             INSERT INTO state_signals (signal_id, state, source_id, title, content,
                 url, pub_date, fetched_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            f"state-{state}-001", state, f"source-{state}",
-            f"{state} Report on Disability Benefits Processing Delays",
-            "State-level analysis of veteran disability claims backlog",
-            f"https://{state.lower()}.gov/report1",
-            two_days_ago, two_days_ago,
-        ))
+        """,
+            (
+                f"state-{state}-001",
+                state,
+                f"source-{state}",
+                f"{state} Report on Disability Benefits Processing Delays",
+                "State-level analysis of veteran disability claims backlog",
+                f"https://{state.lower()}.gov/report1",
+                two_days_ago,
+                two_days_ago,
+            ),
+        )
 
     con.commit()
     con.close()
@@ -283,12 +332,14 @@ class TestRuleLoading:
     def test_load_rules_from_yaml(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             assert len(engine.rules) == 4
 
     def test_rule_has_required_fields(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]
             assert rule.rule_id == "legislative_to_oversight"
@@ -302,6 +353,7 @@ class TestRuleLoading:
         """Loading without explicit path uses config/correlation_rules.yaml."""
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             # Should load rules from default path (may be 0 if file doesn't exist yet)
             assert isinstance(engine.rules, list)
@@ -309,12 +361,14 @@ class TestRuleLoading:
     def test_load_rules_missing_file_returns_empty(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=Path("/nonexistent/rules.yaml"))
             assert engine.rules == []
 
     def test_rule_ids_are_unique(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             ids = [r.rule_id for r in engine.rules]
             assert len(ids) == len(set(ids))
@@ -331,53 +385,85 @@ class TestTopicOverlap:
     def test_find_overlap_with_shared_topics(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine()
-            events_a = [MemberEvent(
-                source_type="bill", event_id="b1", title="Disability Benefits Act",
-                timestamp="2026-01-01T00:00:00", topics=["disability_benefits", "rating"],
-                metadata={},
-            )]
-            events_b = [MemberEvent(
-                source_type="oversight", event_id="o1", title="GAO Disability Report",
-                timestamp="2026-01-02T00:00:00", topics=["disability_benefits", "claims_backlog"],
-                metadata={},
-            )]
+            events_a = [
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Disability Benefits Act",
+                    timestamp="2026-01-01T00:00:00",
+                    topics=["disability_benefits", "rating"],
+                    metadata={},
+                )
+            ]
+            events_b = [
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="GAO Disability Report",
+                    timestamp="2026-01-02T00:00:00",
+                    topics=["disability_benefits", "claims_backlog"],
+                    metadata={},
+                )
+            ]
             overlap = engine._find_topic_overlap(events_a, events_b)
             assert "disability_benefits" in overlap
 
     def test_find_overlap_no_shared_topics(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine()
-            events_a = [MemberEvent(
-                source_type="bill", event_id="b1", title="Tax Reform",
-                timestamp="2026-01-01T00:00:00", topics=["taxation"],
-                metadata={},
-            )]
-            events_b = [MemberEvent(
-                source_type="oversight", event_id="o1", title="Healthcare Report",
-                timestamp="2026-01-02T00:00:00", topics=["healthcare"],
-                metadata={},
-            )]
+            events_a = [
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Tax Reform",
+                    timestamp="2026-01-01T00:00:00",
+                    topics=["taxation"],
+                    metadata={},
+                )
+            ]
+            events_b = [
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Healthcare Report",
+                    timestamp="2026-01-02T00:00:00",
+                    topics=["healthcare"],
+                    metadata={},
+                )
+            ]
             overlap = engine._find_topic_overlap(events_a, events_b)
             assert overlap == []
 
     def test_title_similarity_adds_overlap(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine()
-            events_a = [MemberEvent(
-                source_type="bill", event_id="b1",
-                title="Veterans Disability Benefits Improvement",
-                timestamp="2026-01-01T00:00:00", topics=[],
-                metadata={},
-            )]
-            events_b = [MemberEvent(
-                source_type="oversight", event_id="o1",
-                title="Report on Veterans Disability Benefits",
-                timestamp="2026-01-02T00:00:00", topics=[],
-                metadata={},
-            )]
+            # Near-identical titles that exceed the 0.85 Jaccard threshold
+            events_a = [
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Veterans Disability Benefits Processing Delays Report",
+                    timestamp="2026-01-01T00:00:00",
+                    topics=[],
+                    metadata={},
+                )
+            ]
+            events_b = [
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Veterans Disability Benefits Processing Delays Report Review",
+                    timestamp="2026-01-02T00:00:00",
+                    topics=[],
+                    metadata={},
+                )
+            ]
             overlap = engine._find_topic_overlap(events_a, events_b)
             # Title similarity should produce a "title_match" topic
             assert "title_match" in overlap
@@ -385,35 +471,63 @@ class TestTopicOverlap:
     def test_title_similarity_below_threshold(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine()
-            events_a = [MemberEvent(
-                source_type="bill", event_id="b1",
-                title="National Defense Authorization Act",
-                timestamp="2026-01-01T00:00:00", topics=[],
-                metadata={},
-            )]
-            events_b = [MemberEvent(
-                source_type="oversight", event_id="o1",
-                title="Report on Veteran Benefits",
-                timestamp="2026-01-02T00:00:00", topics=[],
-                metadata={},
-            )]
+            events_a = [
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="National Defense Authorization Act",
+                    timestamp="2026-01-01T00:00:00",
+                    topics=[],
+                    metadata={},
+                )
+            ]
+            events_b = [
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report on Veteran Benefits",
+                    timestamp="2026-01-02T00:00:00",
+                    topics=[],
+                    metadata={},
+                )
+            ]
             overlap = engine._find_topic_overlap(events_a, events_b)
             assert "title_match" not in overlap
 
     def test_multiple_events_aggregate_topics(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine()
             events_a = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill A",
-                            timestamp="2026-01-01T00:00:00", topics=["disability_benefits"], metadata={}),
-                MemberEvent(source_type="bill", event_id="b2", title="Bill B",
-                            timestamp="2026-01-01T00:00:00", topics=["appeals"], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill A",
+                    timestamp="2026-01-01T00:00:00",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b2",
+                    title="Bill B",
+                    timestamp="2026-01-01T00:00:00",
+                    topics=["appeals"],
+                    metadata={},
+                ),
             ]
             events_b = [
-                MemberEvent(source_type="oversight", event_id="o1", title="Report",
-                            timestamp="2026-01-02T00:00:00", topics=["appeals", "rating"], metadata={}),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report",
+                    timestamp="2026-01-02T00:00:00",
+                    topics=["appeals", "rating"],
+                    metadata={},
+                ),
             ]
             overlap = engine._find_topic_overlap(events_a, events_b)
             assert "appeals" in overlap
@@ -430,13 +544,26 @@ class TestSeverityComputation:
     def test_base_severity(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]  # legislative_to_oversight, base=0.6
             events = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill",
-                            timestamp="2026-01-01", topics=["disability_benefits"], metadata={}),
-                MemberEvent(source_type="oversight", event_id="o1", title="Report",
-                            timestamp="2026-01-02", topics=["disability_benefits"], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill",
+                    timestamp="2026-01-01",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report",
+                    timestamp="2026-01-02",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
             ]
             score = engine._compute_severity(rule, events, ["disability_benefits"])
             assert score >= rule.severity_base
@@ -445,13 +572,26 @@ class TestSeverityComputation:
     def test_topic_overlap_bonus(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]
             events = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill",
-                            timestamp="2026-01-01", topics=["disability_benefits", "rating"], metadata={}),
-                MemberEvent(source_type="oversight", event_id="o1", title="Report",
-                            timestamp="2026-01-02", topics=["disability_benefits", "rating"], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill",
+                    timestamp="2026-01-01",
+                    topics=["disability_benefits", "rating"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report",
+                    timestamp="2026-01-02",
+                    topics=["disability_benefits", "rating"],
+                    metadata={},
+                ),
             ]
             # More topic overlap = higher score
             score_two = engine._compute_severity(rule, events, ["disability_benefits", "rating"])
@@ -461,13 +601,26 @@ class TestSeverityComputation:
     def test_severity_capped_at_1(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]
             events = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill",
-                            timestamp="2026-01-01", topics=["a", "b", "c", "d", "e"], metadata={"is_escalation": True}),
-                MemberEvent(source_type="oversight", event_id="o1", title="Report",
-                            timestamp="2026-01-02", topics=["a", "b", "c", "d", "e"], metadata={"is_escalation": True}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill",
+                    timestamp="2026-01-01",
+                    topics=["a", "b", "c", "d", "e"],
+                    metadata={"is_escalation": True},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report",
+                    timestamp="2026-01-02",
+                    topics=["a", "b", "c", "d", "e"],
+                    metadata={"is_escalation": True},
+                ),
             ]
             score = engine._compute_severity(rule, events, ["a", "b", "c", "d", "e"])
             assert score <= 1.0
@@ -475,20 +628,44 @@ class TestSeverityComputation:
     def test_escalation_bonus(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]  # has escalation_bonus: 0.15
             events_no_esc = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill",
-                            timestamp="2026-01-01", topics=["disability_benefits"], metadata={}),
-                MemberEvent(source_type="oversight", event_id="o1", title="Report",
-                            timestamp="2026-01-02", topics=["disability_benefits"], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill",
+                    timestamp="2026-01-01",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report",
+                    timestamp="2026-01-02",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
             ]
             events_esc = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill",
-                            timestamp="2026-01-01", topics=["disability_benefits"], metadata={}),
-                MemberEvent(source_type="oversight", event_id="o1", title="Report",
-                            timestamp="2026-01-02", topics=["disability_benefits"],
-                            metadata={"is_escalation": True}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill",
+                    timestamp="2026-01-01",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report",
+                    timestamp="2026-01-02",
+                    topics=["disability_benefits"],
+                    metadata={"is_escalation": True},
+                ),
             ]
             score_no = engine._compute_severity(rule, events_no_esc, ["disability_benefits"])
             score_esc = engine._compute_severity(rule, events_esc, ["disability_benefits"])
@@ -506,15 +683,26 @@ class TestNarrativeGeneration:
     def test_narrative_includes_rule_name(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]
             events = [
-                MemberEvent(source_type="bill", event_id="b1",
-                            title="Veterans Disability Benefits Improvement Act",
-                            timestamp="2026-01-01", topics=["disability_benefits"], metadata={}),
-                MemberEvent(source_type="oversight", event_id="o1",
-                            title="GAO Report on Disability Benefits",
-                            timestamp="2026-01-02", topics=["disability_benefits"], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Veterans Disability Benefits Improvement Act",
+                    timestamp="2026-01-01",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="GAO Report on Disability Benefits",
+                    timestamp="2026-01-02",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
             ]
             narrative = engine._generate_narrative(rule, events, ["disability_benefits"])
             assert "Legislative to Oversight" in narrative
@@ -522,13 +710,26 @@ class TestNarrativeGeneration:
     def test_narrative_includes_topics(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]
             events = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill",
-                            timestamp="2026-01-01", topics=["disability_benefits"], metadata={}),
-                MemberEvent(source_type="oversight", event_id="o1", title="Report",
-                            timestamp="2026-01-02", topics=["disability_benefits"], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill",
+                    timestamp="2026-01-01",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report",
+                    timestamp="2026-01-02",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
             ]
             narrative = engine._generate_narrative(rule, events, ["disability_benefits"])
             assert "disability_benefits" in narrative
@@ -536,13 +737,26 @@ class TestNarrativeGeneration:
     def test_narrative_includes_source_count(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]
             events = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill A",
-                            timestamp="2026-01-01", topics=["disability_benefits"], metadata={}),
-                MemberEvent(source_type="oversight", event_id="o1", title="Report A",
-                            timestamp="2026-01-02", topics=["disability_benefits"], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill A",
+                    timestamp="2026-01-01",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
+                MemberEvent(
+                    source_type="oversight",
+                    event_id="o1",
+                    title="Report A",
+                    timestamp="2026-01-02",
+                    topics=["disability_benefits"],
+                    metadata={},
+                ),
             ]
             narrative = engine._generate_narrative(rule, events, ["disability_benefits"])
             assert "2" in narrative  # 2 events
@@ -550,11 +764,18 @@ class TestNarrativeGeneration:
     def test_narrative_returns_string(self, rules_path, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine, MemberEvent
+
             engine = CorrelationEngine(rules_path=rules_path)
             rule = engine.rules[0]
             events = [
-                MemberEvent(source_type="bill", event_id="b1", title="Bill",
-                            timestamp="2026-01-01", topics=[], metadata={}),
+                MemberEvent(
+                    source_type="bill",
+                    event_id="b1",
+                    title="Bill",
+                    timestamp="2026-01-01",
+                    topics=[],
+                    metadata={},
+                ),
             ]
             narrative = engine._generate_narrative(rule, events, [])
             assert isinstance(narrative, str)
@@ -572,6 +793,7 @@ class TestEventFetching:
     def test_fetch_oversight_events(self, populated_db):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             events = engine._fetch_recent_events(hours=168)
             assert "oversight" in events
@@ -580,6 +802,7 @@ class TestEventFetching:
     def test_fetch_bill_events(self, populated_db):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             events = engine._fetch_recent_events(hours=168)
             assert "bill" in events
@@ -588,6 +811,7 @@ class TestEventFetching:
     def test_fetch_hearing_events(self, populated_db):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             events = engine._fetch_recent_events(hours=168)
             assert "hearing" in events
@@ -596,6 +820,7 @@ class TestEventFetching:
     def test_fetch_federal_register_events(self, populated_db):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             events = engine._fetch_recent_events(hours=168)
             assert "federal_register" in events
@@ -604,6 +829,7 @@ class TestEventFetching:
     def test_fetch_state_events(self, populated_db):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             events = engine._fetch_recent_events(hours=168)
             assert "state" in events
@@ -612,6 +838,7 @@ class TestEventFetching:
     def test_fetch_respects_time_window(self, populated_db):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             # Very short window should get fewer events
             events_short = engine._fetch_recent_events(hours=1)
@@ -623,6 +850,7 @@ class TestEventFetching:
     def test_member_event_has_topics(self, populated_db):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             events = engine._fetch_recent_events(hours=168)
             # Oversight event about disability should have topics extracted
@@ -643,6 +871,7 @@ class TestEngineEvaluation:
     def test_evaluate_returns_compound_signals(self, populated_db, rules_path):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             signals = engine.evaluate_rules()
             assert isinstance(signals, list)
@@ -650,6 +879,7 @@ class TestEngineEvaluation:
     def test_legislative_to_oversight_detected(self, populated_db, rules_path):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             signals = engine.evaluate_rules()
             rule_ids = [s.rule_id for s in signals]
@@ -658,6 +888,7 @@ class TestEngineEvaluation:
     def test_state_divergence_detected(self, populated_db, rules_path):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             signals = engine.evaluate_rules()
             rule_ids = [s.rule_id for s in signals]
@@ -666,6 +897,7 @@ class TestEngineEvaluation:
     def test_compound_signal_has_required_fields(self, populated_db, rules_path):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             signals = engine.evaluate_rules()
             assert len(signals) > 0
@@ -682,6 +914,7 @@ class TestEngineEvaluation:
     def test_no_duplicate_compound_ids(self, populated_db, rules_path):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             signals = engine.evaluate_rules()
             ids = [s.compound_id for s in signals]
@@ -690,6 +923,7 @@ class TestEngineEvaluation:
     def test_run_returns_summary_dict(self, populated_db, rules_path):
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             summary = engine.run()
             assert isinstance(summary, dict)
@@ -713,24 +947,38 @@ class TestCompoundDB:
             "severity_score": severity,
             "narrative": "Test correlation detected",
             "temporal_window_hours": 168,
-            "member_events": json.dumps([
-                {"source_type": "bill", "event_id": "b1", "title": "Bill A", "timestamp": "2026-01-01"},
-                {"source_type": "oversight", "event_id": "o1", "title": "Report A", "timestamp": "2026-01-02"},
-            ]),
+            "member_events": json.dumps(
+                [
+                    {
+                        "source_type": "bill",
+                        "event_id": "b1",
+                        "title": "Bill A",
+                        "timestamp": "2026-01-01",
+                    },
+                    {
+                        "source_type": "oversight",
+                        "event_id": "o1",
+                        "title": "Report A",
+                        "timestamp": "2026-01-02",
+                    },
+                ]
+            ),
             "topics": json.dumps(["disability_benefits"]),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
         }
 
     def test_insert_compound_signal(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.db.compound import insert_compound_signal
+
             data = self._make_signal_data()
             result = insert_compound_signal(data)
             assert result == data["compound_id"]
 
     def test_get_compound_signal(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_signal
+            from src.db.compound import get_compound_signal, insert_compound_signal
+
             data = self._make_signal_data()
             insert_compound_signal(data)
             row = get_compound_signal(data["compound_id"])
@@ -742,36 +990,41 @@ class TestCompoundDB:
     def test_get_compound_signal_not_found(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.db.compound import get_compound_signal
+
             row = get_compound_signal("nonexistent-id")
             assert row is None
 
     def test_get_compound_signals_default(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_signals
-            for i in range(5):
+            from src.db.compound import get_compound_signals, insert_compound_signal
+
+            for _i in range(5):
                 insert_compound_signal(self._make_signal_data())
             rows = get_compound_signals()
             assert len(rows) == 5
 
     def test_get_compound_signals_limit(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_signals
-            for i in range(5):
+            from src.db.compound import get_compound_signals, insert_compound_signal
+
+            for _i in range(5):
                 insert_compound_signal(self._make_signal_data())
             rows = get_compound_signals(limit=3)
             assert len(rows) == 3
 
     def test_get_compound_signals_offset(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_signals
-            for i in range(5):
+            from src.db.compound import get_compound_signals, insert_compound_signal
+
+            for _i in range(5):
                 insert_compound_signal(self._make_signal_data())
             rows = get_compound_signals(limit=10, offset=3)
             assert len(rows) == 2
 
     def test_get_compound_signals_filter_by_rule(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_signals
+            from src.db.compound import get_compound_signals, insert_compound_signal
+
             insert_compound_signal(self._make_signal_data(rule_id="rule_a"))
             insert_compound_signal(self._make_signal_data(rule_id="rule_b"))
             insert_compound_signal(self._make_signal_data(rule_id="rule_a"))
@@ -781,7 +1034,8 @@ class TestCompoundDB:
 
     def test_get_compound_signals_filter_by_severity(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_signals
+            from src.db.compound import get_compound_signals, insert_compound_signal
+
             insert_compound_signal(self._make_signal_data(severity=0.3))
             insert_compound_signal(self._make_signal_data(severity=0.7))
             insert_compound_signal(self._make_signal_data(severity=0.9))
@@ -791,7 +1045,12 @@ class TestCompoundDB:
 
     def test_resolve_compound_signal(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, resolve_compound_signal, get_compound_signal
+            from src.db.compound import (
+                get_compound_signal,
+                insert_compound_signal,
+                resolve_compound_signal,
+            )
+
             data = self._make_signal_data()
             insert_compound_signal(data)
             result = resolve_compound_signal(data["compound_id"])
@@ -802,12 +1061,18 @@ class TestCompoundDB:
     def test_resolve_nonexistent_returns_false(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.db.compound import resolve_compound_signal
+
             result = resolve_compound_signal("nonexistent-id")
             assert result is False
 
     def test_get_compound_stats(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_stats, resolve_compound_signal
+            from src.db.compound import (
+                get_compound_stats,
+                insert_compound_signal,
+                resolve_compound_signal,
+            )
+
             d1 = self._make_signal_data(rule_id="rule_a", severity=0.8)
             d2 = self._make_signal_data(rule_id="rule_b", severity=0.5)
             d3 = self._make_signal_data(rule_id="rule_a", severity=0.9)
@@ -826,7 +1091,8 @@ class TestCompoundDB:
 
     def test_insert_duplicate_compound_id_ignored(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
-            from src.db.compound import insert_compound_signal, get_compound_signals
+            from src.db.compound import get_compound_signals, insert_compound_signal
+
             data = self._make_signal_data()
             insert_compound_signal(data)
             # Second insert with same compound_id should be ignored
@@ -847,6 +1113,7 @@ class TestMemberEvent:
     def test_member_event_creation(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import MemberEvent
+
             ev = MemberEvent(
                 source_type="bill",
                 event_id="b1",
@@ -863,6 +1130,7 @@ class TestMemberEvent:
     def test_member_event_to_dict(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import MemberEvent
+
             ev = MemberEvent(
                 source_type="oversight",
                 event_id="o1",
@@ -889,6 +1157,7 @@ class TestCompoundSignal:
     def test_compound_signal_creation(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CompoundSignal, MemberEvent
+
             events = [
                 MemberEvent("bill", "b1", "Bill", "2026-01-01", ["disability_benefits"], {}),
                 MemberEvent("oversight", "o1", "Report", "2026-01-02", ["disability_benefits"], {}),
@@ -909,6 +1178,7 @@ class TestCompoundSignal:
     def test_compound_signal_to_db_dict(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CompoundSignal, MemberEvent
+
             events = [
                 MemberEvent("bill", "b1", "Bill", "2026-01-01", ["x"], {}),
             ]
@@ -941,6 +1211,7 @@ class TestMigration:
     @staticmethod
     def _load_migration():
         import importlib.util
+
         script = ROOT / "migrations" / "008_add_compound_signals.py"
         spec = importlib.util.spec_from_file_location("m008", script)
         mod = importlib.util.module_from_spec(spec)
@@ -988,8 +1259,9 @@ class TestEngineIntegration:
 
     def test_run_stores_compound_signals(self, populated_db, rules_path):
         with patch("src.db.core.DB_PATH", populated_db):
-            from src.signals.correlator import CorrelationEngine
             from src.db.compound import get_compound_signals
+            from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             summary = engine.run()
             assert summary["total_signals"] > 0
@@ -999,8 +1271,9 @@ class TestEngineIntegration:
     def test_run_idempotent(self, populated_db, rules_path):
         """Running twice doesn't create duplicates."""
         with patch("src.db.core.DB_PATH", populated_db):
-            from src.signals.correlator import CorrelationEngine
             from src.db.compound import get_compound_signals
+            from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             engine.run()
             count_1 = len(get_compound_signals(limit=100))
@@ -1011,6 +1284,7 @@ class TestEngineIntegration:
     def test_run_with_empty_db(self, tmp_db):
         with patch("src.db.core.DB_PATH", tmp_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine()
             summary = engine.run()
             assert summary["total_signals"] == 0
@@ -1020,6 +1294,7 @@ class TestEngineIntegration:
         rules_path.write_text("[]")
         with patch("src.db.core.DB_PATH", populated_db):
             from src.signals.correlator import CorrelationEngine
+
             engine = CorrelationEngine(rules_path=rules_path)
             summary = engine.run()
             assert summary["total_signals"] == 0
