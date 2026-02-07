@@ -138,6 +138,33 @@ def run_pipeline(
             for err in result["validation_errors"]:
                 logger.warning(f"  - {err}")
 
+        # Send email notification
+        try:
+            from src.notify_email import is_configured, send_ceo_brief_digest
+
+            if is_configured():
+                email_result = {
+                    "success": True,
+                    "brief_id": result["brief_id"],
+                    "stats": {
+                        "period_start": period_start.isoformat(),
+                        "period_end": period_end.isoformat(),
+                        "total_deltas": aggregation.total_count,
+                        "top_issues": analysis.issues_identified,
+                        "enhanced": enhanced,
+                        "sources": {
+                            "federal_register": len(aggregation.fr_deltas),
+                            "bills": len(aggregation.bill_deltas),
+                            "hearings": len(aggregation.hearing_deltas),
+                            "oversight": len(aggregation.oversight_deltas),
+                            "state": len(aggregation.state_deltas),
+                        },
+                    },
+                }
+                send_ceo_brief_digest(email_result, aggregation)
+        except Exception:
+            logger.warning("Failed to send CEO brief email digest")
+
         return PipelineResult(
             success=True,
             brief_id=result["brief_id"],

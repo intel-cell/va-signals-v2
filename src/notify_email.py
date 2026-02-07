@@ -483,3 +483,180 @@ VA Signals Notification System
 """
 
     return _send_email(subject, html, text)
+
+
+def send_ceo_brief_digest(
+    result: dict,
+    aggregation: object | None = None,
+) -> bool:
+    """
+    Send CEO Brief generation digest email.
+
+    Args:
+        result: PipelineResult.to_dict() or dict with success, brief_id, stats, etc.
+        aggregation: Optional aggregation result with delta counts
+
+    Returns:
+        True if email sent successfully, False otherwise
+    """
+    try:
+        success = result.get("success", False)
+        status_label = "SUCCESS" if success else "FAILED"
+        subject = f"VA Signals \u2014 CEO Brief: {status_label}"
+
+        brief_id = result.get("brief_id", "N/A")
+        stats = result.get("stats", {})
+        period_start = stats.get("period_start", "N/A")
+        period_end = stats.get("period_end", "N/A")
+        total_deltas = stats.get("total_deltas", 0)
+        top_issues = stats.get("top_issues", 0)
+        sources = stats.get("sources", {})
+
+        fr_count = sources.get("federal_register", 0)
+        bills_count = sources.get("bills", 0)
+        hearings_count = sources.get("hearings", 0)
+        oversight_count = sources.get("oversight", 0)
+        state_count = sources.get("state", 0)
+
+        # Status badge
+        if success:
+            badge_bg = "#f0fff4"
+            badge_color = SUCCESS_GREEN
+            badge_border = SUCCESS_GREEN
+        else:
+            badge_bg = ERROR_BG
+            badge_color = ERROR_RED
+            badge_border = ERROR_RED
+
+        status_badge = f"""
+            <div style="background-color: {badge_bg}; border-left: 4px solid {badge_border}; padding: 16px; margin-bottom: 20px; border-radius: 4px;">
+                <h2 style="margin: 0 0 8px 0; color: {badge_color}; font-size: 18px;">CEO Brief: {status_label}</h2>
+                <p style="margin: 0; color: {GRAY_TEXT};">Brief ID: {brief_id}</p>
+            </div>
+        """
+
+        # Period
+        period_html = f"""
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 20px;">
+                <tr>
+                    <td style="padding: 8px 0; color: {GRAY_TEXT}; width: 140px;">Period:</td>
+                    <td style="padding: 8px 0; font-weight: 600;">{period_start} to {period_end}</td>
+                </tr>
+            </table>
+        """
+
+        # Quick stats grid (4 cards)
+        stats_grid = f"""
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom: 24px;">
+                <tr>
+                    <td style="background-color: #f7fafc; padding: 16px; border-radius: 8px; text-align: center; width: 25%;">
+                        <div style="font-size: 24px; font-weight: 700; color: {VA_BLUE};">{total_deltas}</div>
+                        <div style="font-size: 12px; color: {GRAY_TEXT}; text-transform: uppercase;">Total Deltas</div>
+                    </td>
+                    <td style="width: 8px;"></td>
+                    <td style="background-color: #f7fafc; padding: 16px; border-radius: 8px; text-align: center; width: 25%;">
+                        <div style="font-size: 24px; font-weight: 700; color: {VA_BLUE};">{top_issues}</div>
+                        <div style="font-size: 12px; color: {GRAY_TEXT}; text-transform: uppercase;">Top Issues</div>
+                    </td>
+                    <td style="width: 8px;"></td>
+                    <td style="background-color: #f7fafc; padding: 16px; border-radius: 8px; text-align: center; width: 25%;">
+                        <div style="font-size: 24px; font-weight: 700; color: {VA_BLUE};">{len(sources)}</div>
+                        <div style="font-size: 12px; color: {GRAY_TEXT}; text-transform: uppercase;">Sources</div>
+                    </td>
+                    <td style="width: 8px;"></td>
+                    <td style="background-color: {badge_bg}; padding: 16px; border-radius: 8px; text-align: center; width: 25%;">
+                        <div style="font-size: 24px; font-weight: 700; color: {badge_color};">{status_label}</div>
+                        <div style="font-size: 12px; color: {GRAY_TEXT}; text-transform: uppercase;">Status</div>
+                    </td>
+                </tr>
+            </table>
+        """
+
+        # Source breakdown table
+        source_table = f"""
+            <h3 style="margin: 0 0 12px 0; color: {VA_BLUE}; font-size: 16px;">Source Breakdown</h3>
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <thead>
+                    <tr style="border-bottom: 2px solid {GRAY_BORDER};">
+                        <th style="padding: 8px 8px 8px 0; text-align: left; color: {GRAY_TEXT}; font-size: 12px; text-transform: uppercase;">Source</th>
+                        <th style="padding: 8px 0; text-align: right; color: {GRAY_TEXT}; font-size: 12px; text-transform: uppercase;">Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="border-bottom: 1px solid {GRAY_BORDER};">
+                        <td style="padding: 10px 8px 10px 0;">Federal Register</td>
+                        <td style="padding: 10px 0; text-align: right;">{fr_count}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid {GRAY_BORDER};">
+                        <td style="padding: 10px 8px 10px 0;">Bills</td>
+                        <td style="padding: 10px 0; text-align: right;">{bills_count}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid {GRAY_BORDER};">
+                        <td style="padding: 10px 8px 10px 0;">Hearings</td>
+                        <td style="padding: 10px 0; text-align: right;">{hearings_count}</td>
+                    </tr>
+                    <tr style="border-bottom: 1px solid {GRAY_BORDER};">
+                        <td style="padding: 10px 8px 10px 0;">Oversight</td>
+                        <td style="padding: 10px 0; text-align: right;">{oversight_count}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px 8px 10px 0;">State</td>
+                        <td style="padding: 10px 0; text-align: right;">{state_count}</td>
+                    </tr>
+                </tbody>
+            </table>
+        """
+
+        # Error section (if failed)
+        error_html = ""
+        error_msg = result.get("error")
+        if error_msg:
+            error_html = f"""
+                <div style="background-color: {ERROR_BG}; border-left: 4px solid {ERROR_RED}; padding: 16px; margin-top: 20px; border-radius: 4px;">
+                    <h3 style="margin: 0 0 8px 0; color: {ERROR_RED}; font-size: 16px;">Error</h3>
+                    <p style="margin: 0; color: {GRAY_TEXT};">{error_msg}</p>
+                </div>
+            """
+
+        content = f"""
+            {status_badge}
+            {period_html}
+            {stats_grid}
+            {source_table}
+            {error_html}
+        """
+
+        html = _base_html_template(subject, content)
+
+        # Plain text fallback
+        text = f"""VA Signals \u2014 CEO Brief: {status_label}
+
+Brief ID: {brief_id}
+Period: {period_start} to {period_end}
+
+Quick Stats:
+  Total Deltas: {total_deltas}
+  Top Issues: {top_issues}
+  Sources: {len(sources)}
+  Status: {status_label}
+
+Source Breakdown:
+  Federal Register: {fr_count}
+  Bills: {bills_count}
+  Hearings: {hearings_count}
+  Oversight: {oversight_count}
+  State: {state_count}
+"""
+
+        if error_msg:
+            text += f"\nError: {error_msg}\n"
+
+        text += """
+---
+VA Signals Notification System
+"""
+
+        return _send_email(subject, html, text)
+
+    except Exception:
+        return False
