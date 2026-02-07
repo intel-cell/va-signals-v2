@@ -18,8 +18,15 @@ from src.resilience.retry import (
 
 
 def _run(coro):
-    """Run an async coroutine synchronously."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    """Run an async coroutine synchronously, safe even if an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    except RuntimeError:
+        return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------

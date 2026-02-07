@@ -33,17 +33,18 @@ class FetchTimeout(Exception):
         super().__init__(f"Fetch '{name}' timed out after {timeout}s")
 
 
-def _get_or_create_loop() -> asyncio.AbstractEventLoop:
-    """Get the current event loop, or create a new one if there isn't one."""
+def _run_coro_sync(coro):
+    """Run an async coroutine synchronously, safe even if an event loop is already running."""
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+        asyncio.get_running_loop()
+        # Event loop already running (e.g. Playwright) — use a thread with its own loop.
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop
+        # No running loop — safe to use asyncio.run() directly.
+        return asyncio.run(coro)
 
 
 def circuit_breaker_sync(cb: CircuitBreaker):
@@ -64,11 +65,9 @@ def circuit_breaker_sync(cb: CircuitBreaker):
     def decorator(func: Callable[P, T]) -> Callable[P, T]:
         @functools.wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-            loop = _get_or_create_loop()
-
             # Check if circuit is open
             try:
-                loop.run_until_complete(cb._check_state())
+                _run_coro_sync(cb._check_state())
             except Exception:
                 pass
 
@@ -83,7 +82,7 @@ def circuit_breaker_sync(cb: CircuitBreaker):
                 result = func(*args, **kwargs)
                 # Record success
                 try:
-                    loop.run_until_complete(cb._record_success())
+                    _run_coro_sync(cb._record_success())
                 except Exception:
                     pass
                 return result
@@ -93,7 +92,7 @@ def circuit_breaker_sync(cb: CircuitBreaker):
                 # Record failure if it should count
                 if cb._should_count_failure(e):
                     try:
-                        loop.run_until_complete(cb._record_failure())
+                        _run_coro_sync(cb._record_failure())
                     except Exception:
                         pass
                 raise
