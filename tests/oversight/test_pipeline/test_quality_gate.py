@@ -1,12 +1,9 @@
 """Tests for quality gate."""
 
-import pytest
-
+from src.oversight.agents.base import TimestampResult
 from src.oversight.pipeline.quality_gate import (
-    QualityGateResult,
     check_quality_gate,
 )
-from src.oversight.agents.base import TimestampResult
 
 
 def test_quality_gate_passes_with_pub_timestamp():

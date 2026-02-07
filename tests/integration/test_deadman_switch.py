@@ -1,12 +1,6 @@
 """Tests for the dead-man's switch endpoint models and logic."""
 
-import sqlite3
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch, MagicMock
-
-import pytest
-
-from src.dashboard_api import PipelineStaleness, DeadManResponse
+from src.dashboard_api import DeadManResponse, PipelineStaleness
 
 
 class TestDeadManModels:
@@ -34,8 +28,12 @@ class TestDeadManModels:
 
     def test_deadman_response_overall_status(self):
         pipelines = [
-            PipelineStaleness(pipeline="a", last_activity_at=None, hours_since_activity=1.0, status="healthy"),
-            PipelineStaleness(pipeline="b", last_activity_at=None, hours_since_activity=30.0, status="degraded"),
+            PipelineStaleness(
+                pipeline="a", last_activity_at=None, hours_since_activity=1.0, status="healthy"
+            ),
+            PipelineStaleness(
+                pipeline="b", last_activity_at=None, hours_since_activity=30.0, status="degraded"
+            ),
         ]
         resp = DeadManResponse(
             pipelines=pipelines,

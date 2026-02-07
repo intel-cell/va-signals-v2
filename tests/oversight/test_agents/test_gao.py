@@ -1,10 +1,10 @@
 """Tests for GAO agent."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from src.oversight.agents.gao import GAOAgent
-
 
 SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">

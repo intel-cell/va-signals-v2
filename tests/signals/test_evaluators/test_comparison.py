@@ -1,6 +1,7 @@
 """Tests for comparison evaluators."""
 
 import pytest
+
 from src.signals.envelope import Envelope
 from src.signals.evaluators.comparison import EqualsEvaluator, GtEvaluator
 

@@ -28,7 +28,9 @@ def _assert_fetch_uses_certifi_context(module, fetch_fn, url: str, api_key: str 
 
     with patch.object(module, "certifi", dummy_certifi, create=True):
         with patch.object(module, "ssl", dummy_ssl, create=True):
-            with patch.object(module.urllib.request, "urlopen", return_value=DummyResponse()) as urlopen:
+            with patch.object(
+                module.urllib.request, "urlopen", return_value=DummyResponse()
+            ) as urlopen:
                 if api_key is None:
                     fetch_fn(url)
                 else:
@@ -39,15 +41,21 @@ def _assert_fetch_uses_certifi_context(module, fetch_fn, url: str, api_key: str 
 
 
 def test_fetch_bills_fetch_json_uses_certifi_context():
-    _assert_fetch_uses_certifi_context(fetch_bills, fetch_bills._fetch_json, "https://example.com", "key")
+    _assert_fetch_uses_certifi_context(
+        fetch_bills, fetch_bills._fetch_json, "https://example.com", "key"
+    )
 
 
 def test_fetch_hearings_fetch_json_uses_certifi_context():
-    _assert_fetch_uses_certifi_context(fetch_hearings, fetch_hearings._fetch_json, "https://example.com", "key")
+    _assert_fetch_uses_certifi_context(
+        fetch_hearings, fetch_hearings._fetch_json, "https://example.com", "key"
+    )
 
 
 def test_fetch_transcripts_fetch_json_uses_certifi_context():
-    _assert_fetch_uses_certifi_context(fetch_transcripts, fetch_transcripts.fetch_json, "https://example.com", "key")
+    _assert_fetch_uses_certifi_context(
+        fetch_transcripts, fetch_transcripts.fetch_json, "https://example.com", "key"
+    )
 
 
 def test_fetch_transcripts_fetch_text_uses_certifi_context():
@@ -58,7 +66,11 @@ def test_fetch_transcripts_fetch_text_uses_certifi_context():
 
     with patch.object(fetch_transcripts, "certifi", dummy_certifi, create=True):
         with patch.object(fetch_transcripts, "ssl", dummy_ssl, create=True):
-            with patch.object(fetch_transcripts.urllib.request, "urlopen", return_value=DummyResponse(payload=b"hello")) as urlopen:
+            with patch.object(
+                fetch_transcripts.urllib.request,
+                "urlopen",
+                return_value=DummyResponse(payload=b"hello"),
+            ) as urlopen:
                 result = fetch_transcripts.fetch_text("https://example.com")
 
     assert result == "hello"

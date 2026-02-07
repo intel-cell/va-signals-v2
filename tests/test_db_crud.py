@@ -1,14 +1,10 @@
 """Tests for db.py CRUD functions — covers FR, eCFR, Agenda Drift, Bills,
 Hearings, Authority Docs, and LDA helpers."""
 
-import json
-
-import pytest
-
 import src.db as db
 
-
 # ── helpers ──────────────────────────────────────────────────────
+
 
 def _make_bill(**overrides):
     base = {
@@ -70,6 +66,7 @@ def _make_authority_doc(**overrides):
 
 # ── FR helpers ───────────────────────────────────────────────────
 
+
 class TestUpsertFrSeen:
     def test_insert_new_returns_true(self):
         result = db.upsert_fr_seen(
@@ -82,7 +79,9 @@ class TestUpsertFrSeen:
 
     def test_existing_returns_false(self):
         db.upsert_fr_seen("FR-001", "2024-01-01", "2024-01-02T00:00:00Z", "https://fr.gov/1")
-        result = db.upsert_fr_seen("FR-001", "2024-01-01", "2024-01-03T00:00:00Z", "https://fr.gov/1")
+        result = db.upsert_fr_seen(
+            "FR-001", "2024-01-01", "2024-01-03T00:00:00Z", "https://fr.gov/1"
+        )
         assert result is False
 
     def test_optional_fields_stored(self):
@@ -97,7 +96,10 @@ class TestUpsertFrSeen:
             title="Test Rule",
         )
         con = db.connect()
-        cur = db.execute(con, "SELECT comments_close_date, effective_date, document_type, title FROM fr_seen WHERE doc_id = 'FR-002'")
+        cur = db.execute(
+            con,
+            "SELECT comments_close_date, effective_date, document_type, title FROM fr_seen WHERE doc_id = 'FR-002'",
+        )
         row = cur.fetchone()
         con.close()
         assert row == ("2024-03-01", "2024-04-01", "proposed rule", "Test Rule")
@@ -115,12 +117,17 @@ class TestUpdateFrSeenDates:
 
     def test_only_updates_provided_fields(self):
         db.upsert_fr_seen(
-            "FR-011", "2024-01-01", "2024-01-02T00:00:00Z", "https://fr.gov/11",
+            "FR-011",
+            "2024-01-01",
+            "2024-01-02T00:00:00Z",
+            "https://fr.gov/11",
             comments_close_date="2024-02-01",
         )
         db.update_fr_seen_dates("FR-011", title="New Title")
         con = db.connect()
-        cur = db.execute(con, "SELECT comments_close_date, title FROM fr_seen WHERE doc_id = 'FR-011'")
+        cur = db.execute(
+            con, "SELECT comments_close_date, title FROM fr_seen WHERE doc_id = 'FR-011'"
+        )
         row = cur.fetchone()
         con.close()
         assert row == ("2024-02-01", "New Title")
@@ -148,8 +155,18 @@ class TestBulkInsertFrSeen:
 
     def test_inserts_multiple(self):
         docs = [
-            {"doc_id": "BULK-1", "published_date": "2024-01-01", "first_seen_at": "2024-01-01T00:00:00Z", "source_url": "u1"},
-            {"doc_id": "BULK-2", "published_date": "2024-01-01", "first_seen_at": "2024-01-01T00:00:00Z", "source_url": "u2"},
+            {
+                "doc_id": "BULK-1",
+                "published_date": "2024-01-01",
+                "first_seen_at": "2024-01-01T00:00:00Z",
+                "source_url": "u1",
+            },
+            {
+                "doc_id": "BULK-2",
+                "published_date": "2024-01-01",
+                "first_seen_at": "2024-01-01T00:00:00Z",
+                "source_url": "u2",
+            },
         ]
         count = db.bulk_insert_fr_seen(docs)
         assert count == 2
@@ -157,8 +174,18 @@ class TestBulkInsertFrSeen:
     def test_conflict_skips_existing(self):
         db.upsert_fr_seen("BULK-3", "2024-01-01", "2024-01-01T00:00:00Z", "u3")
         docs = [
-            {"doc_id": "BULK-3", "published_date": "2024-01-01", "first_seen_at": "2024-01-01T00:00:00Z", "source_url": "u3"},
-            {"doc_id": "BULK-4", "published_date": "2024-01-01", "first_seen_at": "2024-01-01T00:00:00Z", "source_url": "u4"},
+            {
+                "doc_id": "BULK-3",
+                "published_date": "2024-01-01",
+                "first_seen_at": "2024-01-01T00:00:00Z",
+                "source_url": "u3",
+            },
+            {
+                "doc_id": "BULK-4",
+                "published_date": "2024-01-01",
+                "first_seen_at": "2024-01-01T00:00:00Z",
+                "source_url": "u4",
+            },
         ]
         count = db.bulk_insert_fr_seen(docs)
         assert count == 1
@@ -166,28 +193,44 @@ class TestBulkInsertFrSeen:
 
 # ── eCFR helpers ─────────────────────────────────────────────────
 
+
 class TestUpsertEcfrSeen:
     def test_insert_new_returns_true(self):
-        result = db.upsert_ecfr_seen("CFR-001", "2024-01-01", "etag1", "2024-01-02T00:00:00Z", "https://ecfr.gov/1")
+        result = db.upsert_ecfr_seen(
+            "CFR-001", "2024-01-01", "etag1", "2024-01-02T00:00:00Z", "https://ecfr.gov/1"
+        )
         assert result is True
 
     def test_unchanged_returns_false(self):
-        db.upsert_ecfr_seen("CFR-002", "2024-01-01", "etag2", "2024-01-02T00:00:00Z", "https://ecfr.gov/2")
-        result = db.upsert_ecfr_seen("CFR-002", "2024-01-01", "etag2", "2024-01-03T00:00:00Z", "https://ecfr.gov/2")
+        db.upsert_ecfr_seen(
+            "CFR-002", "2024-01-01", "etag2", "2024-01-02T00:00:00Z", "https://ecfr.gov/2"
+        )
+        result = db.upsert_ecfr_seen(
+            "CFR-002", "2024-01-01", "etag2", "2024-01-03T00:00:00Z", "https://ecfr.gov/2"
+        )
         assert result is False
 
     def test_changed_etag_returns_true(self):
-        db.upsert_ecfr_seen("CFR-003", "2024-01-01", "etag3", "2024-01-02T00:00:00Z", "https://ecfr.gov/3")
-        result = db.upsert_ecfr_seen("CFR-003", "2024-01-01", "etag3-changed", "2024-01-03T00:00:00Z", "https://ecfr.gov/3")
+        db.upsert_ecfr_seen(
+            "CFR-003", "2024-01-01", "etag3", "2024-01-02T00:00:00Z", "https://ecfr.gov/3"
+        )
+        result = db.upsert_ecfr_seen(
+            "CFR-003", "2024-01-01", "etag3-changed", "2024-01-03T00:00:00Z", "https://ecfr.gov/3"
+        )
         assert result is True
 
     def test_changed_last_modified_returns_true(self):
-        db.upsert_ecfr_seen("CFR-004", "2024-01-01", "etag4", "2024-01-02T00:00:00Z", "https://ecfr.gov/4")
-        result = db.upsert_ecfr_seen("CFR-004", "2024-02-01", "etag4", "2024-01-03T00:00:00Z", "https://ecfr.gov/4")
+        db.upsert_ecfr_seen(
+            "CFR-004", "2024-01-01", "etag4", "2024-01-02T00:00:00Z", "https://ecfr.gov/4"
+        )
+        result = db.upsert_ecfr_seen(
+            "CFR-004", "2024-02-01", "etag4", "2024-01-03T00:00:00Z", "https://ecfr.gov/4"
+        )
         assert result is True
 
 
 # ── Agenda Drift helpers ─────────────────────────────────────────
+
 
 class TestAdMember:
     def test_insert_new_returns_true(self):
@@ -205,8 +248,22 @@ class TestAdUtterances:
     def test_bulk_insert_and_get(self):
         db.upsert_ad_member("M010", "Sen. Speaker")
         utts = [
-            {"utterance_id": "U001", "member_id": "M010", "hearing_id": "H001", "chunk_ix": 0, "content": "Test speech about veterans.", "spoken_at": "2024-01-15T10:00:00Z"},
-            {"utterance_id": "U002", "member_id": "M010", "hearing_id": "H001", "chunk_ix": 1, "content": "Continued remarks.", "spoken_at": "2024-01-15T10:01:00Z"},
+            {
+                "utterance_id": "U001",
+                "member_id": "M010",
+                "hearing_id": "H001",
+                "chunk_ix": 0,
+                "content": "Test speech about veterans.",
+                "spoken_at": "2024-01-15T10:00:00Z",
+            },
+            {
+                "utterance_id": "U002",
+                "member_id": "M010",
+                "hearing_id": "H001",
+                "chunk_ix": 1,
+                "content": "Continued remarks.",
+                "spoken_at": "2024-01-15T10:01:00Z",
+            },
         ]
         count = db.bulk_insert_ad_utterances(utts)
         assert count == 2
@@ -217,16 +274,34 @@ class TestAdUtterances:
 
     def test_conflict_skips(self):
         db.upsert_ad_member("M011", "Rep. Dup")
-        utts = [{"utterance_id": "U010", "member_id": "M011", "hearing_id": "H002", "chunk_ix": 0, "content": "Original.", "spoken_at": "2024-01-15T10:00:00Z"}]
+        utts = [
+            {
+                "utterance_id": "U010",
+                "member_id": "M011",
+                "hearing_id": "H002",
+                "chunk_ix": 0,
+                "content": "Original.",
+                "spoken_at": "2024-01-15T10:00:00Z",
+            }
+        ]
         db.bulk_insert_ad_utterances(utts)
         count = db.bulk_insert_ad_utterances(utts)
         assert count == 0
 
     def test_get_ad_utterance_by_id_found(self):
         db.upsert_ad_member("M012", "Sen. Found")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U020", "member_id": "M012", "hearing_id": "H010", "chunk_ix": 0, "content": "Content here.", "spoken_at": "2024-02-01T09:00:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U020",
+                    "member_id": "M012",
+                    "hearing_id": "H010",
+                    "chunk_ix": 0,
+                    "content": "Content here.",
+                    "spoken_at": "2024-02-01T09:00:00Z",
+                },
+            ]
+        )
         result = db.get_ad_utterance_by_id("U020")
         assert result is not None
         assert result["member_name"] == "Sen. Found"
@@ -238,24 +313,51 @@ class TestAdUtterances:
 class TestAdEmbedding:
     def test_insert_new_returns_true(self):
         db.upsert_ad_member("M020", "Sen. Vec")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U030", "member_id": "M020", "hearing_id": "H020", "chunk_ix": 0, "content": "x" * 200, "spoken_at": "2024-01-15T10:00:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U030",
+                    "member_id": "M020",
+                    "hearing_id": "H020",
+                    "chunk_ix": 0,
+                    "content": "x" * 200,
+                    "spoken_at": "2024-01-15T10:00:00Z",
+                },
+            ]
+        )
         assert db.upsert_ad_embedding("U030", [0.1, 0.2, 0.3], "model-v1") is True
 
     def test_update_existing_returns_false(self):
         db.upsert_ad_member("M021", "Rep. VecUp")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U031", "member_id": "M021", "hearing_id": "H021", "chunk_ix": 0, "content": "y" * 200, "spoken_at": "2024-01-15T10:00:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U031",
+                    "member_id": "M021",
+                    "hearing_id": "H021",
+                    "chunk_ix": 0,
+                    "content": "y" * 200,
+                    "spoken_at": "2024-01-15T10:00:00Z",
+                },
+            ]
+        )
         db.upsert_ad_embedding("U031", [0.1, 0.2], "model-v1")
         assert db.upsert_ad_embedding("U031", [0.3, 0.4], "model-v2") is False
 
     def test_get_embeddings_for_member(self):
         db.upsert_ad_member("M022", "Sen. Emb")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U032", "member_id": "M022", "hearing_id": "H022", "chunk_ix": 0, "content": "a" * 200, "spoken_at": "2024-01-15T10:00:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U032",
+                    "member_id": "M022",
+                    "hearing_id": "H022",
+                    "chunk_ix": 0,
+                    "content": "a" * 200,
+                    "spoken_at": "2024-01-15T10:00:00Z",
+                },
+            ]
+        )
         db.upsert_ad_embedding("U032", [0.5, 0.6], "model-v1")
         results = db.get_ad_embeddings_for_member("M022", min_content_length=100)
         assert len(results) == 1
@@ -263,9 +365,18 @@ class TestAdEmbedding:
 
     def test_get_embeddings_filters_short_content(self):
         db.upsert_ad_member("M023", "Rep. Short")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U033", "member_id": "M023", "hearing_id": "H023", "chunk_ix": 0, "content": "short", "spoken_at": "2024-01-15T10:00:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U033",
+                    "member_id": "M023",
+                    "hearing_id": "H023",
+                    "chunk_ix": 0,
+                    "content": "short",
+                    "spoken_at": "2024-01-15T10:00:00Z",
+                },
+            ]
+        )
         db.upsert_ad_embedding("U033", [0.1], "model-v1")
         results = db.get_ad_embeddings_for_member("M023", min_content_length=100)
         assert len(results) == 0
@@ -298,9 +409,18 @@ class TestAdBaseline:
 class TestAdDeviationEvents:
     def _setup_member_baseline(self):
         db.upsert_ad_member("M040", "Sen. Dev")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U040", "member_id": "M040", "hearing_id": "H040", "chunk_ix": 0, "content": "Test content.", "spoken_at": "2024-01-15T10:00:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U040",
+                    "member_id": "M040",
+                    "hearing_id": "H040",
+                    "chunk_ix": 0,
+                    "content": "Test content.",
+                    "spoken_at": "2024-01-15T10:00:00Z",
+                },
+            ]
+        )
         baseline_id = db.insert_ad_baseline("M040", [0.1], mu=0.5, sigma=0.1, n=50)
         return baseline_id
 
@@ -326,29 +446,47 @@ class TestAdDeviationEvents:
 
     def test_member_deviation_history(self):
         bl_id = self._setup_member_baseline()
-        db.insert_ad_deviation_event({
-            "member_id": "M040", "hearing_id": "H040", "utterance_id": "U040",
-            "baseline_id": bl_id, "cos_dist": 0.8, "zscore": 3.0,
-        })
+        db.insert_ad_deviation_event(
+            {
+                "member_id": "M040",
+                "hearing_id": "H040",
+                "utterance_id": "U040",
+                "baseline_id": bl_id,
+                "cos_dist": 0.8,
+                "zscore": 3.0,
+            }
+        )
         history = db.get_ad_member_deviation_history("M040")
         assert len(history) == 1
 
     def test_recent_deviations_for_hearing(self):
         bl_id = self._setup_member_baseline()
-        db.insert_ad_deviation_event({
-            "member_id": "M040", "hearing_id": "H040", "utterance_id": "U040",
-            "baseline_id": bl_id, "cos_dist": 0.7, "zscore": 2.5,
-        })
+        db.insert_ad_deviation_event(
+            {
+                "member_id": "M040",
+                "hearing_id": "H040",
+                "utterance_id": "U040",
+                "baseline_id": bl_id,
+                "cos_dist": 0.7,
+                "zscore": 2.5,
+            }
+        )
         results = db.get_ad_recent_deviations_for_hearing("M040", "H040")
         assert len(results) == 1
         assert results[0]["zscore"] == 2.5
 
     def test_update_deviation_note(self):
         bl_id = self._setup_member_baseline()
-        eid = db.insert_ad_deviation_event({
-            "member_id": "M040", "hearing_id": "H040", "utterance_id": "U040",
-            "baseline_id": bl_id, "cos_dist": 0.9, "zscore": 4.0,
-        })
+        eid = db.insert_ad_deviation_event(
+            {
+                "member_id": "M040",
+                "hearing_id": "H040",
+                "utterance_id": "U040",
+                "baseline_id": bl_id,
+                "cos_dist": 0.9,
+                "zscore": 4.0,
+            }
+        )
         db.update_ad_deviation_note(eid, "Explained by topic shift")
         events = db.get_ad_deviation_events(limit=10)
         found = [e for e in events if e["id"] == eid]
@@ -356,10 +494,16 @@ class TestAdDeviationEvents:
 
     def test_get_deviations_without_notes(self):
         bl_id = self._setup_member_baseline()
-        db.insert_ad_deviation_event({
-            "member_id": "M040", "hearing_id": "H040", "utterance_id": "U040",
-            "baseline_id": bl_id, "cos_dist": 0.6, "zscore": 2.0,
-        })
+        db.insert_ad_deviation_event(
+            {
+                "member_id": "M040",
+                "hearing_id": "H040",
+                "utterance_id": "U040",
+                "baseline_id": bl_id,
+                "cos_dist": 0.6,
+                "zscore": 2.0,
+            }
+        )
         results = db.get_ad_deviations_without_notes()
         assert len(results) >= 1
 
@@ -367,19 +511,44 @@ class TestAdDeviationEvents:
 class TestAdTypicalUtterances:
     def test_returns_non_deviation_utterances(self):
         db.upsert_ad_member("M050", "Sen. Typical")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U050", "member_id": "M050", "hearing_id": "H050", "chunk_ix": 0, "content": "Normal speech.", "spoken_at": "2024-01-15T10:00:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U050",
+                    "member_id": "M050",
+                    "hearing_id": "H050",
+                    "chunk_ix": 0,
+                    "content": "Normal speech.",
+                    "spoken_at": "2024-01-15T10:00:00Z",
+                },
+            ]
+        )
         db.upsert_ad_embedding("U050", [0.1], "model-v1")
         results = db.get_ad_typical_utterances("M050")
         assert len(results) == 1
 
     def test_exclude_utterance_id(self):
         db.upsert_ad_member("M051", "Rep. Excl")
-        db.bulk_insert_ad_utterances([
-            {"utterance_id": "U051", "member_id": "M051", "hearing_id": "H051", "chunk_ix": 0, "content": "Speech A.", "spoken_at": "2024-01-15T10:00:00Z"},
-            {"utterance_id": "U052", "member_id": "M051", "hearing_id": "H051", "chunk_ix": 1, "content": "Speech B.", "spoken_at": "2024-01-15T10:01:00Z"},
-        ])
+        db.bulk_insert_ad_utterances(
+            [
+                {
+                    "utterance_id": "U051",
+                    "member_id": "M051",
+                    "hearing_id": "H051",
+                    "chunk_ix": 0,
+                    "content": "Speech A.",
+                    "spoken_at": "2024-01-15T10:00:00Z",
+                },
+                {
+                    "utterance_id": "U052",
+                    "member_id": "M051",
+                    "hearing_id": "H051",
+                    "chunk_ix": 1,
+                    "content": "Speech B.",
+                    "spoken_at": "2024-01-15T10:01:00Z",
+                },
+            ]
+        )
         db.upsert_ad_embedding("U051", [0.1], "model-v1")
         db.upsert_ad_embedding("U052", [0.2], "model-v1")
         results = db.get_ad_typical_utterances("M051", exclude_utterance_id="U051")
@@ -388,6 +557,7 @@ class TestAdTypicalUtterances:
 
 
 # ── Bills helpers ────────────────────────────────────────────────
+
 
 class TestBillsCRUD:
     def test_upsert_new_bill(self):
@@ -433,11 +603,14 @@ class TestBillsCRUD:
 class TestBillActions:
     def test_insert_new_action(self):
         db.upsert_bill(_make_bill())
-        result = db.insert_bill_action("hr-118-100", {
-            "action_date": "2024-02-20",
-            "action_text": "Referred to committee",
-            "action_type": "IntroReferral",
-        })
+        result = db.insert_bill_action(
+            "hr-118-100",
+            {
+                "action_date": "2024-02-20",
+                "action_text": "Referred to committee",
+                "action_type": "IntroReferral",
+            },
+        )
         assert result is True
 
     def test_duplicate_action_skips(self):
@@ -449,7 +622,9 @@ class TestBillActions:
 
     def test_get_bill_actions(self):
         db.upsert_bill(_make_bill())
-        db.insert_bill_action("hr-118-100", {"action_date": "2024-02-20", "action_text": "Referred"})
+        db.insert_bill_action(
+            "hr-118-100", {"action_date": "2024-02-20", "action_text": "Referred"}
+        )
         db.insert_bill_action("hr-118-100", {"action_date": "2024-03-01", "action_text": "Passed"})
         actions = db.get_bill_actions("hr-118-100")
         assert len(actions) == 2
@@ -457,7 +632,9 @@ class TestBillActions:
 
     def test_get_new_actions_since(self):
         db.upsert_bill(_make_bill())
-        db.insert_bill_action("hr-118-100", {"action_date": "2024-02-20", "action_text": "Committee hearing"})
+        db.insert_bill_action(
+            "hr-118-100", {"action_date": "2024-02-20", "action_text": "Committee hearing"}
+        )
         actions = db.get_new_actions_since("2000-01-01T00:00:00Z")
         assert len(actions) >= 1
         assert actions[0]["bill_title"] == "Test Bill"
@@ -482,6 +659,7 @@ class TestBillStats:
 
 
 # ── Hearings helpers ─────────────────────────────────────────────
+
 
 class TestHearingsCRUD:
     def test_upsert_new_hearing(self):
@@ -575,6 +753,7 @@ class TestHearingStats:
 
 # ── Authority Docs helpers ───────────────────────────────────────
 
+
 class TestAuthorityDocsCRUD:
     def test_insert_new_returns_true(self):
         assert db.upsert_authority_doc(_make_authority_doc()) is True
@@ -638,6 +817,7 @@ class TestAuthorityDocsCRUD:
 
 # ── LDA helpers ──────────────────────────────────────────────────
 
+
 class TestLdaCRUD:
     def _make_filing(self, **overrides):
         base = {
@@ -677,14 +857,16 @@ class TestLdaCRUD:
 
     def test_insert_lda_alert(self):
         db.upsert_lda_filing(self._make_filing())
-        alert_id = db.insert_lda_alert({
-            "filing_uuid": "LDA-001",
-            "alert_type": "foreign_entity",
-            "severity": "HIGH",
-            "summary": "Foreign entity detected",
-            "details_json": "{}",
-            "created_at": "2024-04-03T00:00:00Z",
-        })
+        alert_id = db.insert_lda_alert(
+            {
+                "filing_uuid": "LDA-001",
+                "alert_type": "foreign_entity",
+                "severity": "HIGH",
+                "summary": "Foreign entity detected",
+                "details_json": "{}",
+                "created_at": "2024-04-03T00:00:00Z",
+            }
+        )
         assert isinstance(alert_id, int)
 
     def test_get_new_filings_since(self):
@@ -695,16 +877,23 @@ class TestLdaCRUD:
 
     def test_get_lda_stats(self):
         db.upsert_lda_filing(self._make_filing())
-        db.insert_lda_alert({
-            "filing_uuid": "LDA-001", "alert_type": "test", "severity": "LOW",
-            "summary": "Test", "details_json": "{}", "created_at": "2024-04-03T00:00:00Z",
-        })
+        db.insert_lda_alert(
+            {
+                "filing_uuid": "LDA-001",
+                "alert_type": "test",
+                "severity": "LOW",
+                "summary": "Test",
+                "details_json": "{}",
+                "created_at": "2024-04-03T00:00:00Z",
+            }
+        )
         stats = db.get_lda_stats()
         assert stats["total_filings"] == 1
         assert stats["unacknowledged_alerts"] == 1
 
 
 # ── Core helpers ─────────────────────────────────────────────────
+
 
 class TestCoreHelpers:
     def test_table_exists(self):
@@ -714,16 +903,20 @@ class TestCoreHelpers:
         con.close()
 
     def test_insert_source_run(self):
-        db.insert_source_run({
-            "source_id": "test_source",
-            "started_at": "2024-01-01T00:00:00Z",
-            "ended_at": "2024-01-01T01:00:00Z",
-            "status": "SUCCESS",
-            "records_fetched": 10,
-            "errors": [],
-        })
+        db.insert_source_run(
+            {
+                "source_id": "test_source",
+                "started_at": "2024-01-01T00:00:00Z",
+                "ended_at": "2024-01-01T01:00:00Z",
+                "status": "SUCCESS",
+                "records_fetched": 10,
+                "errors": [],
+            }
+        )
         con = db.connect()
-        cur = db.execute(con, "SELECT source_id, status FROM source_runs WHERE source_id = 'test_source'")
+        cur = db.execute(
+            con, "SELECT source_id, status FROM source_runs WHERE source_id = 'test_source'"
+        )
         row = cur.fetchone()
         con.close()
         assert row == ("test_source", "SUCCESS")
@@ -733,7 +926,14 @@ class TestCoreHelpers:
         rid = db.insert_returning_id(
             con,
             "INSERT INTO source_runs(source_id, started_at, ended_at, status, records_fetched, errors_json) VALUES(:source_id, :started_at, :ended_at, :status, :records_fetched, :errors_json)",
-            {"source_id": "x", "started_at": "a", "ended_at": "b", "status": "OK", "records_fetched": 0, "errors_json": "[]"},
+            {
+                "source_id": "x",
+                "started_at": "a",
+                "ended_at": "b",
+                "status": "OK",
+                "records_fetched": 0,
+                "errors_json": "[]",
+            },
         )
         con.commit()
         con.close()
@@ -747,7 +947,11 @@ class TestCoreHelpers:
 
     def test_executemany_empty(self):
         con = db.connect()
-        cur = db.executemany(con, "INSERT INTO fr_seen(doc_id, published_date, first_seen_at, source_url) VALUES(?, ?, ?, ?)", [])
+        db.executemany(
+            con,
+            "INSERT INTO fr_seen(doc_id, published_date, first_seen_at, source_url) VALUES(?, ?, ?, ?)",
+            [],
+        )
         con.close()
 
     def test_assert_tables_exist(self):

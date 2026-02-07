@@ -1,24 +1,27 @@
 """Tests for Haiku pre-filter classifier."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from src.oversight.pipeline.classifier import (
     ClassificationResult,
     _get_client,
     classify_event,
-    is_va_relevant,
     is_dated_action,
+    is_va_relevant,
 )
 
 
 @pytest.fixture
 def mock_anthropic_response():
     """Create a mock Anthropic API response."""
+
     def _create_response(content: str):
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text=content)]
         return mock_response
+
     return _create_response
 
 
@@ -77,7 +80,9 @@ def test_classification_result_rejection():
 @patch("src.oversight.pipeline.classifier._get_client")
 def test_is_va_relevant_true(mock_get_client, mock_anthropic_response):
     mock_client = MagicMock()
-    mock_client.messages.create.return_value = mock_anthropic_response('{"is_va_relevant": true, "explanation": "Report about VA healthcare"}')
+    mock_client.messages.create.return_value = mock_anthropic_response(
+        '{"is_va_relevant": true, "explanation": "Report about VA healthcare"}'
+    )
     mock_get_client.return_value = mock_client
 
     result = is_va_relevant(
@@ -91,7 +96,9 @@ def test_is_va_relevant_true(mock_get_client, mock_anthropic_response):
 @patch("src.oversight.pipeline.classifier._get_client")
 def test_is_va_relevant_false(mock_get_client, mock_anthropic_response):
     mock_client = MagicMock()
-    mock_client.messages.create.return_value = mock_anthropic_response('{"is_va_relevant": false, "explanation": "Report about DOD equipment"}')
+    mock_client.messages.create.return_value = mock_anthropic_response(
+        '{"is_va_relevant": false, "explanation": "Report about DOD equipment"}'
+    )
     mock_get_client.return_value = mock_client
 
     result = is_va_relevant(
@@ -105,7 +112,9 @@ def test_is_va_relevant_false(mock_get_client, mock_anthropic_response):
 @patch("src.oversight.pipeline.classifier._get_client")
 def test_is_dated_action_true(mock_get_client, mock_anthropic_response):
     mock_client = MagicMock()
-    mock_client.messages.create.return_value = mock_anthropic_response('{"is_dated_action": true, "explanation": "New investigation launched"}')
+    mock_client.messages.create.return_value = mock_anthropic_response(
+        '{"is_dated_action": true, "explanation": "New investigation launched"}'
+    )
     mock_get_client.return_value = mock_client
 
     result = is_dated_action(
@@ -119,7 +128,9 @@ def test_is_dated_action_true(mock_get_client, mock_anthropic_response):
 @patch("src.oversight.pipeline.classifier._get_client")
 def test_is_dated_action_false_historical(mock_get_client, mock_anthropic_response):
     mock_client = MagicMock()
-    mock_client.messages.create.return_value = mock_anthropic_response('{"is_dated_action": false, "explanation": "Historical reference to 2019 event"}')
+    mock_client.messages.create.return_value = mock_anthropic_response(
+        '{"is_dated_action": false, "explanation": "Historical reference to 2019 event"}'
+    )
     mock_get_client.return_value = mock_client
 
     result = is_dated_action(

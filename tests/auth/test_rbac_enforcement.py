@@ -11,8 +11,9 @@ Tests:
 - Role hierarchy is respected
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 from src.auth.models import AuthContext, UserRole
@@ -21,8 +22,9 @@ from src.auth.models import AuthContext, UserRole
 @pytest.fixture
 def app_client():
     """Create test client with mocked Firebase init."""
-    with patch('src.auth.firebase_config.init_firebase'):
+    with patch("src.auth.firebase_config.init_firebase"):
         from src.dashboard_api import app
+
         return TestClient(app)
 
 
@@ -66,25 +68,33 @@ class TestViewerRoleAccess:
 
     def test_viewer_can_access_viewer_endpoints(self, app_client):
         """VIEWER should access VIEWER-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.get("/api/runs/stats")
             assert response.status_code == 200
 
     def test_viewer_cannot_access_analyst_endpoints(self, app_client):
         """VIEWER should not access ANALYST-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.get("/api/runs")
             assert response.status_code == 403
 
     def test_viewer_cannot_access_leadership_endpoints(self, app_client):
         """VIEWER should not access LEADERSHIP-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.post("/api/battlefield/sync")
             assert response.status_code == 403
 
     def test_viewer_cannot_access_commander_endpoints(self, app_client):
         """VIEWER should not access COMMANDER-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.post("/api/battlefield/init")
             assert response.status_code == 403
 
@@ -94,25 +104,33 @@ class TestAnalystRoleAccess:
 
     def test_analyst_can_access_viewer_endpoints(self, app_client):
         """ANALYST should access VIEWER-level endpoints (role hierarchy)."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/runs/stats")
             assert response.status_code == 200
 
     def test_analyst_can_access_analyst_endpoints(self, app_client):
         """ANALYST should access ANALYST-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/runs")
             assert response.status_code == 200
 
     def test_analyst_cannot_access_leadership_endpoints(self, app_client):
         """ANALYST should not access LEADERSHIP-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.post("/api/battlefield/sync")
             assert response.status_code == 403
 
     def test_analyst_cannot_access_commander_endpoints(self, app_client):
         """ANALYST should not access COMMANDER-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.post("/api/battlefield/init")
             assert response.status_code == 403
 
@@ -122,25 +140,37 @@ class TestLeadershipRoleAccess:
 
     def test_leadership_can_access_viewer_endpoints(self, app_client):
         """LEADERSHIP should access VIEWER-level endpoints (role hierarchy)."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.get_current_user",
+            return_value=make_auth_context(UserRole.LEADERSHIP),
+        ):
             response = app_client.get("/api/runs/stats")
             assert response.status_code == 200
 
     def test_leadership_can_access_analyst_endpoints(self, app_client):
         """LEADERSHIP should access ANALYST-level endpoints (role hierarchy)."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.get_current_user",
+            return_value=make_auth_context(UserRole.LEADERSHIP),
+        ):
             response = app_client.get("/api/runs")
             assert response.status_code == 200
 
     def test_leadership_can_access_leadership_endpoints(self, app_client):
         """LEADERSHIP should access LEADERSHIP-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.get_current_user",
+            return_value=make_auth_context(UserRole.LEADERSHIP),
+        ):
             response = app_client.post("/api/battlefield/sync")
             assert response.status_code == 200
 
     def test_leadership_cannot_access_commander_endpoints(self, app_client):
         """LEADERSHIP should not access COMMANDER-level endpoints."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.get_current_user",
+            return_value=make_auth_context(UserRole.LEADERSHIP),
+        ):
             response = app_client.post("/api/battlefield/init")
             assert response.status_code == 403
 
@@ -150,7 +180,10 @@ class TestCommanderRoleAccess:
 
     def test_commander_can_access_all_levels(self, app_client):
         """COMMANDER should access all endpoint levels."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.COMMANDER)):
+        with patch(
+            "src.auth.middleware.get_current_user",
+            return_value=make_auth_context(UserRole.COMMANDER),
+        ):
             # VIEWER level
             response = app_client.get("/api/runs/stats")
             assert response.status_code == 200
@@ -174,22 +207,30 @@ class TestEvidenceEndpointRBAC:
     def test_evidence_packs_requires_analyst(self, app_client):
         """Evidence pack listing requires ANALYST."""
         # VIEWER should be rejected
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.get("/api/evidence/packs")
             assert response.status_code == 403
 
         # ANALYST should be allowed
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/evidence/packs")
             assert response.status_code == 200
 
     def test_evidence_search_requires_analyst(self, app_client):
         """Evidence search requires ANALYST."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             response = app_client.get("/api/evidence/search?q=test")
             assert response.status_code == 403
 
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.get("/api/evidence/search?q=test")
             assert response.status_code == 200
 
@@ -199,11 +240,15 @@ class TestBattlefieldEndpointRBAC:
 
     def test_battlefield_stats_viewer_access(self, app_client):
         """Battlefield stats is VIEWER accessible (RBAC passes)."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
             try:
                 response = app_client.get("/api/battlefield/stats")
                 # Accept 200 or 500 (missing table) - verifies RBAC passed (not 401/403)
-                assert response.status_code not in (401, 403), f"RBAC should allow VIEWER, got {response.status_code}"
+                assert response.status_code not in (401, 403), (
+                    f"RBAC should allow VIEWER, got {response.status_code}"
+                )
             except Exception as e:
                 # Database errors indicate RBAC passed but underlying query failed
                 if "no such table" in str(e):
@@ -213,17 +258,26 @@ class TestBattlefieldEndpointRBAC:
 
     def test_battlefield_vehicle_update_requires_analyst(self, app_client):
         """Vehicle update requires ANALYST."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.VIEWER)):
-            response = app_client.patch("/api/battlefield/vehicles/test-id", json={"our_posture": "support"})
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.VIEWER)
+        ):
+            response = app_client.patch(
+                "/api/battlefield/vehicles/test-id", json={"our_posture": "support"}
+            )
             assert response.status_code == 403
 
     def test_battlefield_sync_requires_leadership(self, app_client):
         """Sync operation requires LEADERSHIP."""
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.ANALYST)):
+        with patch(
+            "src.auth.middleware.get_current_user", return_value=make_auth_context(UserRole.ANALYST)
+        ):
             response = app_client.post("/api/battlefield/sync")
             assert response.status_code == 403
 
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(UserRole.LEADERSHIP)):
+        with patch(
+            "src.auth.middleware.get_current_user",
+            return_value=make_auth_context(UserRole.LEADERSHIP),
+        ):
             response = app_client.post("/api/battlefield/sync")
             assert response.status_code == 200
 
@@ -231,12 +285,24 @@ class TestBattlefieldEndpointRBAC:
 class TestRoleHierarchy:
     """Verify role hierarchy is properly enforced."""
 
-    @pytest.mark.parametrize("role,expected_codes", [
-        (UserRole.VIEWER, {"viewer": 200, "analyst": 403, "leadership": 403, "commander": 403}),
-        (UserRole.ANALYST, {"viewer": 200, "analyst": 200, "leadership": 403, "commander": 403}),
-        (UserRole.LEADERSHIP, {"viewer": 200, "analyst": 200, "leadership": 200, "commander": 403}),
-        (UserRole.COMMANDER, {"viewer": 200, "analyst": 200, "leadership": 200, "commander": 200}),
-    ])
+    @pytest.mark.parametrize(
+        "role,expected_codes",
+        [
+            (UserRole.VIEWER, {"viewer": 200, "analyst": 403, "leadership": 403, "commander": 403}),
+            (
+                UserRole.ANALYST,
+                {"viewer": 200, "analyst": 200, "leadership": 403, "commander": 403},
+            ),
+            (
+                UserRole.LEADERSHIP,
+                {"viewer": 200, "analyst": 200, "leadership": 200, "commander": 403},
+            ),
+            (
+                UserRole.COMMANDER,
+                {"viewer": 200, "analyst": 200, "leadership": 200, "commander": 200},
+            ),
+        ],
+    )
     def test_role_hierarchy_enforcement(self, app_client, role, expected_codes):
         """Verify role hierarchy: higher roles include lower permissions."""
         endpoints = {
@@ -246,7 +312,7 @@ class TestRoleHierarchy:
             "commander": "/api/battlefield/init",
         }
 
-        with patch('src.auth.middleware.get_current_user', return_value=make_auth_context(role)):
+        with patch("src.auth.middleware.get_current_user", return_value=make_auth_context(role)):
             for level, endpoint in endpoints.items():
                 if "sync" in endpoint or "init" in endpoint:
                     response = app_client.post(endpoint)
@@ -254,5 +320,6 @@ class TestRoleHierarchy:
                     response = app_client.get(endpoint)
 
                 expected = expected_codes[level]
-                assert response.status_code == expected, \
+                assert response.status_code == expected, (
                     f"{role.value} accessing {level} endpoint {endpoint}: expected {expected}, got {response.status_code}"
+                )

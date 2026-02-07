@@ -1,18 +1,18 @@
 """Tests for BVA (Board of Veterans' Appeals) decision agent."""
 
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.oversight.agents.base import RawEvent
 from src.oversight.agents.bva import (
-    BVAAgent,
     BVA_CITATION_PATTERN,
     BVA_DATE_PATTERN,
     BVA_DOCKET_PATTERN,
     BVA_FULL_DATE_PATTERN,
+    BVAAgent,
 )
-from src.oversight.agents.base import RawEvent
 
 
 @pytest.fixture
@@ -159,7 +159,7 @@ class TestBVAAgentFetchNew:
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value = mock_resp
 
-        since = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        since = datetime(2025, 1, 1, tzinfo=UTC)
         events = bva_agent.fetch_new(since=since)
 
         # 2023 decision should be filtered out
@@ -267,8 +267,8 @@ class TestBVAAgentBackfill:
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value = mock_resp
 
-        start = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 12, 31, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, tzinfo=UTC)
+        end = datetime(2025, 12, 31, tzinfo=UTC)
 
         events = bva_agent.backfill(start, end)
         assert isinstance(events, list)
@@ -282,8 +282,8 @@ class TestBVAAgentBackfill:
         mock_resp.raise_for_status = MagicMock()
         mock_get.return_value = mock_resp
 
-        start = datetime(2025, 1, 1, tzinfo=timezone.utc)
-        end = datetime(2025, 12, 31, tzinfo=timezone.utc)
+        start = datetime(2025, 1, 1, tzinfo=UTC)
+        end = datetime(2025, 12, 31, tzinfo=UTC)
 
         events = bva_agent.backfill(start, end)
         assert isinstance(events, list)
@@ -623,7 +623,7 @@ class TestBVAAgentParseDate:
     def test_parse_has_timezone(self, bva_agent):
         """Parsed dates have UTC timezone."""
         dt = bva_agent._parse_date("09/30/2025")
-        assert dt.tzinfo == timezone.utc
+        assert dt.tzinfo == UTC
 
 
 class TestBVAAgentRegistration:

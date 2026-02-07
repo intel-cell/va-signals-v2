@@ -1,10 +1,6 @@
 """Tests for state intelligence classification."""
 
-import pytest
-
 from src.state.classify import (
-    HIGH_SEVERITY_KEYWORDS,
-    MEDIUM_SEVERITY_KEYWORDS,
     ClassificationResult,
     classify_by_keywords,
 )
@@ -133,7 +129,7 @@ def test_classify_none_content():
     assert result.severity == "low"
 
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 def test_classify_by_llm_high_severity():

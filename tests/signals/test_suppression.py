@@ -1,14 +1,15 @@
 """Tests for suppression manager."""
 
 import pytest
-from datetime import datetime, timezone, timedelta
-from src.signals.suppression import SuppressionManager, SuppressionResult
+
+from src.signals.suppression import SuppressionManager
 
 
 @pytest.fixture
 def manager(tmp_path, monkeypatch):
     """Create suppression manager with test DB."""
     import src.db as db_module
+
     test_db = tmp_path / "test_signals.db"
     monkeypatch.setattr(db_module, "DB_PATH", test_db)
     db_module.init_db()

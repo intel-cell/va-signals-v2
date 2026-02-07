@@ -1,6 +1,7 @@
 """Tests for text evaluators."""
 
 import pytest
+
 from src.signals.envelope import Envelope
 from src.signals.evaluators.text import ContainsAnyEvaluator
 

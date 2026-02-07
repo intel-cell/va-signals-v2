@@ -1,12 +1,12 @@
 """Tests for CAFC (Court of Appeals for the Federal Circuit) agent."""
 
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.oversight.agents.cafc import CAFCAgent, CAFC_CASE_PATTERN
 from src.oversight.agents.base import RawEvent
+from src.oversight.agents.cafc import CAFC_CASE_PATTERN, CAFCAgent
 
 
 @pytest.fixture
@@ -17,6 +17,7 @@ def cafc_agent():
 
 class MockRSSEntry:
     """Mock RSS entry that behaves like feedparser entry."""
+
     def __init__(self, title, link, published, summary):
         self.title = title
         self.link = link
@@ -84,7 +85,9 @@ class TestCAFCAgentIsVARelated:
 
     def test_non_va_case_not_detected(self, cafc_agent):
         """Non-VA cases are not detected as VA-related."""
-        assert not cafc_agent._is_va_related("Acme Corp v. USPTO", "Patent case", "https://cafc.gov/patent.pdf")
+        assert not cafc_agent._is_va_related(
+            "Acme Corp v. USPTO", "Patent case", "https://cafc.gov/patent.pdf"
+        )
 
 
 class TestCAFCAgentFetchNew:
@@ -143,7 +146,7 @@ class TestCAFCAgentFetchNew:
             raise_for_status=lambda: None,
         )
 
-        since = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        since = datetime(2026, 1, 1, tzinfo=UTC)
         events = cafc_agent.fetch_new(since=since)
 
         # Old entry should be filtered out
@@ -192,7 +195,7 @@ class TestCAFCAgentFetchNew:
             raise_for_status=lambda: None,
         )
 
-        events = cafc_agent.fetch_new(since=None)
+        cafc_agent.fetch_new(since=None)
 
         # Should attempt HTML scraping
         mock_html_get.assert_called_once()
@@ -388,8 +391,8 @@ class TestCAFCAgentBackfill:
             ],
         )
 
-        start = datetime(2026, 1, 10, tzinfo=timezone.utc)
-        end = datetime(2026, 1, 20, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 10, tzinfo=UTC)
+        end = datetime(2026, 1, 20, tzinfo=UTC)
 
         events = cafc_agent.backfill(start, end)
 

@@ -1,17 +1,17 @@
 """Tests for state intelligence runner orchestrator."""
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from datetime import UTC
+from unittest.mock import MagicMock, Mock, patch
 
 from src.state import db_helpers
-from src.state.common import RawSignal
 from src.state.classify import ClassificationResult
+from src.state.common import RawSignal
 from src.state.runner import (
-    _is_official_source,
+    MONITORED_STATES,
     _classify_signal,
     _get_run_type_from_hour,
+    _is_official_source,
     _process_single_state,
-    MONITORED_STATES,
 )
 
 
@@ -145,6 +145,7 @@ class TestRunStateMonitor:
 
     def _get_official_source_mock(self, mocks):
         """Create a mock _get_official_source function that returns mock classes."""
+
         def mock_get_official_source(state):
             source_map = {
                 "TX": Mock(return_value=mocks["tx"]),
@@ -152,19 +153,22 @@ class TestRunStateMonitor:
                 "FL": Mock(return_value=mocks["fl"]),
             }
             return source_map.get(state)
+
         return mock_get_official_source
 
     def test_successful_run_records_to_state_runs(self):
         """Test that a successful run is recorded in state_runs table."""
         mocks = self._create_mock_sources()
 
-        with patch("src.state.runner._get_official_source") as mock_get_official, \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch("src.state.runner._get_official_source") as mock_get_official,
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             mock_get_official.return_value = Mock(return_value=mocks["tx"])
 
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             assert summary["run_id"] is not None
@@ -196,11 +200,13 @@ class TestRunStateMonitor:
             }
             return source_map.get(state)
 
-        with patch("src.state.runner._get_official_source", side_effect=mock_get_official_source), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch("src.state.runner._get_official_source", side_effect=mock_get_official_source),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Only TX should have been requested
@@ -223,15 +229,28 @@ class TestRunStateMonitor:
             }
             return source_map.get(state)
 
-        with patch("src.state.runner._get_official_source", side_effect=mock_get_official_source), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch("src.state.runner._get_official_source", side_effect=mock_get_official_source),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
 
             # All states should have been requested
-            assert set(states_requested) == {"TX", "CA", "FL", "PA", "OH", "NY", "NC", "GA", "VA", "AZ"}
+            assert set(states_requested) == {
+                "TX",
+                "CA",
+                "FL",
+                "PA",
+                "OH",
+                "NY",
+                "NC",
+                "GA",
+                "VA",
+                "AZ",
+            }
             assert summary["state"] is None
 
     def test_dry_run_skips_notifications(self):
@@ -248,12 +267,16 @@ class TestRunStateMonitor:
             )
         ]
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]), \
-             patch("src.state.runner._send_email") as mock_email:
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+            patch("src.state.runner._send_email") as mock_email,
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Email should NOT have been called in dry_run mode
@@ -277,13 +300,17 @@ class TestRunStateMonitor:
             )
         ]
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]), \
-             patch("src.state.runner._send_email", return_value=True) as mock_email, \
-             patch("src.state.runner.email_configured", return_value=True):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+            patch("src.state.runner._send_email", return_value=True) as mock_email,
+            patch("src.state.runner.email_configured", return_value=True),
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=False)
 
             # Email should have been called for high severity
@@ -296,11 +323,15 @@ class TestRunStateMonitor:
         # Make TX official source fail
         mocks["tx"].fetch.side_effect = Exception("Connection error")
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Status should be PARTIAL (some sources succeeded, some failed)
@@ -316,11 +347,15 @@ class TestRunStateMonitor:
         mocks["newsapi"].fetch.side_effect = Exception("NewsAPI error")
         mocks["rss"].fetch.side_effect = Exception("RSS error")
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Status should be ERROR when all sources fail
@@ -351,22 +386,22 @@ class TestRunStateMonitor:
             )
         ]
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]), \
-             patch("src.state.runner.classify_by_keywords") as mock_keyword, \
-             patch("src.state.runner.classify_by_llm") as mock_llm:
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+            patch("src.state.runner.classify_by_keywords") as mock_keyword,
+            patch("src.state.runner.classify_by_llm") as mock_llm,
+        ):
             # Set up return values
-            mock_keyword.return_value = ClassificationResult(
-                severity="low", method="keyword"
-            )
-            mock_llm.return_value = ClassificationResult(
-                severity="low", method="llm"
-            )
+            mock_keyword.return_value = ClassificationResult(severity="low", method="keyword")
+            mock_llm.return_value = ClassificationResult(severity="low", method="llm")
 
             from src.state.runner import run_state_monitor
-            summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
+
+            run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Official source should use keyword classification
             assert mock_keyword.called
@@ -397,11 +432,15 @@ class TestRunStateMonitor:
             )
         ]
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Should only have 1 new signal (deduplicated)
@@ -411,12 +450,16 @@ class TestRunStateMonitor:
         """Test that source health is updated on successful fetch."""
         mocks = self._create_mock_sources()
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             from src.state.runner import run_state_monitor
-            summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
+
+            run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Check that health was recorded for TX official source
             health = db_helpers.get_source_health("tx_tvc_news")
@@ -430,12 +473,16 @@ class TestRunStateMonitor:
         # Make TX official fail
         mocks["tx"].fetch.side_effect = Exception("Test error")
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])), \
-             patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]), \
-             patch("src.state.runner.RSSSource", return_value=mocks["rss"]):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=mocks["tx"])
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=mocks["newsapi"]),
+            patch("src.state.runner.RSSSource", return_value=mocks["rss"]),
+        ):
             from src.state.runner import run_state_monitor
-            summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
+
+            run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # Check that health was recorded with failure
             health = db_helpers.get_source_health("tx_tvc_news")
@@ -453,7 +500,7 @@ class TestGetRunTypeFromHour:
 
         for hour in [6, 7, 8, 9, 10, 11, 12, 13]:
             with patch("src.state.runner.datetime") as mock_dt:
-                mock_dt.now.return_value = datetime(2026, 1, 21, hour, 0, 0, tzinfo=timezone.utc)
+                mock_dt.now.return_value = datetime(2026, 1, 21, hour, 0, 0, tzinfo=UTC)
                 mock_dt.timezone = timezone
                 result = _get_run_type_from_hour()
                 assert result == "morning", f"Hour {hour} should be morning"
@@ -465,7 +512,7 @@ class TestGetRunTypeFromHour:
 
         for hour in [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5]:
             with patch("src.state.runner.datetime") as mock_dt:
-                mock_dt.now.return_value = datetime(2026, 1, 21, hour, 0, 0, tzinfo=timezone.utc)
+                mock_dt.now.return_value = datetime(2026, 1, 21, hour, 0, 0, tzinfo=UTC)
                 mock_dt.timezone = timezone
                 result = _get_run_type_from_hour()
                 assert result == "evening", f"Hour {hour} should be evening"
@@ -500,17 +547,22 @@ class TestRunnerIntegration:
         rss_instance.source_id = "rss_tx"
         rss_instance.fetch.return_value = []
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
-             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
-             patch("src.state.runner.RSSSource", return_value=rss_instance):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=newsapi_instance),
+            patch("src.state.runner.RSSSource", return_value=rss_instance),
+        ):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             assert summary["new_signals"] == 1
 
             # Verify signal is in database
             from src.state.common import generate_signal_id
+
             sig_id = generate_signal_id("https://tx.gov/integration-test")
             signal = db_helpers.get_state_signal(sig_id)
             assert signal is not None
@@ -547,15 +599,22 @@ class TestProcessSingleState:
         rss_instance.source_id = "rss_tx"
         rss_instance.fetch.return_value = []
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
-             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
-             patch("src.state.runner.RSSSource", return_value=rss_instance):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=newsapi_instance),
+            patch("src.state.runner.RSSSource", return_value=rss_instance),
+        ):
             result = _process_single_state("TX", dry_run=True)
 
             expected_keys = {
-                "total_signals_found", "high_severity_count", "new_signals_count",
-                "source_successes", "source_failures", "errors",
+                "total_signals_found",
+                "high_severity_count",
+                "new_signals_count",
+                "source_successes",
+                "source_failures",
+                "errors",
             }
             assert set(result.keys()) == expected_keys
             assert isinstance(result["errors"], list)
@@ -575,10 +634,13 @@ class TestProcessSingleState:
         rss_instance.source_id = "rss_tx"
         rss_instance.fetch.return_value = []
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
-             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
-             patch("src.state.runner.RSSSource", return_value=rss_instance):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=newsapi_instance),
+            patch("src.state.runner.RSSSource", return_value=rss_instance),
+        ):
             result = _process_single_state("TX", dry_run=True)
 
             assert result["source_failures"] >= 1
@@ -606,10 +668,13 @@ class TestProcessSingleState:
         rss_instance.source_id = "rss_tx"
         rss_instance.fetch.return_value = []
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
-             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
-             patch("src.state.runner.RSSSource", return_value=rss_instance):
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=newsapi_instance),
+            patch("src.state.runner.RSSSource", return_value=rss_instance),
+        ):
             result = _process_single_state("TX", dry_run=True)
 
             assert result["high_severity_count"] >= 1
@@ -629,11 +694,12 @@ class TestParallelExecution:
         rss_instance.source_id = "rss_tx"
         rss_instance.fetch.return_value = []
 
-        with patch("src.state.runner._get_official_source", return_value=None), \
-             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
-             patch("src.state.runner.RSSSource", return_value=rss_instance), \
-             patch("src.state.runner.ThreadPoolExecutor") as mock_executor_cls:
-
+        with (
+            patch("src.state.runner._get_official_source", return_value=None),
+            patch("src.state.runner.NewsAPISource", return_value=newsapi_instance),
+            patch("src.state.runner.RSSSource", return_value=rss_instance),
+            patch("src.state.runner.ThreadPoolExecutor") as mock_executor_cls,
+        ):
             # Set up the mock executor context manager
             mock_executor = MagicMock()
             mock_executor_cls.return_value.__enter__ = Mock(return_value=mock_executor)
@@ -652,7 +718,8 @@ class TestParallelExecution:
             mock_executor.submit.return_value = mock_future
 
             from src.state.runner import run_state_monitor
-            summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
+
+            run_state_monitor(run_type="morning", state=None, dry_run=True)
 
             # ThreadPoolExecutor should have been created with max_workers capped at 6
             mock_executor_cls.assert_called_once()
@@ -674,13 +741,17 @@ class TestParallelExecution:
         rss_instance.source_id = "rss_tx"
         rss_instance.fetch.return_value = []
 
-        with patch("src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)), \
-             patch("src.state.runner.NewsAPISource", return_value=newsapi_instance), \
-             patch("src.state.runner.RSSSource", return_value=rss_instance), \
-             patch("src.state.runner.ThreadPoolExecutor") as mock_executor_cls:
-
+        with (
+            patch(
+                "src.state.runner._get_official_source", return_value=Mock(return_value=tx_instance)
+            ),
+            patch("src.state.runner.NewsAPISource", return_value=newsapi_instance),
+            patch("src.state.runner.RSSSource", return_value=rss_instance),
+            patch("src.state.runner.ThreadPoolExecutor") as mock_executor_cls,
+        ):
             from src.state.runner import run_state_monitor
-            summary = run_state_monitor(run_type="morning", state="TX", dry_run=True)
+
+            run_state_monitor(run_type="morning", state="TX", dry_run=True)
 
             # ThreadPoolExecutor should NOT be used for a single state
             mock_executor_cls.assert_not_called()
@@ -702,6 +773,7 @@ class TestParallelExecution:
 
         with patch("src.state.runner._process_single_state", side_effect=mock_process):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
 
             # All 10 states should have been processed
@@ -714,7 +786,6 @@ class TestParallelExecution:
 
     def test_results_deterministic_order(self):
         """Results should be aggregated in deterministic state order."""
-        errors_collected = []
 
         def mock_process(st, dry_run=False):
             return {
@@ -728,6 +799,7 @@ class TestParallelExecution:
 
         with patch("src.state.runner._process_single_state", side_effect=mock_process):
             from src.state.runner import run_state_monitor
+
             summary = run_state_monitor(run_type="morning", state=None, dry_run=True)
 
             # Errors should be in MONITORED_STATES order (deterministic)

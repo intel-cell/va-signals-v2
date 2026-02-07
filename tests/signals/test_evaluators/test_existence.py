@@ -1,6 +1,7 @@
 """Tests for existence and nested field evaluators."""
 
 import pytest
+
 from src.signals.envelope import Envelope
 from src.signals.evaluators.existence import FieldExistsEvaluator, NestedFieldInEvaluator
 

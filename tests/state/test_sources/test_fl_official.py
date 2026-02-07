@@ -1,8 +1,9 @@
 """Tests for Florida official sources."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.state.sources.fl_official import FLOfficialSource
 

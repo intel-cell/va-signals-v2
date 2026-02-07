@@ -26,6 +26,7 @@ def _run(coro):
 # RetryConfig defaults
 # ---------------------------------------------------------------------------
 
+
 class TestRetryConfig:
     def test_defaults(self):
         cfg = RetryConfig()
@@ -43,6 +44,7 @@ class TestRetryConfig:
 # RetryStats defaults
 # ---------------------------------------------------------------------------
 
+
 class TestRetryStats:
     def test_defaults(self):
         s = RetryStats()
@@ -55,6 +57,7 @@ class TestRetryStats:
 # ---------------------------------------------------------------------------
 # calculate_delay
 # ---------------------------------------------------------------------------
+
 
 class TestCalculateDelay:
     def test_first_attempt(self):
@@ -88,6 +91,7 @@ class TestCalculateDelay:
 # should_retry
 # ---------------------------------------------------------------------------
 
+
 class TestShouldRetry:
     def test_retries_matching_exception(self):
         cfg = RetryConfig(retry_exceptions=(ConnectionError,))
@@ -117,6 +121,7 @@ class TestShouldRetry:
 # retry_with_backoff — success
 # ---------------------------------------------------------------------------
 
+
 class TestRetryWithBackoffSuccess:
     def test_immediate_success(self):
         func = AsyncMock(return_value=42)
@@ -125,10 +130,12 @@ class TestRetryWithBackoffSuccess:
         assert func.call_count == 1
 
     def test_sync_func_success(self):
-        result = _run(retry_with_backoff(
-            lambda: "ok",
-            config=RetryConfig(max_attempts=3),
-        ))
+        result = _run(
+            retry_with_backoff(
+                lambda: "ok",
+                config=RetryConfig(max_attempts=3),
+            )
+        )
         assert result == "ok"
 
     def test_args_forwarded(self):
@@ -142,6 +149,7 @@ class TestRetryWithBackoffSuccess:
 # ---------------------------------------------------------------------------
 # retry_with_backoff — retry then succeed
 # ---------------------------------------------------------------------------
+
 
 class TestRetryWithBackoffRetryThenSucceed:
     def test_succeeds_after_failures(self):
@@ -171,11 +179,13 @@ class TestRetryWithBackoffRetryThenSucceed:
             return "ok"
 
         cfg = RetryConfig(max_attempts=3, base_delay=0.001, jitter=False)
-        result = _run(retry_with_backoff(
-            flaky,
-            config=cfg,
-            on_retry=lambda attempt, exc, delay: retries.append((attempt, type(exc).__name__)),
-        ))
+        result = _run(
+            retry_with_backoff(
+                flaky,
+                config=cfg,
+                on_retry=lambda attempt, exc, delay: retries.append((attempt, type(exc).__name__)),
+            )
+        )
         assert result == "ok"
         assert len(retries) == 1
         assert retries[0] == (1, "RuntimeError")
@@ -184,6 +194,7 @@ class TestRetryWithBackoffRetryThenSucceed:
 # ---------------------------------------------------------------------------
 # retry_with_backoff — all retries exhausted
 # ---------------------------------------------------------------------------
+
 
 class TestRetryExhausted:
     def test_raises_after_max_attempts(self):
@@ -222,6 +233,7 @@ class TestRetryExhausted:
 # ---------------------------------------------------------------------------
 # retry decorator
 # ---------------------------------------------------------------------------
+
 
 class TestRetryDecorator:
     def test_async_decorator(self):
@@ -272,6 +284,7 @@ class TestRetryDecorator:
 # ---------------------------------------------------------------------------
 # Pre-configured decorators
 # ---------------------------------------------------------------------------
+
 
 class TestPreConfiguredDecorators:
     def test_retry_api_call_wraps_async(self):

@@ -1,7 +1,6 @@
 """Tests for normalized event envelope."""
 
-import pytest
-from src.signals.envelope import Envelope, normalize_text, compute_content_hash
+from src.signals.envelope import Envelope, compute_content_hash, normalize_text
 
 
 def test_envelope_creation():

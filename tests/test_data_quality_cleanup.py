@@ -8,12 +8,12 @@ Covers:
 """
 
 from src.auth.audit import _is_contaminated
+from src.db import connect, execute
 from src.db.hearings import upsert_hearing
 from src.db.helpers import insert_source_run
-from src.db import connect, execute
-
 
 # ---------- audit.py validation ----------
+
 
 class TestAuditContamination:
     def test_rejects_testclient_ip(self):
@@ -21,7 +21,11 @@ class TestAuditContamination:
         assert _is_contaminated(entry) is True
 
     def test_rejects_script_injection(self):
-        entry = {"ip_address": "1.2.3.4", "request_body": "<script>alert(1)</script>", "user_agent": ""}
+        entry = {
+            "ip_address": "1.2.3.4",
+            "request_body": "<script>alert(1)</script>",
+            "user_agent": "",
+        }
         assert _is_contaminated(entry) is True
 
     def test_rejects_drop_table(self):
@@ -33,7 +37,11 @@ class TestAuditContamination:
         assert _is_contaminated(entry) is True
 
     def test_allows_normal_entry(self):
-        entry = {"ip_address": "192.168.1.1", "request_body": '{"key": "value"}', "user_agent": "Mozilla/5.0"}
+        entry = {
+            "ip_address": "192.168.1.1",
+            "request_body": '{"key": "value"}',
+            "user_agent": "Mozilla/5.0",
+        }
         assert _is_contaminated(entry) is False
 
     def test_allows_none_values(self):
@@ -42,6 +50,7 @@ class TestAuditContamination:
 
 
 # ---------- hearings.py date validation ----------
+
 
 class TestHearingsDateValidation:
     def _make_hearing(self, event_id="H-001", hearing_date="2025-03-15"):
@@ -86,6 +95,7 @@ class TestHearingsDateValidation:
 
 
 # ---------- helpers.py validation ----------
+
 
 class TestSourceRunValidation:
     def _make_run(self, source_id="fr_delta", started_at="2025-01-15T10:00:00Z"):
@@ -136,6 +146,7 @@ class TestSourceRunValidation:
 
 
 # ---------- hearings duplicate event_id (issue #13) ----------
+
 
 class TestHearingsDuplicateEventId:
     def _make_hearing(self, event_id="H-DUP-001", **overrides):

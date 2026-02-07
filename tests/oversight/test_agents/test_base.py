@@ -1,8 +1,5 @@
 """Tests for base agent class."""
 
-import pytest
-from dataclasses import dataclass
-
 from src.oversight.agents.base import (
     OversightAgent,
     RawEvent,

@@ -2,11 +2,10 @@
 
 import pytest
 
+from src.oversight.db_helpers import seed_default_escalation_signals
 from src.oversight.pipeline.escalation import (
-    EscalationResult,
     check_escalation,
 )
-from src.oversight.db_helpers import seed_default_escalation_signals
 
 
 @pytest.fixture(autouse=True)

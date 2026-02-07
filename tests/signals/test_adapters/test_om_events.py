@@ -1,6 +1,5 @@
 """Tests for OM events adapter."""
 
-import pytest
 from src.signals.adapters.om_events import OMEventsAdapter
 from src.signals.envelope import Envelope
 
@@ -116,10 +115,7 @@ def test_adapt_om_event_computes_version():
 
 def test_adapt_om_event_builds_body_text():
     adapter = OMEventsAdapter()
-    event = _make_om_event(
-        title="Test Report Title",
-        summary="Detailed summary of findings"
-    )
+    event = _make_om_event(title="Test Report Title", summary="Detailed summary of findings")
     env = adapter.adapt(event)
 
     assert "Test Report Title" in env.body_text
@@ -129,9 +125,7 @@ def test_adapt_om_event_builds_body_text():
 def test_adapt_om_event_uses_raw_content_fallback():
     adapter = OMEventsAdapter()
     event = _make_om_event(
-        title="",
-        summary="",
-        raw_content="Raw content fallback text" + "x" * 2000
+        title="", summary="", raw_content="Raw content fallback text" + "x" * 2000
     )
     env = adapter.adapt(event)
 

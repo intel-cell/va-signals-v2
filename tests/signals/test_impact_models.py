@@ -3,24 +3,21 @@
 CHARLIE COMMAND - Phase 1: Impact Memo Schema validation.
 """
 
-import pytest
-from datetime import datetime
-
 from src.signals.impact.models import (
-    ImpactMemo,
-    PolicyHook,
-    WhyItMatters,
+    ConfidenceLevel,
     HeatMap,
     HeatMapIssue,
-    Objection,
-    Posture,
-    ConfidenceLevel,
-    RiskLevel,
-    IssueArea,
-    SourceType,
     HeatMapQuadrant,
-    create_impact_memo,
+    ImpactMemo,
+    IssueArea,
+    Objection,
+    PolicyHook,
+    Posture,
+    RiskLevel,
+    SourceType,
+    WhyItMatters,
     create_heat_map_issue,
+    create_impact_memo,
 )
 
 

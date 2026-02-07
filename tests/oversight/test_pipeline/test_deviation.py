@@ -1,15 +1,16 @@
 """Tests for Sonnet deviation classifier."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
+
+from src.oversight.pipeline.baseline import BaselineSummary
 from src.oversight.pipeline.deviation import (
     DeviationResult,
     _get_client,
     check_deviation,
     classify_deviation_type,
 )
-from src.oversight.pipeline.baseline import BaselineSummary
 
 
 @pytest.fixture
@@ -31,6 +32,7 @@ def mock_anthropic_response():
         mock_response = MagicMock()
         mock_response.content = [MagicMock(text=content)]
         return mock_response
+
     return _create_response
 
 
@@ -141,16 +143,22 @@ def test_check_deviation_frequency_spike(mock_get_client, mock_anthropic_respons
 def test_classify_deviation_type():
     """Test deviation type classification."""
     # New topic
-    assert classify_deviation_type(
-        event_topics={"ai": 0.8, "technology": 0.2},
-        baseline_topics={"wait_times": 0.5, "staffing": 0.5},
-    ) == "new_topic"
+    assert (
+        classify_deviation_type(
+            event_topics={"ai": 0.8, "technology": 0.2},
+            baseline_topics={"wait_times": 0.5, "staffing": 0.5},
+        )
+        == "new_topic"
+    )
 
     # Similar topics
-    assert classify_deviation_type(
-        event_topics={"wait_times": 0.6, "staffing": 0.4},
-        baseline_topics={"wait_times": 0.5, "staffing": 0.5},
-    ) is None
+    assert (
+        classify_deviation_type(
+            event_topics={"wait_times": 0.6, "staffing": 0.4},
+            baseline_topics={"wait_times": 0.5, "staffing": 0.5},
+        )
+        is None
+    )
 
 
 def test_check_deviation_missing_key_fails_closed(monkeypatch, sample_baseline):

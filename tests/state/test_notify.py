@@ -1,7 +1,5 @@
 """Tests for state notification formatting."""
 
-import pytest
-
 from src.state.notify import format_state_alert, format_state_digest
 
 
@@ -37,7 +35,10 @@ class TestFormatStateAlert:
         # Check state tag
         assert "*[TX]*" in text
         # Check Slack link format
-        assert "<https://example.com/article|Texas Veterans Commission suspends PACT Act outreach>" in text
+        assert (
+            "<https://example.com/article|Texas Veterans Commission suspends PACT Act outreach>"
+            in text
+        )
         # Check program
         assert "_PACT Act_" in text
         # Check source
@@ -343,15 +344,9 @@ class TestFormatStateDigest:
     def test_multiple_states_sorted_alphabetically(self):
         """States are sorted alphabetically."""
         signals_by_state = {
-            "Texas": [
-                {"title": "TX Signal", "url": "https://tx.com", "program": "General"}
-            ],
-            "California": [
-                {"title": "CA Signal", "url": "https://ca.com", "program": "General"}
-            ],
-            "Florida": [
-                {"title": "FL Signal", "url": "https://fl.com", "program": "General"}
-            ],
+            "Texas": [{"title": "TX Signal", "url": "https://tx.com", "program": "General"}],
+            "California": [{"title": "CA Signal", "url": "https://ca.com", "program": "General"}],
+            "Florida": [{"title": "FL Signal", "url": "https://fl.com", "program": "General"}],
         }
 
         result = format_state_digest(signals_by_state)
@@ -441,9 +436,14 @@ class TestFormatStateDigest:
 
         # Should NOT show signals 6, 7, 8 as titles
         lines = text.split("\n")
-        title_lines = [l for l in lines if "Signal 6" in l or "Signal 7" in l or "Signal 8" in l]
+        title_lines = [
+            line for line in lines if "Signal 6" in line or "Signal 7" in line or "Signal 8" in line
+        ]
         # These should only appear in the count, not as individual items
-        assert all("(+3 more)" in l or "_PACT Act_" in l for l in title_lines) or len(title_lines) == 0
+        assert (
+            all("(+3 more)" in line or "_PACT Act_" in line for line in title_lines)
+            or len(title_lines) == 0
+        )
 
     def test_exactly_five_signals_no_more_indicator(self):
         """Exactly 5 signals shows all without '+X more' indicator."""
@@ -525,9 +525,7 @@ class TestFormatStateDigest:
     def test_filters_out_empty_state_lists(self):
         """Empty state lists are filtered out."""
         signals_by_state = {
-            "Texas": [
-                {"title": "TX Signal", "url": "https://tx.com", "program": "General"}
-            ],
+            "Texas": [{"title": "TX Signal", "url": "https://tx.com", "program": "General"}],
             "California": [],  # Empty - should be filtered
             "Florida": [],  # Empty - should be filtered
         }
@@ -596,9 +594,7 @@ class TestFormatStateDigest:
     def test_bullet_point_format(self):
         """Signal items use bullet point format with proper indentation."""
         signals_by_state = {
-            "Texas": [
-                {"title": "Test signal", "url": "https://example.com", "program": "General"}
-            ]
+            "Texas": [{"title": "Test signal", "url": "https://example.com", "program": "General"}]
         }
 
         result = format_state_digest(signals_by_state)

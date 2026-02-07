@@ -15,12 +15,11 @@ Status: STUB - Awaiting component integration
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
-
 
 # =============================================================================
 # LOGIN TO DASHBOARD FLOW
 # =============================================================================
+
 
 class TestLoginToDashboardFlow:
     """Test complete login → dashboard access flow."""
@@ -70,6 +69,7 @@ class TestLoginToDashboardFlow:
 # CEO BRIEF FLOW
 # =============================================================================
 
+
 class TestCEOBriefFlow:
     """Test CEO Brief generation and viewing flow."""
 
@@ -104,6 +104,7 @@ class TestCEOBriefFlow:
 # EVIDENCE PACK FLOW
 # =============================================================================
 
+
 class TestEvidencePackFlow:
     """Test Evidence Pack viewing flow."""
 
@@ -124,6 +125,7 @@ class TestEvidencePackFlow:
 # =============================================================================
 # BATTLEFIELD OPERATIONS FLOW
 # =============================================================================
+
 
 class TestBattlefieldFlow:
     """Test Battlefield dashboard operations."""
@@ -175,6 +177,7 @@ class TestBattlefieldFlow:
 # AUDIT LOG VERIFICATION
 # =============================================================================
 
+
 class TestAuditLogFlow:
     """Test audit logging captures all actions."""
 
@@ -210,6 +213,7 @@ class TestAuditLogFlow:
 # LOGOUT FLOW
 # =============================================================================
 
+
 class TestLogoutFlow:
     """Test logout and session invalidation."""
 
@@ -235,6 +239,7 @@ class TestLogoutFlow:
 # =============================================================================
 # CROSS-BROWSER COMPATIBILITY (Manual Verification)
 # =============================================================================
+
 
 class TestBrowserCompatibility:
     """
@@ -279,13 +284,13 @@ class TestBrowserCompatibility:
 # PERFORMANCE BASELINE
 # =============================================================================
 
+
 class TestPerformanceBaseline:
     """Basic performance verification."""
 
     @pytest.mark.skip(reason="Awaiting component integration")
     def test_dashboard_load_time(self, full_test_client):
         """Verify dashboard loads in < 2 seconds."""
-        import time
         # start = time.time()
         # response = full_test_client.get("/api/battlefield/dashboard")
         # elapsed = time.time() - start
@@ -295,9 +300,8 @@ class TestPerformanceBaseline:
     @pytest.mark.skip(reason="Awaiting component integration")
     def test_api_response_time(self, full_test_client):
         """Verify API p95 < 500ms."""
-        import time
-        response_times = []
-        endpoints = [
+        _response_times = []  # noqa: F841
+        _endpoints = [  # noqa: F841
             "/api/runs/stats",
             "/api/bills/stats",
             "/api/battlefield/stats",

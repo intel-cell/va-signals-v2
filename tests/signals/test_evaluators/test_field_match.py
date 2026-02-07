@@ -1,6 +1,7 @@
 """Tests for field match evaluators."""
 
 import pytest
+
 from src.signals.envelope import Envelope
 from src.signals.evaluators.field_match import FieldInEvaluator, FieldIntersectsEvaluator
 

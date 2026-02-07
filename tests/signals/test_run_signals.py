@@ -1,9 +1,7 @@
 """Tests for signals CLI runner."""
 
-import pytest
-from unittest.mock import patch, MagicMock
 from argparse import Namespace
-from io import StringIO
+from unittest.mock import patch
 
 from src.run_signals import (
     cmd_route,
@@ -27,8 +25,8 @@ class TestCmdStatus:
 
     def test_status_shows_recent_fires(self, capsys):
         """Status should display recent trigger fires from audit log."""
-        from src.signals.output.audit_log import write_audit_log
         from src.signals.engine.evaluator import EvaluationResult
+        from src.signals.output.audit_log import write_audit_log
 
         # Create a test audit log entry
         write_audit_log(
@@ -53,7 +51,11 @@ class TestCmdStatus:
 
         captured = capsys.readouterr()
         # Should show something about recent fires or audit log
-        assert "Recent" in captured.out or "audit" in captured.out.lower() or "trigger" in captured.out.lower()
+        assert (
+            "Recent" in captured.out
+            or "audit" in captured.out.lower()
+            or "trigger" in captured.out.lower()
+        )
 
     def test_status_shows_suppression_state(self, capsys):
         """Status should show active suppressions."""
@@ -73,7 +75,11 @@ class TestCmdStatus:
 
         captured = capsys.readouterr()
         # Should show suppression info
-        assert "Suppression" in captured.out or "suppression" in captured.out.lower() or "active" in captured.out.lower()
+        assert (
+            "Suppression" in captured.out
+            or "suppression" in captured.out.lower()
+            or "active" in captured.out.lower()
+        )
 
 
 class TestCmdTestEnvelope:
@@ -86,7 +92,11 @@ class TestCmdTestEnvelope:
 
         captured = capsys.readouterr()
         # Should mention GAO or oversight since we're creating a GAO test envelope
-        assert "GAO" in captured.out or "oversight" in captured.out.lower() or "test" in captured.out.lower()
+        assert (
+            "GAO" in captured.out
+            or "oversight" in captured.out.lower()
+            or "test" in captured.out.lower()
+        )
 
     def test_test_envelope_shows_routing_results(self, capsys):
         """Test-envelope should show what triggers matched."""
@@ -95,7 +105,11 @@ class TestCmdTestEnvelope:
 
         captured = capsys.readouterr()
         # Should show routing results - triggers or matches
-        assert "trigger" in captured.out.lower() or "match" in captured.out.lower() or "result" in captured.out.lower()
+        assert (
+            "trigger" in captured.out.lower()
+            or "match" in captured.out.lower()
+            or "result" in captured.out.lower()
+        )
 
     def test_test_envelope_does_not_write_audit_log(self):
         """Test-envelope should be a dry run - no audit log writes."""
@@ -135,9 +149,18 @@ class TestCmdRoute:
             """INSERT INTO hearings (event_id, congress, chamber, committee_code, committee_name,
                hearing_date, status, title, first_seen_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("TEST-HEARING-1", 119, "House", "HSVA", "House Veterans Affairs",
-             "2026-01-25", "scheduled", "Hearing on GAO Audit of VA Claims",
-             "2026-01-21T10:00:00Z", "2026-01-21T10:00:00Z"),
+            (
+                "TEST-HEARING-1",
+                119,
+                "House",
+                "HSVA",
+                "House Veterans Affairs",
+                "2026-01-25",
+                "scheduled",
+                "Hearing on GAO Audit of VA Claims",
+                "2026-01-21T10:00:00Z",
+                "2026-01-21T10:00:00Z",
+            ),
         )
         con.commit()
         con.close()
@@ -147,7 +170,12 @@ class TestCmdRoute:
 
         captured = capsys.readouterr()
         # Should show some processing output
-        assert "route" in captured.out.lower() or "hearing" in captured.out.lower() or "processed" in captured.out.lower() or "event" in captured.out.lower()
+        assert (
+            "route" in captured.out.lower()
+            or "hearing" in captured.out.lower()
+            or "processed" in captured.out.lower()
+            or "event" in captured.out.lower()
+        )
 
     def test_route_dry_run_skips_output(self, capsys):
         """Route with dry-run should not write to audit log."""
@@ -159,8 +187,16 @@ class TestCmdRoute:
             """INSERT INTO om_events (event_id, event_type, primary_source_type, primary_url,
                pub_precision, pub_source, title, fetched_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("TEST-OM-1", "report", "gao", "https://gao.gov/test",
-             "day", "extracted", "GAO Investigation of VA", "2026-01-21T10:00:00Z"),
+            (
+                "TEST-OM-1",
+                "report",
+                "gao",
+                "https://gao.gov/test",
+                "day",
+                "extracted",
+                "GAO Investigation of VA",
+                "2026-01-21T10:00:00Z",
+            ),
         )
         con.commit()
         con.close()
@@ -195,8 +231,15 @@ class TestCmdRoute:
             """INSERT INTO bills (bill_id, congress, bill_type, bill_number, title,
                first_seen_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            ("119-hr-1234", 119, "HR", 1234, "VA Disability Claims Review Act",
-             "2026-01-21T10:00:00Z", "2026-01-21T10:00:00Z"),
+            (
+                "119-hr-1234",
+                119,
+                "HR",
+                1234,
+                "VA Disability Claims Review Act",
+                "2026-01-21T10:00:00Z",
+                "2026-01-21T10:00:00Z",
+            ),
         )
         con.commit()
         con.close()
@@ -265,9 +308,18 @@ class TestRouteResults:
             """INSERT INTO hearings (event_id, congress, chamber, committee_code, committee_name,
                hearing_date, status, title, first_seen_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("TEST-HEARING-2", 119, "House", "HSVA", "House Veterans Affairs",
-             "2026-01-26", "scheduled", "GAO Review of VA Disability Claims Backlog",
-             "2026-01-21T11:00:00Z", "2026-01-21T11:00:00Z"),
+            (
+                "TEST-HEARING-2",
+                119,
+                "House",
+                "HSVA",
+                "House Veterans Affairs",
+                "2026-01-26",
+                "scheduled",
+                "GAO Review of VA Disability Claims Backlog",
+                "2026-01-21T11:00:00Z",
+                "2026-01-21T11:00:00Z",
+            ),
         )
         con.commit()
         con.close()
@@ -277,7 +329,10 @@ class TestRouteResults:
 
         captured = capsys.readouterr()
         # Should show some form of count or summary
-        assert any(x in captured.out.lower() for x in ["matched", "trigger", "processed", "routed", "event"])
+        assert any(
+            x in captured.out.lower()
+            for x in ["matched", "trigger", "processed", "routed", "event"]
+        )
 
     def test_route_reports_suppressed_count(self, capsys):
         """Route should report suppressed triggers separately."""
@@ -290,9 +345,18 @@ class TestRouteResults:
             """INSERT INTO hearings (event_id, congress, chamber, committee_code, committee_name,
                hearing_date, status, title, first_seen_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("TEST-HEARING-3", 119, "House", "HSVA", "House Veterans Affairs",
-             "2026-01-27", "scheduled", "GAO Investigation Results",
-             "2026-01-21T12:00:00Z", "2026-01-21T12:00:00Z"),
+            (
+                "TEST-HEARING-3",
+                119,
+                "House",
+                "HSVA",
+                "House Veterans Affairs",
+                "2026-01-27",
+                "scheduled",
+                "GAO Investigation Results",
+                "2026-01-21T12:00:00Z",
+                "2026-01-21T12:00:00Z",
+            ),
         )
         con.commit()
         con.close()

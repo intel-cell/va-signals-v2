@@ -1,9 +1,7 @@
 """Tests for email SMTP health check and /api/health email integration."""
 
 import os
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from src.notify_email import check_smtp_health
 
@@ -27,14 +25,18 @@ class TestCheckSmtpHealth:
         mock_smtp_class.return_value.__enter__ = MagicMock(return_value=mock_smtp)
         mock_smtp_class.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = check_smtp_health()
 
         assert result["configured"] is True
@@ -49,14 +51,18 @@ class TestCheckSmtpHealth:
         """Returns reachable=False with error message on SMTP failure."""
         mock_smtp_class.side_effect = Exception("Connection refused")
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "password",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "password",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = check_smtp_health()
 
         assert result["configured"] is True
@@ -71,14 +77,18 @@ class TestCheckSmtpHealth:
         mock_smtp_class.return_value.__enter__ = MagicMock(return_value=mock_smtp)
         mock_smtp_class.return_value.__exit__ = MagicMock(return_value=False)
 
-        with patch.dict(os.environ, {
-            "SMTP_HOST": "smtp.example.com",
-            "SMTP_PORT": "587",
-            "SMTP_USER": "user@example.com",
-            "SMTP_PASS": "wrongpass",
-            "EMAIL_FROM": "from@example.com",
-            "EMAIL_TO": "to@example.com",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "SMTP_HOST": "smtp.example.com",
+                "SMTP_PORT": "587",
+                "SMTP_USER": "user@example.com",
+                "SMTP_PASS": "wrongpass",
+                "EMAIL_FROM": "from@example.com",
+                "EMAIL_TO": "to@example.com",
+            },
+            clear=True,
+        ):
             result = check_smtp_health()
 
         assert result["configured"] is True

@@ -1,6 +1,5 @@
 """Tests for bills adapter."""
 
-import pytest
 from src.signals.adapters.bills import BillsAdapter
 from src.signals.envelope import Envelope
 
@@ -71,9 +70,7 @@ def test_adapt_bill_computes_version():
 def test_adapt_bill_builds_body_text():
     adapter = BillsAdapter()
     bill = _make_bill(
-        title="Test Bill Title",
-        latest_action_text="Passed House",
-        policy_area="Veterans Affairs"
+        title="Test Bill Title", latest_action_text="Passed House", policy_area="Veterans Affairs"
     )
     env = adapter.adapt(bill)
 
@@ -99,7 +96,7 @@ def test_adapt_bill_preserves_metadata():
         sponsor_name="Rep. Smith",
         sponsor_party="D",
         cosponsors_count=10,
-        latest_action_date="2026-01-20"
+        latest_action_date="2026-01-20",
     )
     env = adapter.adapt(bill)
 

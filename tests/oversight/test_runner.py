@@ -1,17 +1,14 @@
 """Tests for oversight CLI runner."""
 
 import time
-import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime
+from unittest.mock import MagicMock, patch
 
 from src.oversight.runner import (
+    OversightRunResult,
+    _process_raw_event,
+    generate_digest,
     run_agent,
     run_all_agents,
-    run_backfill,
-    generate_digest,
-    _process_raw_event,
-    OversightRunResult,
 )
 
 
@@ -142,9 +139,7 @@ def test_generate_digest(mock_get_events):
 @patch("src.oversight.runner.extract_entities")
 @patch("src.oversight.runner.check_quality_gate")
 @patch("src.oversight.runner.check_escalation")
-def test_processed_event_includes_ml_fields(
-    mock_escalation, mock_qg, mock_entities, mock_dedup
-):
+def test_processed_event_includes_ml_fields(mock_escalation, mock_qg, mock_entities, mock_dedup):
     """Processed events should include ml_score and ml_risk_level from escalation."""
     from src.oversight.agents.base import RawEvent
     from src.oversight.pipeline.escalation import EscalationResult
@@ -195,6 +190,7 @@ def test_run_all_agents_parallelism(mock_run_agent):
 
     9 agents each sleep 0.1s: sequential ~0.9s, parallel < 0.5s.
     """
+
     def slow_agent(agent_name, since=None):
         time.sleep(0.1)
         return OversightRunResult(

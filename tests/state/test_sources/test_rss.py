@@ -1,10 +1,8 @@
 """Tests for RSS news source."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from src.state.sources.rss import RSSSource, RSS_FEEDS
-from src.state.common import RawSignal
+from src.state.sources.rss import RSS_FEEDS, RSSSource
 
 
 def _make_feed_entry(title, link, summary, published_parsed):
@@ -53,7 +51,7 @@ def test_rss_fetch_parses_feed(mock_parse):
                 summary="The state budget allocates...",
                 published_parsed=(2026, 1, 19, 15, 0, 0, 0, 0, 0),
             ),
-        ]
+        ],
     )
 
     source = RSSSource(state="TX")
@@ -96,7 +94,7 @@ def test_rss_filters_veteran_relevant(mock_parse):
                 summary="Veterans will be honored...",
                 published_parsed=(2026, 1, 19, 15, 0, 0, 0, 0, 0),
             ),
-        ]
+        ],
     )
 
     source = RSSSource(state="TX")

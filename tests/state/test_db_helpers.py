@@ -1,6 +1,5 @@
 """Tests for state intelligence DB helpers."""
 
-import pytest
 from src.state import db_helpers
 
 
@@ -53,9 +52,27 @@ class TestStateSources:
     def test_get_sources_by_state(self):
         """Test getting all sources for a state."""
         sources = [
-            {"source_id": "tx_1", "state": "TX", "source_type": "official", "name": "TX Source 1", "url": "https://tx1.gov"},
-            {"source_id": "tx_2", "state": "TX", "source_type": "rss", "name": "TX Source 2", "url": "https://tx2.gov/rss"},
-            {"source_id": "ca_1", "state": "CA", "source_type": "official", "name": "CA Source 1", "url": "https://ca1.gov"},
+            {
+                "source_id": "tx_1",
+                "state": "TX",
+                "source_type": "official",
+                "name": "TX Source 1",
+                "url": "https://tx1.gov",
+            },
+            {
+                "source_id": "tx_2",
+                "state": "TX",
+                "source_type": "rss",
+                "name": "TX Source 2",
+                "url": "https://tx2.gov/rss",
+            },
+            {
+                "source_id": "ca_1",
+                "state": "CA",
+                "source_type": "official",
+                "name": "CA Source 1",
+                "url": "https://ca1.gov",
+            },
         ]
         for s in sources:
             db_helpers.insert_state_source(s)
@@ -75,7 +92,13 @@ class TestStateSignals:
     def test_insert_and_get_state_signal(self):
         """Test inserting and retrieving a state signal."""
         # First create a source
-        source = {"source_id": "tx_test", "state": "TX", "source_type": "official", "name": "Test", "url": "https://test.gov"}
+        source = {
+            "source_id": "tx_test",
+            "state": "TX",
+            "source_type": "official",
+            "name": "Test",
+            "url": "https://test.gov",
+        }
         db_helpers.insert_state_source(source)
 
         signal = {
@@ -101,7 +124,13 @@ class TestStateSignals:
 
     def test_signal_exists(self):
         """Test checking if a signal exists."""
-        source = {"source_id": "tx_test2", "state": "TX", "source_type": "official", "name": "Test2", "url": "https://test2.gov"}
+        source = {
+            "source_id": "tx_test2",
+            "state": "TX",
+            "source_type": "official",
+            "name": "Test2",
+            "url": "https://test2.gov",
+        }
         db_helpers.insert_state_source(source)
 
         signal = {
@@ -117,15 +146,45 @@ class TestStateSignals:
 
     def test_get_signals_by_state(self):
         """Test getting signals by state."""
-        source_tx = {"source_id": "tx_src", "state": "TX", "source_type": "official", "name": "TX", "url": "https://tx.gov"}
-        source_ca = {"source_id": "ca_src", "state": "CA", "source_type": "official", "name": "CA", "url": "https://ca.gov"}
+        source_tx = {
+            "source_id": "tx_src",
+            "state": "TX",
+            "source_type": "official",
+            "name": "TX",
+            "url": "https://tx.gov",
+        }
+        source_ca = {
+            "source_id": "ca_src",
+            "state": "CA",
+            "source_type": "official",
+            "name": "CA",
+            "url": "https://ca.gov",
+        }
         db_helpers.insert_state_source(source_tx)
         db_helpers.insert_state_source(source_ca)
 
         signals = [
-            {"signal_id": "tx_sig_1", "state": "TX", "source_id": "tx_src", "title": "TX 1", "url": "https://tx.gov/1"},
-            {"signal_id": "tx_sig_2", "state": "TX", "source_id": "tx_src", "title": "TX 2", "url": "https://tx.gov/2"},
-            {"signal_id": "ca_sig_1", "state": "CA", "source_id": "ca_src", "title": "CA 1", "url": "https://ca.gov/1"},
+            {
+                "signal_id": "tx_sig_1",
+                "state": "TX",
+                "source_id": "tx_src",
+                "title": "TX 1",
+                "url": "https://tx.gov/1",
+            },
+            {
+                "signal_id": "tx_sig_2",
+                "state": "TX",
+                "source_id": "tx_src",
+                "title": "TX 2",
+                "url": "https://tx.gov/2",
+            },
+            {
+                "signal_id": "ca_sig_1",
+                "state": "CA",
+                "source_id": "ca_src",
+                "title": "CA 1",
+                "url": "https://ca.gov/1",
+            },
         ]
         for sig in signals:
             db_helpers.insert_state_signal(sig)
@@ -136,11 +195,23 @@ class TestStateSignals:
 
     def test_get_signals_by_state_with_since(self):
         """Test getting signals by state with since filter."""
-        source = {"source_id": "tx_since", "state": "TX", "source_type": "official", "name": "TX", "url": "https://tx.gov"}
+        source = {
+            "source_id": "tx_since",
+            "state": "TX",
+            "source_type": "official",
+            "name": "TX",
+            "url": "https://tx.gov",
+        }
         db_helpers.insert_state_source(source)
 
         # Insert a signal
-        signal = {"signal_id": "tx_since_1", "state": "TX", "source_id": "tx_since", "title": "TX 1", "url": "https://tx.gov/1"}
+        signal = {
+            "signal_id": "tx_since_1",
+            "state": "TX",
+            "source_id": "tx_since",
+            "title": "TX 1",
+            "url": "https://tx.gov/1",
+        }
         db_helpers.insert_state_signal(signal)
 
         # Get all signals (no since)
@@ -162,9 +233,21 @@ class TestStateClassifications:
     def test_insert_and_get_classification(self):
         """Test inserting and retrieving a classification."""
         # Setup
-        source = {"source_id": "tx_class", "state": "TX", "source_type": "official", "name": "Test", "url": "https://test.gov"}
+        source = {
+            "source_id": "tx_class",
+            "state": "TX",
+            "source_type": "official",
+            "name": "Test",
+            "url": "https://test.gov",
+        }
         db_helpers.insert_state_source(source)
-        signal = {"signal_id": "sig_class", "state": "TX", "source_id": "tx_class", "title": "Test", "url": "https://test.gov/1"}
+        signal = {
+            "signal_id": "sig_class",
+            "state": "TX",
+            "source_id": "tx_class",
+            "title": "Test",
+            "url": "https://test.gov/1",
+        }
         db_helpers.insert_state_signal(signal)
 
         classification = {
@@ -185,24 +268,44 @@ class TestStateClassifications:
 
     def test_get_unnotified_signals(self):
         """Test getting signals that haven't been notified."""
-        source = {"source_id": "tx_unnotified", "state": "TX", "source_type": "official", "name": "Test", "url": "https://test.gov"}
+        source = {
+            "source_id": "tx_unnotified",
+            "state": "TX",
+            "source_type": "official",
+            "name": "Test",
+            "url": "https://test.gov",
+        }
         db_helpers.insert_state_source(source)
 
         # Create two signals
         signals = [
-            {"signal_id": "sig_unnotified_1", "state": "TX", "source_id": "tx_unnotified", "title": "Test 1", "url": "https://test.gov/1"},
-            {"signal_id": "sig_unnotified_2", "state": "TX", "source_id": "tx_unnotified", "title": "Test 2", "url": "https://test.gov/2"},
+            {
+                "signal_id": "sig_unnotified_1",
+                "state": "TX",
+                "source_id": "tx_unnotified",
+                "title": "Test 1",
+                "url": "https://test.gov/1",
+            },
+            {
+                "signal_id": "sig_unnotified_2",
+                "state": "TX",
+                "source_id": "tx_unnotified",
+                "title": "Test 2",
+                "url": "https://test.gov/2",
+            },
         ]
         for sig in signals:
             db_helpers.insert_state_signal(sig)
 
         # Classify both as high severity
         for sig_id in ["sig_unnotified_1", "sig_unnotified_2"]:
-            db_helpers.insert_state_classification({
-                "signal_id": sig_id,
-                "severity": "high",
-                "classification_method": "keyword",
-            })
+            db_helpers.insert_state_classification(
+                {
+                    "signal_id": sig_id,
+                    "severity": "high",
+                    "classification_method": "keyword",
+                }
+            )
 
         # Check unnotified - both should be there
         unnotified = db_helpers.get_unnotified_signals(severity="high")
@@ -262,7 +365,13 @@ class TestSourceHealth:
 
     def test_update_source_health_success(self):
         """Test updating source health on success."""
-        source = {"source_id": "health_test", "state": "TX", "source_type": "official", "name": "Test", "url": "https://test.gov"}
+        source = {
+            "source_id": "health_test",
+            "state": "TX",
+            "source_type": "official",
+            "name": "Test",
+            "url": "https://test.gov",
+        }
         db_helpers.insert_state_source(source)
 
         db_helpers.update_source_health("health_test", success=True)
@@ -275,7 +384,13 @@ class TestSourceHealth:
 
     def test_update_source_health_failure(self):
         """Test updating source health on failure."""
-        source = {"source_id": "health_fail", "state": "TX", "source_type": "official", "name": "Test", "url": "https://test.gov"}
+        source = {
+            "source_id": "health_fail",
+            "state": "TX",
+            "source_type": "official",
+            "name": "Test",
+            "url": "https://test.gov",
+        }
         db_helpers.insert_state_source(source)
 
         db_helpers.update_source_health("health_fail", success=False, error="Connection timeout")
@@ -291,7 +406,13 @@ class TestSourceHealth:
 
     def test_health_resets_on_success(self):
         """Test that consecutive failures reset on success."""
-        source = {"source_id": "health_reset", "state": "TX", "source_type": "official", "name": "Test", "url": "https://test.gov"}
+        source = {
+            "source_id": "health_reset",
+            "state": "TX",
+            "source_type": "official",
+            "name": "Test",
+            "url": "https://test.gov",
+        }
         db_helpers.insert_state_source(source)
 
         # Two failures
@@ -334,6 +455,7 @@ class TestSourceHealthConcurrency:
 
         # Verify all 30 records were written
         from src.db import connect, execute
+
         con = connect()
         cur = execute(con, "SELECT COUNT(*) FROM state_source_health", {})
         count = cur.fetchone()[0]
@@ -353,8 +475,7 @@ class TestSourceHealthConcurrency:
             source_id, success = args
             try:
                 db_helpers.update_source_health(
-                    source_id, success=success,
-                    error=None if success else "test error"
+                    source_id, success=success, error=None if success else "test error"
                 )
             except Exception as e:
                 errors.append((source_id, str(e)))
@@ -380,7 +501,7 @@ class TestSeedDefaultSources:
 
     def test_seed_default_sources_idempotent(self):
         """Test that seeding is idempotent."""
-        count1 = db_helpers.seed_default_sources()
+        db_helpers.seed_default_sources()
         count2 = db_helpers.seed_default_sources()
         # Second call should insert 0 because all already exist
         assert count2 == 0

@@ -1,7 +1,8 @@
 """Tests for evaluator registry."""
 
 import pytest
-from src.signals.evaluators.registry import EvaluatorRegistry, EVALUATOR_WHITELIST
+
+from src.signals.evaluators.registry import EVALUATOR_WHITELIST, EvaluatorRegistry
 
 
 def test_registry_contains_all_whitelisted():

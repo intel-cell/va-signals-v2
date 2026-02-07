@@ -8,8 +8,10 @@ Provides:
 - Mock external services
 """
 
-import pytest
+from datetime import UTC
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -99,8 +101,9 @@ def seeded_full_db():
     """)
 
     # Seed test data
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc).isoformat()
+    from datetime import datetime
+
+    now = datetime.now(UTC).isoformat()
 
     # Test users
     users = [
@@ -108,10 +111,7 @@ def seeded_full_db():
         ("usr-001", "analyst@test.com", "analyst", now),
         ("usr-002", "viewer@test.com", "viewer", now),
     ]
-    con.executemany(
-        "INSERT INTO users (uid, email, role, created_at) VALUES (?, ?, ?, ?)",
-        users
-    )
+    con.executemany("INSERT INTO users (uid, email, role, created_at) VALUES (?, ?, ?, ?)", users)
 
     # Test source runs
     runs = [
@@ -123,20 +123,42 @@ def seeded_full_db():
         """INSERT INTO source_runs
            (source_id, started_at, ended_at, status, records_fetched, errors_json)
            VALUES (?, ?, ?, ?, ?, ?)""",
-        runs
+        runs,
     )
 
     # Test vehicles
     vehicles = [
-        ("bill_hr-119-1234", "bill", "Test Bill", "H.R. 1234", "committee", "2026-01-15", "monitor", 75.0, now, now),
-        ("hearing_12345", "oversight", "Test Hearing", "HVAC-12345", "active", "2026-02-01", "support", 90.0, now, now),
+        (
+            "bill_hr-119-1234",
+            "bill",
+            "Test Bill",
+            "H.R. 1234",
+            "committee",
+            "2026-01-15",
+            "monitor",
+            75.0,
+            now,
+            now,
+        ),
+        (
+            "hearing_12345",
+            "oversight",
+            "Test Hearing",
+            "HVAC-12345",
+            "active",
+            "2026-02-01",
+            "support",
+            90.0,
+            now,
+            now,
+        ),
     ]
     con.executemany(
         """INSERT INTO bf_vehicles
            (vehicle_id, vehicle_type, title, identifier, current_stage, status_date,
             our_posture, heat_score, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        vehicles
+        vehicles,
     )
 
     con.commit()

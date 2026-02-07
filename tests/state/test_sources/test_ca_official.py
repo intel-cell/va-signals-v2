@@ -1,8 +1,8 @@
 """Tests for California official sources."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 from src.state.sources.ca_official import CAOfficialSource
 

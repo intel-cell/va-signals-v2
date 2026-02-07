@@ -176,9 +176,7 @@ def get_authority_doc(doc_id: str) -> dict | None:
     }
 
 
-def get_authority_docs(
-    authority_source: str = None, limit: int = 50
-) -> list[dict]:
+def get_authority_docs(authority_source: str = None, limit: int = 50) -> list[dict]:
     """Get authority documents, optionally filtered by source."""
     con = connect()
 

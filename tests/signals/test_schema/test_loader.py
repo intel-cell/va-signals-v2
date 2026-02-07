@@ -1,12 +1,12 @@
 """Tests for YAML schema loader."""
 
 import pytest
+
 from src.signals.schema.loader import (
-    load_category_schema,
     get_indicator,
-    get_trigger,
     get_routing_rule,
-    CategorySchema,
+    get_trigger,
+    load_category_schema,
 )
 
 

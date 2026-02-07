@@ -1,24 +1,29 @@
 """Tests for src/run_hearings.py — CLI runner for VA Hearings sync."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-
-from src import run_hearings
 import src.db as db
-
+from src import run_hearings
 
 # ── helpers ──────────────────────────────────────────────────────
 
+
 def _insert_test_hearing(**overrides):
     base = {
-        "event_id": "EVT-100", "congress": 119, "chamber": "House",
-        "committee_code": "hsvr00", "committee_name": "Veterans Affairs",
-        "hearing_date": "2035-06-15", "hearing_time": "10:00",
-        "title": "VA Budget Hearing", "meeting_type": "hearing",
-        "status": "scheduled", "location": "Room 334",
-        "url": "https://congress.gov/h/1", "witnesses_json": "[]",
+        "event_id": "EVT-100",
+        "congress": 119,
+        "chamber": "House",
+        "committee_code": "hsvr00",
+        "committee_name": "Veterans Affairs",
+        "hearing_date": "2035-06-15",
+        "hearing_time": "10:00",
+        "title": "VA Budget Hearing",
+        "meeting_type": "hearing",
+        "status": "scheduled",
+        "location": "Room 334",
+        "url": "https://congress.gov/h/1",
+        "witnesses_json": "[]",
     }
     base.update(overrides)
     db.upsert_hearing(base)
@@ -27,22 +32,34 @@ def _insert_test_hearing(**overrides):
 def _make_schema_file(tmp_path):
     schemas_dir = tmp_path / "schemas"
     schemas_dir.mkdir()
-    (schemas_dir / "source_run.schema.json").write_text(json.dumps({
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "required": ["source_id", "started_at", "ended_at", "status", "records_fetched", "errors"],
-        "properties": {
-            "source_id": {"type": "string"},
-            "started_at": {"type": "string"},
-            "ended_at": {"type": "string"},
-            "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
-            "records_fetched": {"type": "integer", "minimum": 0},
-            "errors": {"type": "array", "items": {"type": "string"}},
-        },
-    }))
+    (schemas_dir / "source_run.schema.json").write_text(
+        json.dumps(
+            {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "required": [
+                    "source_id",
+                    "started_at",
+                    "ended_at",
+                    "status",
+                    "records_fetched",
+                    "errors",
+                ],
+                "properties": {
+                    "source_id": {"type": "string"},
+                    "started_at": {"type": "string"},
+                    "ended_at": {"type": "string"},
+                    "status": {"type": "string", "enum": ["SUCCESS", "NO_DATA", "ERROR"]},
+                    "records_fetched": {"type": "integer", "minimum": 0},
+                    "errors": {"type": "array", "items": {"type": "string"}},
+                },
+            }
+        )
+    )
 
 
 # ── Argument parsing ─────────────────────────────────────────────
+
 
 class TestMainArgParsing:
     @patch.object(run_hearings, "run_hearings_sync")
@@ -80,6 +97,7 @@ class TestMainArgParsing:
 
 # ── run_hearings_sync ────────────────────────────────────────────
 
+
 class TestRunHearingsSync:
     @patch.object(run_hearings, "send_error_alert")
     @patch.object(run_hearings, "sync_va_hearings")
@@ -87,7 +105,10 @@ class TestRunHearingsSync:
         monkeypatch.setattr(run_hearings, "ROOT", tmp_path)
         _make_schema_file(tmp_path)
         mock_sync.return_value = {
-            "new_hearings": 2, "updated_hearings": 1, "changes": [{"field": "status"}], "errors": [],
+            "new_hearings": 2,
+            "updated_hearings": 1,
+            "changes": [{"field": "status"}],
+            "errors": [],
         }
 
         result = run_hearings.run_hearings_sync(full=False, congress=119)
@@ -118,7 +139,10 @@ class TestRunHearingsSync:
         monkeypatch.setattr(run_hearings, "ROOT", tmp_path)
         _make_schema_file(tmp_path)
         mock_sync.return_value = {
-            "new_hearings": 0, "updated_hearings": 0, "changes": [], "errors": [],
+            "new_hearings": 0,
+            "updated_hearings": 0,
+            "changes": [],
+            "errors": [],
         }
 
         result = run_hearings.run_hearings_sync()
@@ -130,7 +154,9 @@ class TestRunHearingsSync:
         monkeypatch.setattr(run_hearings, "ROOT", tmp_path)
         _make_schema_file(tmp_path)
         mock_sync.return_value = {
-            "new_hearings": 1, "updated_hearings": 0, "changes": [],
+            "new_hearings": 1,
+            "updated_hearings": 0,
+            "changes": [],
             "errors": ["Rate limited"],
         }
 
@@ -143,7 +169,10 @@ class TestRunHearingsSync:
         monkeypatch.setattr(run_hearings, "ROOT", tmp_path)
         _make_schema_file(tmp_path)
         mock_sync.return_value = {
-            "new_hearings": 0, "updated_hearings": 0, "changes": [], "errors": [],
+            "new_hearings": 0,
+            "updated_hearings": 0,
+            "changes": [],
+            "errors": [],
         }
 
         run_hearings.run_hearings_sync(full=True)
@@ -152,6 +181,7 @@ class TestRunHearingsSync:
 
 
 # ── print_summary ────────────────────────────────────────────────
+
 
 class TestPrintSummary:
     def test_empty_db_summary(self, capsys):
@@ -188,6 +218,7 @@ class TestPrintSummary:
 
 # ── write_run_record ─────────────────────────────────────────────
 
+
 class TestWriteRunRecord:
     def test_writes_json_file(self, tmp_path, monkeypatch):
         monkeypatch.setattr(run_hearings, "ROOT", tmp_path)
@@ -201,6 +232,7 @@ class TestWriteRunRecord:
 
 
 # ── load_run_schema ──────────────────────────────────────────────
+
 
 class TestLoadRunSchema:
     def test_loads_schema(self):

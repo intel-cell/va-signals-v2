@@ -1,11 +1,11 @@
 """Tests for Texas official sources."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.state.sources.tx_official import TXOfficialSource
-from src.state.common import RawSignal
 
 
 @pytest.fixture
