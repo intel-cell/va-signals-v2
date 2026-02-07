@@ -1339,8 +1339,8 @@ function updateRunsChart() {
             datasets: [{
                 label: 'Runs',
                 data: data,
-                backgroundColor: 'rgba(59, 130, 246, 0.7)',
-                borderColor: 'rgba(59, 130, 246, 1)',
+                backgroundColor: 'rgba(27, 42, 74, 0.7)',
+                borderColor: 'rgba(27, 42, 74, 1)',
                 borderWidth: 1,
                 borderRadius: 4,
                 barThickness: 20
@@ -1360,16 +1360,16 @@ function updateRunsChart() {
                         display: false
                     },
                     ticks: {
-                        color: '#64748b'
+                        color: '#7A7A8A'
                     }
                 },
                 y: {
                     beginAtZero: true,
                     grid: {
-                        color: 'rgba(51, 65, 85, 0.5)'
+                        color: 'rgba(0, 0, 0, 0.06)'
                     },
                     ticks: {
-                        color: '#64748b',
+                        color: '#7A7A8A',
                         stepSize: 5
                     }
                 }
@@ -1410,11 +1410,11 @@ function updateStatusChart() {
             datasets: [{
                 data: data,
                 backgroundColor: [
-                    '#10b981',
-                    '#6b7280',
-                    '#ef4444'
+                    '#2D6A4F',
+                    '#7A7A8A',
+                    '#9B2C2C'
                 ],
-                borderColor: '#1e293b',
+                borderColor: '#FFFFFF',
                 borderWidth: 3
             }]
         },
@@ -1426,7 +1426,7 @@ function updateStatusChart() {
                 legend: {
                     position: 'bottom',
                     labels: {
-                        color: '#94a3b8',
+                        color: '#4A4A5A',
                         padding: 15,
                         usePointStyle: true,
                         pointStyle: 'circle'
@@ -1458,11 +1458,11 @@ function showColumnExplanation(column) {
                 <div class="explanation-breakdown">
                     <div class="explanation-item">
                         <span class="label">govinfo_fr_bulk</span>
-                        <span class="value" style="color: var(--accent-primary)">Federal Register</span>
+                        <span class="value" style="color: var(--accent-navy)">Federal Register</span>
                     </div>
                     <div class="explanation-item">
                         <span class="label">govinfo_ecfr_title_38</span>
-                        <span class="value" style="color: var(--accent-primary)">eCFR Title 38 (VA regulations)</span>
+                        <span class="value" style="color: var(--accent-navy)">eCFR Title 38 (VA regulations)</span>
                     </div>
                 </div>
 
@@ -1972,7 +1972,7 @@ async function refreshStateData() {
 }
 
 function initMainTabs() {
-    const mainTabs = document.querySelectorAll('.main-tab');
+    const mainTabs = document.querySelectorAll('.tab-btn');
     mainTabs.forEach(tab => {
         tab.addEventListener('click', async () => {
             // Update active tab
@@ -3753,7 +3753,7 @@ function initMobileMenu() {
 
 function toggleMobileMenu() {
     const btn = document.querySelector('.mobile-menu-btn');
-    const tabs = document.querySelector('.main-tabs');
+    const tabs = document.querySelector('.nav-tabs');
     const overlay = document.querySelector('.mobile-overlay');
 
     btn?.classList.toggle('open');
@@ -3763,7 +3763,7 @@ function toggleMobileMenu() {
 
 function closeMobileMenu() {
     const btn = document.querySelector('.mobile-menu-btn');
-    const tabs = document.querySelector('.main-tabs');
+    const tabs = document.querySelector('.nav-tabs');
     const overlay = document.querySelector('.mobile-overlay');
 
     btn?.classList.remove('open');
@@ -3776,7 +3776,7 @@ function initSwipeNavigation() {
     let touchEndX = 0;
 
     const panels = document.querySelectorAll('.tab-panel');
-    const tabButtons = document.querySelectorAll('.main-tab');
+    const tabButtons = document.querySelectorAll('.tab-btn');
     const tabOrder = Array.from(tabButtons).map(btn => btn.dataset.tab);
 
     document.addEventListener('touchstart', e => {
