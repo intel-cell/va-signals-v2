@@ -53,6 +53,7 @@ from .ad import (
 )
 from .bills import (
     upsert_bill,
+    update_committees_json,
     get_bill,
     get_bills,
     insert_bill_action,

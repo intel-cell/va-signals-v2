@@ -1,9 +1,13 @@
 """Hearings database functions."""
 
+import logging
+from datetime import datetime
 from typing import Any
 
 from .core import connect, execute, insert_returning_id
 from .helpers import _utc_now_iso
+
+logger = logging.getLogger(__name__)
 
 
 def _hearing_row_to_dict(row) -> dict:
@@ -36,6 +40,20 @@ def upsert_hearing(hearing: dict) -> tuple[bool, list[dict]]:
     Expected keys: event_id, congress, chamber, committee_code, committee_name,
     hearing_date, hearing_time, title, meeting_type, status, location, url, witnesses_json.
     """
+    # Reject placeholder/far-future dates
+    hearing_date = hearing.get("hearing_date", "")
+    if hearing_date:
+        try:
+            dt = datetime.fromisoformat(hearing_date[:10])
+            if dt.year >= 2099:
+                logger.warning(
+                    "Rejecting hearing with far-future date: event_id=%s date=%s",
+                    hearing.get("event_id"), hearing_date,
+                )
+                return (False, [])
+        except (ValueError, TypeError):
+            pass  # let downstream handle unparseable dates
+
     con = connect()
     now = _utc_now_iso()
 

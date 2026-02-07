@@ -14,6 +14,7 @@ import json
 import re
 import sys
 import ssl
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
@@ -282,6 +283,40 @@ def fetch_bill_actions(congress: int, bill_type: str, number: int) -> list[dict]
     return actions
 
 
+def fetch_bill_committees(congress: int, bill_type: str, bill_number: int) -> list[dict]:
+    """
+    Fetch committee assignments for a specific bill.
+
+    Args:
+        congress: Congress number (e.g., 119)
+        bill_type: Bill type (e.g., 'hr', 's')
+        bill_number: Bill number
+
+    Returns:
+        List of committee dicts with keys: name, chamber, type.
+        Returns empty list on failure.
+    """
+    api_key = get_api_key()
+    url = (
+        f"{BASE_API_URL}/bill/{congress}/{bill_type.lower()}/{bill_number}"
+        f"/committees?api_key={api_key}"
+    )
+    try:
+        data = _fetch_json(url, api_key)
+    except (urllib.error.HTTPError, urllib.error.URLError, Exception) as e:
+        print(f"Error fetching committees for {bill_type.upper()}-{bill_number}: {e}")
+        return []
+
+    committees = []
+    for c in data.get("committees", []):
+        committees.append({
+            "name": c.get("name"),
+            "chamber": c.get("chamber"),
+            "type": c.get("type"),
+        })
+    return committees
+
+
 def sync_va_bills(congress: int = 119, limit: int = 250, dry_run: bool = False) -> dict:
     """
     Synchronize VA-related bills from Congress.gov to local database.
@@ -406,6 +441,17 @@ def sync_va_bills(congress: int = 119, limit: int = 250, dry_run: bool = False) 
                     stats["new_actions"] += 1
         elif actions and dry_run:
             stats["new_actions"] += len(actions)
+
+        # Backfill committees if empty
+        if not dry_run:
+            existing = db.get_bill(bill_id)
+            if existing:
+                cj = existing.get("committees_json")
+                if not cj or cj in ("[]", "null", ""):
+                    comms = fetch_bill_committees(congress_num, bill_type, number)
+                    if comms:
+                        db.update_committees_json(bill_id, json.dumps(comms))
+                    time.sleep(0.5)
 
     return stats
 

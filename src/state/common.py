@@ -49,6 +49,63 @@ PROGRAM_PATTERNS = {
         r"vamc",
         r"va facility",
     ],
+    "disability_compensation": [
+        r"disability\s+rating",
+        r"c\s*&\s*p\s+exam",
+        r"compensation\s+and\s+pension",
+        r"service.connected",
+        r"disability\s+claim",
+    ],
+    "education": [
+        r"gi\s+bill",
+        r"voc\s+rehab",
+        r"education\s+benefit",
+        r"chapter\s+33",
+        r"post.9/11",
+        r"veteran\s+education",
+    ],
+    "mental_health": [
+        r"ptsd",
+        r"mental\s+health",
+        r"suicide\s+prevention",
+        r"vet\s+center",
+        r"behavioral\s+health",
+        r"counseling\s+service",
+    ],
+    "housing": [
+        r"hud.vash",
+        r"homeless\s+veteran.*housing",
+        r"housing\s+voucher",
+        r"ssvf",
+        r"supportive\s+housing",
+    ],
+    "caregiver": [
+        r"caregiver",
+        r"aid\s+and\s+attendance",
+        r"respite\s+care",
+        r"caregiver\s+support",
+    ],
+    "homelessness": [
+        r"homeless",
+        r"stand\s+down",
+        r"grant\s+(and\s+)?per\s+diem",
+        r"hchv",
+        r"domiciliary",
+    ],
+    "employment": [
+        r"vr\s*&\s*e",
+        r"vocational\s+rehabilitation",
+        r"veteran\s+employment",
+        r"hire\s+heroes",
+        r"veteran\s+readiness",
+    ],
+    "burial": [
+        r"burial\s+benefit",
+        r"memorial",
+        r"national\s+cemetery",
+        r"headstone",
+        r"pre-need\s+eligibility",
+    ],
 }
 
 _COMPILED_PROGRAM_PATTERNS = {

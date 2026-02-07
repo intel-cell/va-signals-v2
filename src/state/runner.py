@@ -259,6 +259,20 @@ def _process_single_state(st: str, dry_run: bool = False) -> dict:
         # Classify signal
         classification = _classify_signal(sig)
 
+        # Fallback: if keyword-based program detection missed, use LLM program
+        if program is None and classification.program is not None:
+            program = classification.program
+            # Update the stored signal with the LLM-detected program
+            from src.db import connect as db_connect, execute as db_execute
+            con = db_connect()
+            db_execute(
+                con,
+                "UPDATE state_signals SET program = :program WHERE signal_id = :signal_id",
+                {"program": program, "signal_id": sig_id},
+            )
+            con.commit()
+            con.close()
+
         # Store classification
         insert_state_classification({
             "signal_id": sig_id,
@@ -346,8 +360,12 @@ def run_state_monitor(
                 mark_signal_notified(sig_data["signal_id"], "email")
                 logger.info(f"Sent email notification for {sig_data['signal_id']}")
 
-        # Medium/low severity signals are left for weekly digest
-        # (mark_signal_notified is NOT called for them here)
+        # Mark medium/low severity signals for digest
+        for severity_level in ("medium", "low"):
+            digest_signals = get_unnotified_signals(severity=severity_level)
+            for sig_data in digest_signals:
+                mark_signal_notified(sig_data["signal_id"], "digest_queued")
+                logger.info(f"Queued {severity_level} signal {sig_data['signal_id']} for digest")
     else:
         logger.info("Dry run - skipping notifications")
 

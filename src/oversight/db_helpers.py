@@ -22,14 +22,16 @@ def insert_om_event(event: dict) -> None:
             pub_timestamp, pub_precision, pub_source,
             event_timestamp, event_precision, event_source,
             title, summary, raw_content,
-            is_escalation, escalation_signals, is_deviation, deviation_reason,
+            is_escalation, escalation_signals, ml_score, ml_risk_level,
+            is_deviation, deviation_reason,
             canonical_refs, fetched_at
         ) VALUES (
             :event_id, :event_type, :theme, :primary_source_type, :primary_url,
             :pub_timestamp, :pub_precision, :pub_source,
             :event_timestamp, :event_precision, :event_source,
             :title, :summary, :raw_content,
-            :is_escalation, :escalation_signals, :is_deviation, :deviation_reason,
+            :is_escalation, :escalation_signals, :ml_score, :ml_risk_level,
+            :is_deviation, :deviation_reason,
             :canonical_refs, :fetched_at
         )
         """,
@@ -50,6 +52,8 @@ def insert_om_event(event: dict) -> None:
             "raw_content": event.get("raw_content"),
             "is_escalation": 1 if event.get("is_escalation") else 0,
             "escalation_signals": json.dumps(event.get("escalation_signals")) if event.get("escalation_signals") else None,
+            "ml_score": event.get("ml_score"),
+            "ml_risk_level": event.get("ml_risk_level"),
             "is_deviation": 1 if event.get("is_deviation") else 0,
             "deviation_reason": event.get("deviation_reason"),
             "canonical_refs": json.dumps(event.get("canonical_refs")) if event.get("canonical_refs") else None,

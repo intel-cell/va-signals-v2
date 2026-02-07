@@ -1,8 +1,11 @@
 """Shared helper functions for the db package."""
 
 import json
+import logging
 
 from .core import connect, execute
+
+logger = logging.getLogger(__name__)
 
 
 def _utc_now_iso() -> str:
@@ -11,6 +14,15 @@ def _utc_now_iso() -> str:
 
 
 def insert_source_run(run_record: dict):
+  source_id = run_record.get("source_id", "")
+  started_at = run_record.get("started_at", "")
+  if len(source_id) <= 1 or len(started_at) <= 1:
+      logger.warning(
+          "Skipping source_run with invalid data: source_id=%r started_at=%r",
+          source_id, started_at,
+      )
+      return
+
   con = connect()
   execute(
     con,

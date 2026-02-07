@@ -514,7 +514,7 @@ class TestHearingsCRUD:
         assert db.get_hearing("NOPE") is None
 
     def test_get_hearings_upcoming(self):
-        db.upsert_hearing(_make_hearing(event_id="EVT-F", hearing_date="2099-01-01"))
+        db.upsert_hearing(_make_hearing(event_id="EVT-F", hearing_date="2035-01-01"))
         db.upsert_hearing(_make_hearing(event_id="EVT-P", hearing_date="2000-01-01"))
         upcoming = db.get_hearings(upcoming=True, limit=100)
         ids = [h["event_id"] for h in upcoming]
@@ -566,7 +566,7 @@ class TestHearingStats:
         assert stats["upcoming"] == 0
 
     def test_populated_stats(self):
-        db.upsert_hearing(_make_hearing(event_id="ST-1", hearing_date="2099-06-01"))
+        db.upsert_hearing(_make_hearing(event_id="ST-1", hearing_date="2035-06-01"))
         db.upsert_hearing(_make_hearing(event_id="ST-2", hearing_date="2000-01-01"))
         stats = db.get_hearing_stats()
         assert stats["total"] == 2

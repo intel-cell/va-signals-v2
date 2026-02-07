@@ -67,6 +67,19 @@ def _sanitize_body(body: Optional[str], max_length: int = 10000) -> Optional[str
 
 # --- Async Audit Worker ---
 
+def _is_contaminated(entry: dict) -> bool:
+    """Check if an audit entry contains test contamination or injection attempts."""
+    ip = entry.get("ip_address") or ""
+    if ip == "testclient":
+        return True
+    # Check all string fields for injection patterns
+    for val in (ip, entry.get("request_body") or "", entry.get("user_agent") or ""):
+        lower = val.lower()
+        if "<script" in lower or "drop table" in lower:
+            return True
+    return False
+
+
 def _audit_worker():
     """Background worker that writes audit logs to database."""
     from ..db import connect, execute
@@ -79,6 +92,11 @@ def _audit_worker():
             if entry is None:
                 # Shutdown signal
                 break
+
+            if _is_contaminated(entry):
+                logger.warning("Skipping contaminated audit entry: ip=%s", entry.get("ip_address"))
+                _audit_queue.task_done()
+                continue
 
             con = connect()
             execute(

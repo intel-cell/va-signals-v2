@@ -15,7 +15,7 @@ def _insert_test_hearing(**overrides):
     base = {
         "event_id": "EVT-100", "congress": 119, "chamber": "House",
         "committee_code": "hsvr00", "committee_name": "Veterans Affairs",
-        "hearing_date": "2099-06-15", "hearing_time": "10:00",
+        "hearing_date": "2035-06-15", "hearing_time": "10:00",
         "title": "VA Budget Hearing", "meeting_type": "hearing",
         "status": "scheduled", "location": "Room 334",
         "url": "https://congress.gov/h/1", "witnesses_json": "[]",

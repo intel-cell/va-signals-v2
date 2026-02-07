@@ -63,6 +63,37 @@ class OversightRunResult:
     errors: list = field(default_factory=list)
 
 
+_THEME_KEYWORDS = {
+    "oversight_report": ["report", "audit", "review", "assessment", "evaluation"],
+    "congressional_action": ["hearing", "committee", "subcommittee", "legislation", "bill", "resolution"],
+    "legal_ruling": ["ruling", "decision", "opinion", "court", "judge", "appeal"],
+    "policy_change": ["policy", "regulation", "rule", "guidance", "directive", "memorandum"],
+    "budget_fiscal": ["budget", "funding", "appropriation", "fiscal", "spending"],
+    "personnel": ["appoint", "resign", "nominee", "director", "secretary", "leadership"],
+    "healthcare_operations": ["hospital", "clinic", "wait time", "staffing", "facility"],
+    "benefits_claims": ["claim", "benefit", "disability", "compensation", "pension"],
+}
+
+_SOURCE_TYPE_THEME_MAP = {
+    "gao": "oversight_report",
+    "oig": "oversight_report",
+    "congressional_record": "congressional_action",
+    "committee_press": "congressional_action",
+    "cafc": "legal_ruling",
+    "bva": "legal_ruling",
+}
+
+
+def _extract_theme(title: str, source_type: str) -> Optional[str]:
+    """Extract theme from title keywords, falling back to source_type mapping."""
+    lower_title = title.lower()
+    for theme, keywords in _THEME_KEYWORDS.items():
+        for kw in keywords:
+            if kw in lower_title:
+                return theme
+    return _SOURCE_TYPE_THEME_MAP.get(source_type)
+
+
 def _generate_event_id(source_type: str, url: str) -> str:
     """Generate a deterministic event ID."""
     hash_input = f"{source_type}:{url}"
@@ -115,7 +146,7 @@ def _process_raw_event(
     event = {
         "event_id": event_id,
         "event_type": "report_release",  # Default, can be overridden
-        "theme": None,  # To be classified later
+        "theme": _extract_theme(raw.title, source_type),
         "primary_source_type": source_type,
         "primary_url": raw.url,
         "pub_timestamp": timestamps.pub_timestamp,

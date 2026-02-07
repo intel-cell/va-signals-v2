@@ -19,6 +19,7 @@ class ClassificationResult:
     method: str  # "keyword", "llm"
     keywords_matched: list[str] = field(default_factory=list)
     llm_reasoning: Optional[str] = None
+    program: Optional[str] = None
 
 
 HIGH_SEVERITY_KEYWORDS = [
@@ -254,12 +255,14 @@ def classify_by_llm(
                 severity="noise",
                 method="llm",
                 llm_reasoning=result.get("reasoning"),
+                program=result.get("federal_program"),
             )
 
         return ClassificationResult(
             severity=result["severity"],
             method="llm",
             llm_reasoning=result.get("reasoning"),
+            program=result.get("federal_program"),
         )
 
     except Exception as e:

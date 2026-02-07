@@ -82,6 +82,20 @@ def upsert_bill(bill: dict) -> bool:
     return not exists
 
 
+def update_committees_json(bill_id: str, committees_json: str) -> bool:
+    """Update committees_json for a specific bill."""
+    con = connect()
+    execute(
+        con,
+        "UPDATE bills SET committees_json = :committees_json WHERE bill_id = :bill_id",
+        {"committees_json": committees_json, "bill_id": bill_id},
+    )
+    changed = con.total_changes > 0
+    con.commit()
+    con.close()
+    return changed
+
+
 def get_bill(bill_id: str) -> dict | None:
     """Get a single bill by ID."""
     con = connect()
