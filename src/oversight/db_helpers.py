@@ -430,6 +430,59 @@ def get_oversight_stats() -> dict:
     }
 
 
+def get_escalation_queue(
+    limit: int = 50,
+    source_type: str | None = None,
+) -> list[dict]:
+    """Get escalation events ordered by ml_score desc, pub_timestamp desc.
+
+    Returns events marked as escalations with fields needed for priority scoring.
+    """
+    con = connect()
+
+    query = """
+        SELECT event_id, event_type, theme, primary_source_type, primary_url,
+               pub_timestamp, title, summary,
+               is_escalation, escalation_signals, ml_score, ml_risk_level,
+               surfaced, surfaced_at, fetched_at
+        FROM om_events
+        WHERE is_escalation = 1
+    """
+    params: dict[str, object] = {}
+
+    if source_type:
+        query += " AND primary_source_type = :source_type"
+        params["source_type"] = source_type
+
+    query += " ORDER BY COALESCE(ml_score, 0) DESC, pub_timestamp DESC LIMIT :limit"
+    params["limit"] = limit
+
+    cur = execute(con, query, params)
+    rows = cur.fetchall()
+    con.close()
+
+    return [
+        {
+            "event_id": row[0],
+            "event_type": row[1],
+            "theme": row[2],
+            "primary_source_type": row[3],
+            "primary_url": row[4],
+            "pub_timestamp": row[5],
+            "title": row[6],
+            "summary": row[7],
+            "is_escalation": bool(row[8]),
+            "escalation_signals": json.loads(row[9]) if row[9] else None,
+            "ml_score": row[10],
+            "ml_risk_level": row[11],
+            "surfaced": bool(row[12]),
+            "surfaced_at": row[13],
+            "fetched_at": row[14],
+        }
+        for row in rows
+    ]
+
+
 def get_oversight_events(
     limit: int = 50,
     source_type: str | None = None,

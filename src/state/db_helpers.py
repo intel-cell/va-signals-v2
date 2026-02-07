@@ -348,32 +348,60 @@ def signal_exists(signal_id: str) -> bool:
     return exists
 
 
-def get_signals_by_state(state: str, since: str | None = None, limit: int = 100) -> list[dict]:
-    """Get signals for a state, ordered by pub_date descending.
+def get_signals_by_state(
+    state: str | None = None,
+    severity: str | None = None,
+    since: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Get signals with optional filters, ordered by pub_date descending.
 
-    If `since` is provided, filter by fetched_at >= since.
+    Args:
+        state: Filter by state code (e.g. 'TX'). If None, returns all states.
+        severity: Filter by classification severity (e.g. 'high').
+        since: Filter by fetched_at >= since.
+        limit: Max results.
     """
     con = connect()
-    if since:
-        cur = execute(
-            con,
-            """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
-               FROM state_signals WHERE state = :state AND fetched_at >= :since
-               ORDER BY pub_date DESC, fetched_at DESC LIMIT :limit""",
-            {"state": state, "since": since, "limit": limit},
-        )
+
+    if severity:
+        select = """SELECT s.id, s.signal_id, s.state, s.source_id, s.program,
+                           s.title, s.content, s.url, s.pub_date, s.event_date,
+                           s.fetched_at, c.severity
+                    FROM state_signals s
+                    LEFT JOIN state_classifications c ON s.signal_id = c.signal_id"""
     else:
-        cur = execute(
-            con,
-            """SELECT id, signal_id, state, source_id, program, title, content, url, pub_date, event_date, fetched_at
-               FROM state_signals WHERE state = :state
-               ORDER BY pub_date DESC, fetched_at DESC LIMIT :limit""",
-            {"state": state, "limit": limit},
-        )
+        select = """SELECT s.id, s.signal_id, s.state, s.source_id, s.program,
+                           s.title, s.content, s.url, s.pub_date, s.event_date,
+                           s.fetched_at
+                    FROM state_signals s"""
+
+    conditions = []
+    params: dict[str, object] = {}
+
+    if state:
+        conditions.append("s.state = :state")
+        params["state"] = state
+    if severity:
+        conditions.append("c.severity = :severity")
+        params["severity"] = severity
+    if since:
+        conditions.append("s.fetched_at >= :since")
+        params["since"] = since
+
+    query = select
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY s.pub_date DESC, s.fetched_at DESC LIMIT :limit"
+    params["limit"] = limit
+
+    cur = execute(con, query, params)
     rows = cur.fetchall()
     con.close()
-    return [
-        {
+
+    results = []
+    for r in rows:
+        row_dict = {
             "id": r[0],
             "signal_id": r[1],
             "state": r[2],
@@ -386,8 +414,10 @@ def get_signals_by_state(state: str, since: str | None = None, limit: int = 100)
             "event_date": r[9],
             "fetched_at": r[10],
         }
-        for r in rows
-    ]
+        if severity:
+            row_dict["severity"] = r[11]
+        results.append(row_dict)
+    return results
 
 
 # --- Classification helpers ---

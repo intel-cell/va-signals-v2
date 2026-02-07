@@ -486,6 +486,22 @@ function handleWebSocketMessage(data) {
             updateCharts();
             break;
 
+        case 'signal':
+            if (data.data && data.data.type === 'oversight_escalation') {
+                const severity = data.data.severity || 'medium';
+                const source = data.data.source || 'unknown';
+                const title = data.data.title || 'Escalation detected';
+                const toastType = severity === 'critical' ? 'error' : 'warning';
+                showToast(toastType, `${severity.toUpperCase()} Escalation`, `${source}: ${title}`);
+            }
+            break;
+
+        case 'oversight':
+            if (data.data) {
+                showToast('warning', 'Oversight Event', data.data.title || 'New oversight event');
+            }
+            break;
+
         case 'error':
             showToast('error', 'Error', data.message);
             break;

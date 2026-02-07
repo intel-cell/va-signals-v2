@@ -241,6 +241,16 @@ def run_agent(agent_name: str, since: datetime | None = None) -> OversightRunRes
                 insert_om_event(event)
                 processed += 1
 
+                # Route through signals bridge (non-fatal)
+                try:
+                    from src.oversight.pipeline.signal_bridge import route_oversight_event
+
+                    bridge_result = route_oversight_event(event)
+                    if bridge_result.surfaced:
+                        logger.info(f"[{agent_name}] Event surfaced: {event['event_id']}")
+                except Exception as e:
+                    logger.warning(f"[{agent_name}] Signal bridge error (non-fatal): {e}")
+
                 if event.get("is_escalation"):
                     escalations += 1
 
@@ -392,6 +402,14 @@ def run_backfill(
                 if not existing:
                     insert_om_event(event)
                     processed += 1
+
+                    # Route through signals bridge (non-fatal)
+                    try:
+                        from src.oversight.pipeline.signal_bridge import route_oversight_event
+
+                        route_oversight_event(event)
+                    except Exception as e:
+                        logger.warning(f"[{agent_name}] Signal bridge error (non-fatal): {e}")
 
         return OversightRunResult(
             agent=agent_name,
